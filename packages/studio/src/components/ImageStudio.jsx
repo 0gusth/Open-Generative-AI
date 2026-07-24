@@ -19,6 +19,7 @@ import {
 } from "../models.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
+  PROMPT_MEDIA_PREVIEW_CLASS,
   PromptAspectRatioIcon,
   PromptAction,
   PromptChevronIcon,
@@ -1436,7 +1437,7 @@ export default function ImageStudio({
             {/* Inline list of uploaded files */}
             <div className="flex items-center gap-2.5 flex-wrap">
               {uploadedImageUrls && uploadedImageUrls.length > 0 && uploadedImageUrls.map((url, idx) => (
-                <div key={idx} className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+                <div key={url} className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <img src={url} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"

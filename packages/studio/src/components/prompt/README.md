@@ -17,6 +17,8 @@ individual Studio component.
 - `promptControlClassName()` provides the 38 px parameter-control contract.
 - `promptMediaButtonClassName()` provides the 40 px circular media-attachment
   contract.
+- `PROMPT_MEDIA_PREVIEW_CLASS` keeps uploaded media previews on the same 40 px
+  circular contract.
 - `PromptPopover` provides the shared dropdown surface, placement, border,
   radius, shadow, scrolling, and responsive height limit.
 - `PromptPopoverHeader` provides the shared uppercase section heading.
@@ -46,6 +48,9 @@ vary between tools.
 Primary media attachments inside the composer must use
 `promptMediaButtonClassName()`. Selected media uses `active: true`. This keeps
 upload targets 40 px round with the same border and hover feedback.
+If selected media is rendered as a separate preview, its wrapper must use
+`PROMPT_MEDIA_PREVIEW_CLASS` so the control does not change shape or size after
+upload.
 
 Every dropdown opened from a prompt control must use the shared popover
 primitives. Gallery and model-picker layouts may customize width and inner

@@ -20,6 +20,7 @@ import {
 } from "../models.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
+  PROMPT_MEDIA_PREVIEW_CLASS,
   PromptAspectRatioIcon,
   PromptAction,
   PromptChevronIcon,
@@ -42,27 +43,6 @@ import {
 function getQualitiesForModel(modelList, modelId) {
   const model = modelList.find((m) => m.id === modelId);
   return model?.inputs?.quality?.enum || [];
-}
-
-function supportsImageReference(modelId, imageMode, v2vMode) {
-  if (imageMode) {
-    return i2vModels.some((model) => model.id === modelId);
-  }
-
-  if (v2vMode) {
-    return Boolean(
-      v2vModels.find((model) => model.id === modelId)?.imageField,
-    );
-  }
-
-  const model = t2vModels.find((item) => item.id === modelId);
-  if (!model) return false;
-  if (model.inputs?.images_list) return true;
-
-  return Boolean(
-    model.family &&
-      i2vModels.some((candidate) => candidate.family === model.family),
-  );
 }
 
 async function downloadFile(url, filename) {
@@ -1338,11 +1318,9 @@ export default function VideoStudio({
     canvasModel === "seedance-v2.0-t2v" || canvasModel === "seedance-v2.0-i2v";
   const currentModelObj = getCurrentModel();
   const isExtendMode = currentModelObj?.requiresRequestId;
-  const showDrawButton = supportsImageReference(
-    selectedModel,
-    imageMode,
-    v2vMode,
-  );
+  const canUploadImageReference =
+    (!v2vMode || isMotionControlSelection(selectedModel, v2vMode)) &&
+    (!isExtendMode || currentModelObj?.inputs?.images_list);
 
   const promptPlaceholder = v2vMode
     ? currentModelObj?.imageField
@@ -1555,7 +1533,7 @@ export default function VideoStudio({
             <div className="flex items-center gap-2.5 flex-wrap">
               {/* Main image preview */}
               {uploadedImageUrl && (
-                <div className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+                <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <img src={uploadedImageUrl} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"
@@ -1569,7 +1547,7 @@ export default function VideoStudio({
 
               {/* End frame image preview */}
               {uploadedEndImageUrl && (
-                <div className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+                <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <img src={uploadedEndImageUrl} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"
@@ -1586,7 +1564,7 @@ export default function VideoStudio({
 
               {/* Video preview */}
               {uploadedVideoUrl && (
-                <div className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+                <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <video src={uploadedVideoUrl} className="w-full h-full object-cover" muted />
                   <button
                     type="button"
@@ -1602,7 +1580,7 @@ export default function VideoStudio({
               {imageMode && getMaxImagesForI2VModel(selectedModel) > 2 && (
                 <>
                   {uploadedImageUrls.map((url, idx) => (
-                    <div key={idx} className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+                    <div key={url} className={PROMPT_MEDIA_PREVIEW_CLASS}>
                       <img src={url} alt="" className="w-full h-full object-cover" />
                       <button
                         type="button"
@@ -1627,7 +1605,7 @@ export default function VideoStudio({
                   • T2V with inputs.images_list: optional reference images (e.g. Seedance 2.0 Extend)
                   • Hidden in regular V2V mode (watermark remover etc. needs no image)
                   • Hidden for extend-type models without inputs.images_list */}
-              {((!v2vMode || isMotionControlSelection(selectedModel, v2vMode)) && (!isExtendMode || currentModelObj?.inputs?.images_list)) && (
+              {canUploadImageReference && (
                 getMaxImagesForI2VModel(selectedModel) > 2 ? (
                   uploadedImageUrls.length < getMaxImagesForI2VModel(selectedModel) && (
                     <div className="relative">
@@ -2072,7 +2050,7 @@ export default function VideoStudio({
                 </div>
               )}
 
-              {showDrawButton && (
+              {canUploadImageReference && (
                 <button
                   type="button"
                   className={promptControlClassName()}

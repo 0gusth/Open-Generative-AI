@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { runClipping, uploadFile } from "../muapi.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
+  PROMPT_MEDIA_PREVIEW_CLASS,
   PromptAspectRatioIcon,
   PromptAction,
   PromptComposer,
@@ -756,7 +757,7 @@ export default function ClippingStudio({
           {/* Inline list of uploaded media files */}
           {videoUrl && (
             <div className="flex items-center gap-2.5 px-1 pb-1">
-              <div className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+              <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                 <video src={videoUrl} className="w-full h-full object-cover" muted playsInline />
                 <button
                   type="button"

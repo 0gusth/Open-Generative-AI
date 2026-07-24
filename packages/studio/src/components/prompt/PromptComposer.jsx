@@ -73,6 +73,9 @@ export function promptMediaButtonClassName({
   );
 }
 
+export const PROMPT_MEDIA_PREVIEW_CLASS =
+  "relative w-10 h-10 shrink-0 rounded-full border border-white/10 overflow-hidden shadow-md group";
+
 export const PROMPT_CONTROL_LABEL_CLASS =
   "text-xs font-semibold text-current opacity-70 group-hover:text-[#22d3ee] group-hover:opacity-100 transition-all";
 
