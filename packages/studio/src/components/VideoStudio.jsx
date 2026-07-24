@@ -17,6 +17,24 @@ import {
   getModesForModel,
   getMaxImagesForI2VModel,
 } from "../models.js";
+import {
+  PROMPT_CONTROL_LABEL_CLASS,
+  PromptAspectRatioIcon,
+  PromptAction,
+  PromptChevronIcon,
+  PromptComposer,
+  PromptControls,
+  PromptFooter,
+  PromptMenuItem,
+  PromptMenuList,
+  PromptPopover,
+  PromptPopoverHeader,
+  PromptDurationIcon,
+  PromptQualityIcon,
+  PromptTextarea,
+  promptControlClassName,
+  promptMediaButtonClassName,
+} from "./prompt/PromptComposer.jsx";
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 
@@ -89,20 +107,6 @@ const VideoReadySvg = () => (
 );
 
 // ── Dropdown components ───────────────────────────────────────────────────────
-
-function DropdownItem({ label, selected, onClick }) {
-  return (
-    <div
-      className="flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all group"
-      onClick={onClick}
-    >
-      <span className="text-xs font-bold text-white opacity-80 group-hover:opacity-100 capitalize">
-        {label}
-      </span>
-      {selected && <CheckSvg />}
-    </div>
-  );
-}
 
 const PROVIDER_LOGOS = {
   openai: "https://cdn.muapi.ai/models/openai.png",
@@ -388,33 +392,6 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
 
 // ── Control button ────────────────────────────────────────────────────────────
 
-function ControlBtn({ icon, label, onClick, style }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={style}
-      className="flex items-center gap-1.5 md:gap-2.5 px-3 md:px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl transition-all border border-white/5 group whitespace-nowrap"
-    >
-      {icon}
-      <span className="text-xs font-bold text-white group-hover:text-primary transition-colors">
-        {label}
-      </span>
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="4"
-        className="opacity-20 group-hover:opacity-100 transition-opacity"
-      >
-        <path d="M6 9l6 6 6-6" />
-      </svg>
-    </button>
-  );
-}
-
 // ── Dropdown panel ─────────────────────────────────────────────────────────────
 // Rendered inside a `relative` wrapper div; floats above the anchor button.
 
@@ -668,19 +645,6 @@ export default function VideoStudio({
     }
   }, [applyControlsForModel, defaultModel.id]);
 
-  // ── Adjust height on load ────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (textareaRef.current) {
-        const el = textareaRef.current;
-        el.style.height = "auto";
-        const maxH = window.innerWidth < 768 ? 150 : 250;
-        el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, []);
-
   // ── Persistence: Save ────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -844,13 +808,8 @@ export default function VideoStudio({
     return () => window.removeEventListener("click", handler);
   }, [openDropdown]);
 
-  // ── textarea auto-resize ──────────────────────────────────────────────────
   const handlePromptInput = (e) => {
     setPrompt(e.target.value);
-    const el = e.target;
-    el.style.height = "auto";
-    const maxH = window.innerWidth < 768 ? 150 : 250;
-    el.style.height = Math.min(el.scrollHeight, maxH) + "px";
   };
 
   // ── image upload ─────────────────────────────────────────────────────────
@@ -1575,8 +1534,7 @@ export default function VideoStudio({
       </div>
 
       {/* ── BOTTOM PROMPT BAR ── */}
-      <div className="absolute bottom-4 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-        <div className="w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]">
+      <PromptComposer>
           <div className="flex flex-col gap-3">
             {/* Inline list of uploaded media files */}
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -1669,7 +1627,7 @@ export default function VideoStudio({
                         type="button"
                         title="Upload reference image"
                         onClick={() => imageFileInputRef.current?.click()}
-                        className="w-12 h-12 shrink-0 rounded-xl border border-dashed border-white/10 hover:border-[#22d3ee]/40 bg-white/[0.02] hover:bg-white/5 transition-all flex items-center justify-center relative overflow-hidden group"
+                        className={promptMediaButtonClassName()}
                       >
                         {imageUploading ? (
                           <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
@@ -1712,7 +1670,7 @@ export default function VideoStudio({
                         type="button"
                         title="Upload reference image"
                         onClick={() => imageFileInputRef.current?.click()}
-                        className="w-12 h-12 shrink-0 rounded-xl border border-dashed border-white/10 hover:border-[#22d3ee]/40 bg-white/[0.02] hover:bg-white/5 transition-all flex items-center justify-center relative overflow-hidden group"
+                        className={promptMediaButtonClassName()}
                       >
                         {imageUploading ? (
                           <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
@@ -1758,7 +1716,7 @@ export default function VideoStudio({
                     type="button"
                     title="Upload end frame (optional)"
                     onClick={() => endImageFileInputRef.current?.click()}
-                    className="w-12 h-12 shrink-0 rounded-xl border border-dashed border-white/10 hover:border-[#22d3ee]/40 bg-white/[0.02] hover:bg-white/5 transition-all flex items-center justify-center relative overflow-hidden group"
+                    className={promptMediaButtonClassName()}
                   >
                     {endImageUploading ? (
                       <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
@@ -1803,7 +1761,7 @@ export default function VideoStudio({
                     type="button"
                     title="Upload video to remove watermark"
                     onClick={() => videoFileInputRef.current?.click()}
-                    className="w-12 h-12 shrink-0 rounded-xl border border-dashed border-white/10 hover:border-[#22d3ee]/40 bg-white/[0.02] hover:bg-white/5 transition-all flex items-center justify-center relative overflow-hidden group"
+                    className={promptMediaButtonClassName()}
                   >
                     {videoUploading ? (
                       <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
@@ -1844,14 +1802,12 @@ export default function VideoStudio({
 
             {/* Prompt textarea */}
             <div className="flex-1 flex flex-col gap-1">
-              <textarea
+              <PromptTextarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={handlePromptInput}
                 placeholder={promptPlaceholder}
                 disabled={promptDisabled}
-                rows={1}
-                className="w-full bg-transparent border-none text-white text-sm placeholder:text-white/10 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40"
               />
             </div>
           </div>
@@ -1874,14 +1830,16 @@ export default function VideoStudio({
           )}
 
           {/* Bottom row: controls + generate */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-3 border-t border-white/[0.03] relative">
-            <div className="flex items-center gap-2 relative flex-wrap pb-1 md:pb-0">
+          <PromptFooter>
+            <PromptControls ref={dropdownRef}>
               {/* Model btn */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={toggleDropdown("model")}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                  className={promptControlClassName({
+                    active: openDropdown === "model",
+                  })}
                 >
                   <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white/5">
                     {(() => {
@@ -1899,34 +1857,24 @@ export default function VideoStudio({
                       );
                     })()}
                   </div>
-                  <span className="text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {selectedModelName}
                   </span>
-                  <svg
-                    width="8"
-                    height="8"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    className="opacity-20 group-hover:opacity-100 transition-opacity"
-                  >
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
+                  <PromptChevronIcon />
                 </button>
                 {openDropdown === "model" && (
-                  <div
-                    ref={dropdownRef}
+                  <PromptPopover
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0a0a0a] rounded-[1.5rem] p-3.5 shadow-2xl border border-white/[0.05] w-[calc(100vw-2rem)] md:w-[480px] max-w-md md:max-w-none"
+                    className="w-[calc(100vw-2rem)] md:w-[480px] max-w-md md:max-w-none max-h-[70vh]"
                   >
+                    <PromptPopoverHeader>Model</PromptPopoverHeader>
                     <ModelDropdown
                       imageMode={imageMode}
                       selectedModel={selectedModel}
                       onSelect={handleModelSelect}
                       onClose={() => setOpenDropdown(null)}
                     />
-                  </div>
+                  </PromptPopover>
                 )}
               </div>
 
@@ -1936,58 +1884,38 @@ export default function VideoStudio({
                   <button
                     type="button"
                     onClick={toggleDropdown("ar")}
-                    className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                    className={promptControlClassName({
+                      active: openDropdown === "ar",
+                    })}
                   >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="opacity-40 text-white"
-                    >
-                      <rect
-                        x="3"
-                        y="3"
-                        width="18"
-                        height="18"
-                        rx="2"
-                        ry="2"
-                      />
-                    </svg>
-                    <span className="text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                    <PromptAspectRatioIcon />
+                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
                       {selectedAr}
                     </span>
                   </button>
                   {openDropdown === "ar" && (
-                    <div
-                      ref={dropdownRef}
+                    <PromptPopover
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 max-h-80 overflow-y-auto custom-scrollbar shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[160px]"
                     >
-                      <div className="text-xs font-semibold text-white/30 uppercase tracking-wider pb-2 border-b border-white/[0.05] mb-2 px-1">
+                      <PromptPopoverHeader>
                         Aspect Ratio
-                      </div>
-                      <div className="flex flex-col gap-1">
+                      </PromptPopoverHeader>
+                      <PromptMenuList>
                         {getCurrentAspectRatios(selectedModel).map((r) => (
-                          <div
+                          <PromptMenuItem
                             key={r}
-                            className="flex items-center justify-between p-2.5 px-3 hover:bg-[#22d3ee]/10 hover:text-white rounded-xl cursor-pointer transition-all group/opt"
+                            selected={selectedAr === r}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAr(r);
                               setOpenDropdown(null);
                             }}
                           >
-                            <span className="text-xs font-semibold text-white/70 group-hover/opt:text-[#22d3ee] transition-colors">
-                              {r}
-                            </span>
-                            {selectedAr === r && <CheckSvg />}
-                          </div>
+                            {r}
+                          </PromptMenuItem>
                         ))}
-                      </div>
-                    </div>
+                      </PromptMenuList>
+                    </PromptPopover>
                   )}
                 </div>
               )}
@@ -1998,11 +1926,13 @@ export default function VideoStudio({
                   <button
                     type="button"
                     onClick={toggleDropdown("effect")}
-                    className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                    className={promptControlClassName({
+                      active: openDropdown === "effect",
+                    })}
                   >
                     <svg
-                      width="14"
-                      height="14"
+                      width="16"
+                      height="16"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -2011,38 +1941,34 @@ export default function VideoStudio({
                     >
                       <path d="M5 3l14 9-14 9V3z" />
                     </svg>
-                    <span className="text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors max-w-[140px] truncate">
+                    <span className={`${PROMPT_CONTROL_LABEL_CLASS} max-w-[140px] truncate`}>
                       {selectedEffect || "Effect"}
                     </span>
                   </button>
                   {openDropdown === "effect" && (
-                    <div
-                      ref={dropdownRef}
+                    <PromptPopover
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 max-h-80 overflow-y-auto custom-scrollbar shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[200px]"
+                      className="min-w-[200px]"
                     >
-                      <div className="text-xs font-semibold text-white/30 uppercase tracking-wider pb-2 border-b border-white/[0.05] mb-2 px-1">
+                      <PromptPopoverHeader>
                         Effect Type
-                      </div>
-                      <div className="flex flex-col gap-1">
+                      </PromptPopoverHeader>
+                      <PromptMenuList>
                         {getEffectsForI2VModel(selectedModel).map((eff) => (
-                          <div
+                          <PromptMenuItem
                             key={eff}
-                            className="flex items-center justify-between p-2.5 px-3 hover:bg-[#22d3ee]/10 hover:text-white rounded-xl cursor-pointer transition-all group/opt"
+                            selected={selectedEffect === eff}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedEffect(eff);
                               setOpenDropdown(null);
                             }}
                           >
-                            <span className="text-xs font-semibold text-white/70 group-hover/opt:text-[#22d3ee] transition-colors">
-                              {eff}
-                            </span>
-                            {selectedEffect === eff && <CheckSvg />}
-                          </div>
+                            {eff}
+                          </PromptMenuItem>
                         ))}
-                      </div>
-                    </div>
+                      </PromptMenuList>
+                    </PromptPopover>
                   )}
                 </div>
               )}
@@ -2053,52 +1979,38 @@ export default function VideoStudio({
                   <button
                     type="button"
                     onClick={toggleDropdown("duration")}
-                    className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                    className={promptControlClassName({
+                      active: openDropdown === "duration",
+                    })}
                   >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="opacity-40 text-white"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span className="text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                    <PromptDurationIcon />
+                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
                       {selectedDuration}s
                     </span>
                   </button>
                   {openDropdown === "duration" && (
-                    <div
-                      ref={dropdownRef}
+                    <PromptPopover
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[140px]"
                     >
-                      <div className="text-xs font-semibold text-white/30 uppercase tracking-wider pb-2 border-b border-white/[0.05] mb-2 px-1">
+                      <PromptPopoverHeader>
                         Duration
-                      </div>
-                      <div className="flex flex-col gap-1">
+                      </PromptPopoverHeader>
+                      <PromptMenuList>
                         {getCurrentDurations(selectedModel).map((d) => (
-                          <div
+                          <PromptMenuItem
                             key={d}
-                            className="flex items-center justify-between p-2.5 px-3 hover:bg-[#22d3ee]/10 hover:text-white rounded-xl cursor-pointer transition-all group/opt"
+                            selected={selectedDuration === d}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedDuration(d);
                               setOpenDropdown(null);
                             }}
                           >
-                            <span className="text-xs font-semibold text-white/70 group-hover/opt:text-[#22d3ee] transition-colors">
-                              {d}s
-                            </span>
-                            {selectedDuration === d && <CheckSvg />}
-                          </div>
+                            {d}s
+                          </PromptMenuItem>
                         ))}
-                      </div>
-                    </div>
+                      </PromptMenuList>
+                    </PromptPopover>
                   )}
                 </div>
               )}
@@ -2109,62 +2021,47 @@ export default function VideoStudio({
                   <button
                     type="button"
                     onClick={toggleDropdown("resolution")}
-                    className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                    className={promptControlClassName({
+                      active: openDropdown === "resolution",
+                    })}
                   >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      className="opacity-40 text-white"
-                    >
-                      <polygon points="12 2 22 12 12 22 2 12" />
-                    </svg>
-                    <span className="text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                    <PromptQualityIcon />
+                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
                       {selectedResolution || "720p"}
                     </span>
                   </button>
                   {openDropdown === "resolution" && (
-                    <div
-                      ref={dropdownRef}
+                    <PromptPopover
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[140px]"
                     >
-                      <div className="text-xs font-semibold text-white/30 uppercase tracking-wider pb-2 border-b border-white/[0.05] mb-2 px-1">
+                      <PromptPopoverHeader>
                         Resolution
-                      </div>
-                      <div className="flex flex-col gap-1">
+                      </PromptPopoverHeader>
+                      <PromptMenuList>
                         {getCurrentResolutions(selectedModel).map((r) => (
-                          <div
+                          <PromptMenuItem
                             key={r}
-                            className="flex items-center justify-between p-2.5 px-3 hover:bg-[#22d3ee]/10 hover:text-white rounded-xl cursor-pointer transition-all group/opt"
+                            selected={selectedResolution === r}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedResolution(r);
                               setOpenDropdown(null);
                             }}
                           >
-                            <span className="text-xs font-semibold text-white/70 group-hover/opt:text-[#22d3ee] transition-colors">
-                              {r}
-                            </span>
-                            {selectedResolution === r && <CheckSvg />}
-                          </div>
+                            {r}
+                          </PromptMenuItem>
                         ))}
-                      </div>
-                    </div>
+                      </PromptMenuList>
+                    </PromptPopover>
                   )}
                 </div>
               )}
-            </div>
+            </PromptControls>
 
             {/* Generate button */}
-            <button
-              type="button"
+            <PromptAction
               onClick={handleGenerate}
               disabled={generating}
-              className="bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {generating ? (
                 <>
@@ -2180,10 +2077,9 @@ export default function VideoStudio({
                   <span>Generate</span>
                 </>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </PromptAction>
+          </PromptFooter>
+      </PromptComposer>
 
       {/* ── FULLSCREEN VIDEO MODAL ── */}
       {fullscreenUrl && (

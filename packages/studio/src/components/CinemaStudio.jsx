@@ -2,6 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateImage, uploadFile } from "../muapi.js";
+import {
+  PromptAspectRatioIcon,
+  PromptAction,
+  PromptComposer,
+  PromptControls,
+  PromptFooter,
+  PromptMenuItem,
+  PromptMenuList,
+  PromptPopover,
+  PromptPopoverHeader,
+  PromptQualityIcon,
+  PromptTextarea,
+  promptControlClassName,
+  promptMediaButtonClassName,
+} from "./prompt/PromptComposer.jsx";
 
 // ─── Constants (inlined from promptUtils) ───────────────────────────────────
 
@@ -106,9 +121,8 @@ function buildNanoBananaPrompt(
 
 // ─── Dropdown ────────────────────────────────────────────────────────────────
 
-function Dropdown({ items, selected, onSelect, triggerRef, onClose }) {
+function Dropdown({ title, items, selected, onSelect, triggerRef, onClose }) {
   const menuRef = useRef(null);
-  const [position, setPosition] = useState({ bottom: 0, left: 0 });
 
   useEffect(() => {
     const handler = (e) => {
@@ -126,14 +140,15 @@ function Dropdown({ items, selected, onSelect, triggerRef, onClose }) {
   }, [onClose, triggerRef]);
 
   return (
-    <div
+    <PromptPopover
       ref={menuRef}
-      className="custom-dropdown absolute bottom-[calc(100%+8px)] left-0 bg-[#1a1a1a] border border-white/10 rounded py-1 shadow-2xl z-50 flex flex-col min-w-[120px] animate-fade-in"
     >
+      <PromptPopoverHeader>{title}</PromptPopoverHeader>
+      <PromptMenuList>
       {items.map((item) => (
-        <button
+        <PromptMenuItem
           key={item}
-          className={`px-3 py-2 text-xs font-bold text-left hover:bg-white/10 transition-colors ${item === selected ? "text-primary" : "text-white"}`}
+          selected={item === selected}
           onClick={(e) => {
             e.stopPropagation();
             onSelect(item);
@@ -141,9 +156,10 @@ function Dropdown({ items, selected, onSelect, triggerRef, onClose }) {
           }}
         >
           {item}
-        </button>
+        </PromptMenuItem>
       ))}
-    </div>
+      </PromptMenuList>
+    </PromptPopover>
   );
 }
 
@@ -525,17 +541,6 @@ export default function CinemaStudio({
   }, []);
 
   // ── Adjust height on load ────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (textareaRef.current) {
-        const el = textareaRef.current;
-        el.style.height = "auto";
-        el.style.height = el.scrollHeight + "px";
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, []);
-
   // ── Persistence: Save ────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -566,13 +571,6 @@ export default function CinemaStudio({
     `${settings.lens}, ${settings.focal}mm, ${settings.aperture}`;
 
   // ── Textarea auto-height ──
-  const handleTextareaInput = (e) => {
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-    setSettings((prev) => ({ ...prev, prompt: el.value }));
-  };
-
   // ── Generate ──
   const handleGenerate = useCallback(async () => {
     const basePrompt = settings.prompt.trim();
@@ -686,13 +684,6 @@ export default function CinemaStudio({
       }));
       if (entry.settings.resolution) setResolution(entry.settings.resolution);
 
-      // Sync textarea height
-      if (textareaRef.current) {
-        textareaRef.current.value = entry.settings.prompt || "";
-        textareaRef.current.style.height = "auto";
-        textareaRef.current.style.height =
-          textareaRef.current.scrollHeight + "px";
-      }
     }
     setCanvasUrl(entry.url);
   };
@@ -701,8 +692,6 @@ export default function CinemaStudio({
     setCanvasUrl(null);
     setSettings((prev) => ({ ...prev, prompt: "" }));
     if (textareaRef.current) {
-      textareaRef.current.value = "";
-      textareaRef.current.style.height = "auto";
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
   };
@@ -874,8 +863,10 @@ export default function CinemaStudio({
       </div>
 
       {/* ── BOTTOM PROMPT BAR ── */}
-      <div className="absolute bottom-4 left-4 right-4 md:left-0 md:right-0 md:mx-auto md:max-w-[95%] lg:max-w-4xl z-30 transition-all duration-700 animate-fade-in-up">
-        <div className="w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]">
+      <PromptComposer
+        positionClassName="absolute bottom-4 left-4 right-4 md:left-0 md:right-0 md:mx-auto md:max-w-[95%] lg:max-w-4xl z-30 transition-all duration-700 animate-fade-in-up"
+        style={null}
+      >
           {/* Upper Row: Image Upload & Textarea */}
           <div className="flex items-start gap-4 w-full px-1">
             {/* Image Upload Button */}
@@ -895,7 +886,9 @@ export default function CinemaStudio({
                     : imageInputRef.current?.click()
                 }
                 disabled={isUploadingImage}
-                className={`w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden ${uploadedImage ? "border-[#22d3ee]/60 bg-white/5" : "bg-white/[0.03] border-white/[0.03] hover:bg-white/10 hover:border-[#22d3ee]/40"} group`}
+                className={promptMediaButtonClassName({
+                  active: Boolean(uploadedImage),
+                })}
               >
                 {isUploadingImage ? (
                   <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
@@ -948,51 +941,45 @@ export default function CinemaStudio({
               </button>
             </div>
 
-            <textarea
+            <PromptTextarea
               ref={textareaRef}
               value={settings.prompt}
-              onChange={(e) => {
-                setSettings(prev => ({ ...prev, prompt: e.target.value }));
-                const el = e.target;
-                el.style.height = "auto";
-                const maxH = window.innerWidth < 768 ? 150 : 250;
-                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-              }}
+              onChange={(e) =>
+                setSettings((prev) => ({ ...prev, prompt: e.target.value }))
+              }
               placeholder="Describe your cinema scene..."
-              className="w-full bg-transparent border-none text-white text-sm placeholder:text-white/20 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40"
-              rows={1}
             />
           </div>
 
           {/* Bottom Row: Controls & Generate */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-3 border-t border-white/[0.03] relative">
-            <div className="flex items-center gap-2 relative flex-wrap pb-1 md:pb-0">
+          <PromptFooter>
+            <PromptControls>
               {/* Aspect Ratio Button */}
               <div className="relative">
                 <button
                   ref={arBtnRef}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner text-[11px] font-semibold text-white/70 hover:text-white"
+                  className={promptControlClassName({
+                    active: openDropdown === "ar",
+                    className: "text-xs font-semibold",
+                  })}
                   onClick={() =>
                     setOpenDropdown((d) => (d === "ar" ? null : "ar"))
                   }
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40">
-                    <rect x="2" y="7" width="20" height="10" rx="2" ry="2" />
-                  </svg>
+                  <PromptAspectRatioIcon />
                   {settings.aspect_ratio}
                 </button>
                 {openDropdown === "ar" && (
-                  <div className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[140px]">
-                    <Dropdown
-                      items={ASPECT_RATIOS}
-                      selected={settings.aspect_ratio}
-                      onSelect={(val) =>
-                        setSettings((prev) => ({ ...prev, aspect_ratio: val }))
-                      }
-                      triggerRef={arBtnRef}
-                      onClose={() => setOpenDropdown(null)}
-                    />
-                  </div>
+                  <Dropdown
+                    title="Aspect Ratio"
+                    items={ASPECT_RATIOS}
+                    selected={settings.aspect_ratio}
+                    onSelect={(val) =>
+                      setSettings((prev) => ({ ...prev, aspect_ratio: val }))
+                    }
+                    triggerRef={arBtnRef}
+                    onClose={() => setOpenDropdown(null)}
+                  />
                 )}
               </div>
 
@@ -1000,44 +987,45 @@ export default function CinemaStudio({
               <div className="relative">
                 <button
                   ref={resBtnRef}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner text-[11px] font-semibold text-white/70 hover:text-white"
+                  className={promptControlClassName({
+                    active: openDropdown === "res",
+                    className: "text-xs font-semibold",
+                  })}
                   onClick={() =>
                     setOpenDropdown((d) => (d === "res" ? null : "res"))
                   }
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                  </svg>
+                  <PromptQualityIcon />
                   {resolution}
                 </button>
                 {openDropdown === "res" && (
-                  <div className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[140px]">
-                    <Dropdown
-                      items={RESOLUTIONS}
-                      selected={resolution}
-                      onSelect={setResolution}
-                      triggerRef={resBtnRef}
-                      onClose={() => setOpenDropdown(null)}
-                    />
-                  </div>
+                  <Dropdown
+                    title="Resolution"
+                    items={RESOLUTIONS}
+                    selected={resolution}
+                    onSelect={setResolution}
+                    triggerRef={resBtnRef}
+                    onClose={() => setOpenDropdown(null)}
+                  />
                 )}
               </div>
 
               {/* Summary Card (triggers overlay) */}
               <button
-                className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] text-left group overflow-hidden shadow-inner text-[11px] font-semibold text-white/70 hover:text-white"
+                className={promptControlClassName({
+                  className: "text-left overflow-hidden text-xs font-semibold text-white/70 hover:text-white",
+                })}
                 onClick={() => setIsOverlayOpen(true)}
               >
                 <div className="w-1.5 h-1.5 bg-[#22d3ee] rounded-full shadow-lg shadow-[#22d3ee]/20 shrink-0" />
-                <span className="max-w-[120px] truncate text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                <span className="max-w-[120px] truncate text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
                   {settings.camera} · {formatSummaryValue()}
                 </span>
               </button>
-            </div>
+            </PromptControls>
 
             {/* Generate Button */}
-            <button
-              className="bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10"
+            <PromptAction
               disabled={isGenerating || !settings.prompt.trim()}
               onClick={handleGenerate}
             >
@@ -1051,10 +1039,9 @@ export default function CinemaStudio({
                   <span>Shoot ✦ 10</span>
                 </>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </PromptAction>
+          </PromptFooter>
+      </PromptComposer>
       {fullscreenUrl && (
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"
