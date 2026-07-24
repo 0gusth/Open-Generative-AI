@@ -509,6 +509,8 @@ export default function CinemaStudio({
   const [imageUploadProgress, setImageUploadProgress] = useState(0);
   const imageInputRef = useRef(null);
   const [activeHistoryIndex, setactiveHistoryIndex] = useState(null);
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState(null);
+  const [copiedImageIndex, setCopiedImageIndex] = useState(null);
 
   // ── Internal history state (used when historyItems prop is not provided) ──
   const [internalHistory, setInternalHistory] = useState([]);
@@ -693,6 +695,75 @@ export default function CinemaStudio({
     }
   }, [canvasUrl]);
 
+  const handleCopyPrompt = useCallback(
+    async (prompt, index) => {
+      if (!prompt) return;
+
+      try {
+        await navigator.clipboard.writeText(prompt);
+        setCopiedPromptIndex(index);
+        window.setTimeout(() => {
+          setCopiedPromptIndex((current) => (current === index ? null : current));
+        }, 1600);
+      } catch (error) {
+        console.error("Failed to copy the prompt:", error);
+        onGenerationError?.("Could not copy the prompt to the clipboard.");
+      }
+    },
+    [onGenerationError],
+  );
+
+  const handleCopyImage = useCallback(
+    async (imageUrl, index) => {
+      try {
+        if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+          throw new Error("Image clipboard access is not supported.");
+        }
+
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+          throw new Error(`Image request failed with status ${response.status}.`);
+        }
+
+        const sourceBlob = await response.blob();
+        let clipboardBlob = sourceBlob;
+
+        if (sourceBlob.type !== "image/png") {
+          const bitmap = await createImageBitmap(sourceBlob);
+          const canvas = document.createElement("canvas");
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Could not create an image canvas.");
+          context.drawImage(bitmap, 0, 0);
+          bitmap.close?.();
+
+          clipboardBlob = await new Promise((resolve, reject) => {
+            canvas.toBlob(
+              (blob) =>
+                blob
+                  ? resolve(blob)
+                  : reject(new Error("Could not convert the image to PNG.")),
+              "image/png",
+            );
+          });
+        }
+
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": clipboardBlob }),
+        ]);
+        setCopiedImageIndex(index);
+        window.setTimeout(() => {
+          setCopiedImageIndex((current) => (current === index ? null : current));
+        }, 1600);
+      } catch (error) {
+        console.error("Failed to copy the image:", error);
+        onGenerationError?.("Could not copy the image to the clipboard.");
+      }
+    },
+    [onGenerationError],
+  );
+
   // ── Load history item ──
   const loadHistoryItem = (entry, idx) => {
     if (entry.settings) {
@@ -785,6 +856,49 @@ export default function CinemaStudio({
                   </button>
                   <button
                     type="button"
+                    title={
+                      copiedImageIndex === idx ? "Image copied" : "Copy image"
+                    }
+                    aria-label={
+                      copiedImageIndex === idx ? "Image copied" : "Copy image"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyImage(entry.url, idx);
+                    }}
+                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-[#22d3ee] hover:text-black transition-all border border-white/10"
+                  >
+                    {copiedImageIndex === idx ? (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m5 12 4 4L19 6" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="8" y="8" width="12" height="12" rx="2" />
+                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     title="Delete"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -805,10 +919,34 @@ export default function CinemaStudio({
 
                 {/* Details */}
                 <div className="p-3 bg-black/80 backdrop-blur-sm border-t border-white/5 flex-1 flex flex-col justify-between gap-2">
-                  <p className="text-white/70 text-xs line-clamp-3 leading-relaxed">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyPrompt(entry.settings?.prompt, idx);
+                    }}
+                    className={`w-full text-left text-xs line-clamp-3 leading-relaxed transition-colors cursor-copy ${
+                      copiedPromptIndex === idx
+                        ? "text-[#22d3ee]"
+                        : "text-white/70 hover:text-white"
+                    }`}
+                    title={
+                      copiedPromptIndex === idx
+                        ? "Prompt copied"
+                        : "Copy full prompt"
+                    }
+                    aria-label={
+                      copiedPromptIndex === idx
+                        ? "Prompt copied"
+                        : "Copy full prompt"
+                    }
+                  >
                     {entry.settings?.prompt || "No prompt"}
-                  </p>
-                  <div className="flex items-center justify-between mt-1 flex-wrap gap-1">
+                  </button>
+                  <span className="sr-only" aria-live="polite">
+                    {copiedPromptIndex === idx ? "Prompt copied" : ""}
+                  </span>
+                  <div className="flex items-center mt-1 flex-wrap gap-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-[#22d3ee] px-2 py-0.5 bg-[#22d3ee]/10 rounded border border-[#22d3ee]/20">
                         Cinema Studio
@@ -817,22 +955,6 @@ export default function CinemaStudio({
                         <span className="text-[10px] text-white/40">{entry.settings.camera}</span>
                       )}
                     </div>
-                    {entry.settings?.prompt && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(entry.settings.prompt);
-                          const btn = e.currentTarget;
-                          btn.innerText = "Copied!";
-                          setTimeout(() => { btn.innerText = "Copy"; }, 2000);
-                        }}
-                        className="px-2 py-0.5 bg-white/5 hover:bg-primary/20 hover:text-primary rounded text-[10px] font-medium text-white/70 transition-all border border-white/10"
-                        title="Copy prompt"
-                      >
-                        Copy Prompt
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
