@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateVideo, generateI2V, processV2V, uploadFile } from "../muapi.js";
+import DrawModal from "./DrawModal.jsx";
 import {
   t2vModels,
   i2vModels,
@@ -41,6 +42,27 @@ import {
 function getQualitiesForModel(modelList, modelId) {
   const model = modelList.find((m) => m.id === modelId);
   return model?.inputs?.quality?.enum || [];
+}
+
+function supportsImageReference(modelId, imageMode, v2vMode) {
+  if (imageMode) {
+    return i2vModels.some((model) => model.id === modelId);
+  }
+
+  if (v2vMode) {
+    return Boolean(
+      v2vModels.find((model) => model.id === modelId)?.imageField,
+    );
+  }
+
+  const model = t2vModels.find((item) => item.id === modelId);
+  if (!model) return false;
+  if (model.inputs?.images_list) return true;
+
+  return Boolean(
+    model.family &&
+      i2vModels.some((candidate) => candidate.family === model.family),
+  );
 }
 
 async function downloadFile(url, filename) {
@@ -460,6 +482,7 @@ export default function VideoStudio({
   const [canvasUrl, setCanvasUrl] = useState(null);
   const [canvasModel, setCanvasModel] = useState(null);
   const [showCanvas, setShowCanvas] = useState(false);
+  const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
   const [lastGenerationId, setLastGenerationId] = useState(null);
   const [lastGenerationModel, setLastGenerationModel] = useState(null);
 
@@ -694,85 +717,134 @@ export default function VideoStudio({
 
   // ── Derived UI values ────────────────────────────────────────────────────
 
-  const processDroppedImage = async (file) => {
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Image exceeds 10MB limit.");
-      return;
-    }
-    setImageUploading(true);
-    setImageProgress(0);
-    try {
-      const url = await uploadFile(apiKey, file, (pct) => {
-        setImageProgress(pct);
-      });
+  const applyImageReferenceUrl = useCallback(
+    (url) => {
+      if (!url) return;
+
       setUploadedImageUrl(url);
+
+      // Motion-control models use the image alongside the uploaded video.
+      if (isMotionControlSelection(selectedModel, v2vMode)) {
+        setUploadedImageUrls([url]);
+        setPromptDisabled(false);
+        return;
+      }
+
+      const currentT2V = t2vModels.find((model) => model.id === selectedModel);
+
+      // Models with native image inputs stay in their current mode.
+      if (currentT2V?.inputs?.images_list) {
+        const maxImages = currentT2V.inputs.images_list.maxItems || 8;
+        setUploadedImageUrls((previousUrls) => {
+          if (previousUrls.includes(url)) return previousUrls;
+          return [...previousUrls, url].slice(0, maxImages);
+        });
+        setPromptDisabled(false);
+        return;
+      }
+
       setUploadedVideoUrl(null);
       setUploadedVideoName(null);
       setV2vMode(false);
 
-      let targetModelId = selectedModel;
+      const sibling = currentT2V?.family
+        ? i2vModels.find((model) => model.family === currentT2V.family)
+        : null;
+      const targetModel = imageMode
+        ? i2vModels.find((model) => model.id === selectedModel)
+        : sibling || i2vModels[0];
+
+      if (!targetModel) return;
+
       if (!imageMode) {
-        const currentT2V = t2vModels.find((m) => m.id === selectedModel);
-        const sibling = currentT2V?.family
-          ? i2vModels.find((m) => m.family === currentT2V.family)
-          : null;
-        const target = sibling || i2vModels[0];
-        targetModelId = target.id;
         setImageMode(true);
-        setSelectedModel(target.id);
-        setSelectedModelName(target.name);
-        applyControlsForModel(target.id, true, false);
+        setSelectedModel(targetModel.id);
+        setSelectedModelName(targetModel.name);
+        applyControlsForModel(targetModel.id, true, false);
       }
 
-      const maxImgs = getMaxImagesForI2VModel(targetModelId);
-      if (maxImgs > 2) {
-        setUploadedImageUrls((prev) => {
-          if (prev.includes(url)) return prev;
-          return [...prev, url].slice(0, maxImgs);
+      const maxImages = getMaxImagesForI2VModel(targetModel.id);
+      if (maxImages > 2) {
+        setUploadedImageUrls((previousUrls) => {
+          if (previousUrls.includes(url)) return previousUrls;
+          return [...previousUrls, url].slice(0, maxImages);
         });
       } else {
         setUploadedImageUrls([url]);
       }
       setPromptDisabled(false);
-    } catch (err) {
-      alert(`Image upload failed: ${err.message}`);
-    } finally {
-      setImageUploading(false);
-      setImageProgress(0);
-    }
-  };
+    },
+    [
+      applyControlsForModel,
+      imageMode,
+      isMotionControlSelection,
+      selectedModel,
+      v2vMode,
+    ],
+  );
 
-  const processDroppedVideo = async (file) => {
-    if (file.size > 50 * 1024 * 1024) {
-      alert("Video exceeds 50MB limit.");
-      return;
-    }
-    setVideoUploading(true);
-    setVideoProgress(0);
-    try {
-      const url = await uploadFile(apiKey, file, (pct) => {
-        setVideoProgress(pct);
-      });
-      setUploadedVideoUrl(url);
-      setUploadedVideoName(file.name);
-      if (imageMode) {
-        setUploadedImageUrl(null);
-        setImageMode(false);
+  const handleDrawReference = useCallback(
+    (entry) => {
+      applyImageReferenceUrl(entry?.url);
+    },
+    [applyImageReferenceUrl],
+  );
+
+  const uploadImageReference = useCallback(
+    async (file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        alert("Image exceeds 10MB limit.");
+        return;
       }
-      setV2vMode(true);
-      const firstV2V = v2vModels[0];
-      setSelectedModel(firstV2V.id);
-      setSelectedModelName(firstV2V.name);
-      applyControlsForModel(firstV2V.id, false, true);
-      setPrompt("");
-      setPromptDisabled(true);
-    } catch (err) {
-      alert(`Video upload failed: ${err.message}`);
-    } finally {
-      setVideoUploading(false);
+
+      setImageUploading(true);
+      setImageProgress(0);
+      try {
+        const url = await uploadFile(apiKey, file, setImageProgress);
+        applyImageReferenceUrl(url);
+      } catch (err) {
+        console.error("[VideoStudio] Image upload failed:", err);
+        alert(`Image upload failed: ${err.message}`);
+      } finally {
+        setImageUploading(false);
+        setImageProgress(0);
+      }
+    },
+    [apiKey, applyImageReferenceUrl],
+  );
+
+  const processDroppedVideo = useCallback(
+    async (file) => {
+      if (file.size > 50 * 1024 * 1024) {
+        alert("Video exceeds 50MB limit.");
+        return;
+      }
+      setVideoUploading(true);
       setVideoProgress(0);
-    }
-  };
+      try {
+        const url = await uploadFile(apiKey, file, setVideoProgress);
+        setUploadedVideoUrl(url);
+        setUploadedVideoName(file.name);
+        if (imageMode) {
+          setUploadedImageUrl(null);
+          setImageMode(false);
+        }
+        setV2vMode(true);
+        const firstV2V = v2vModels[0];
+        setSelectedModel(firstV2V.id);
+        setSelectedModelName(firstV2V.name);
+        applyControlsForModel(firstV2V.id, false, true);
+        setPrompt("");
+        setPromptDisabled(true);
+      } catch (err) {
+        alert(`Video upload failed: ${err.message}`);
+      } finally {
+        setVideoUploading(false);
+        setVideoProgress(0);
+      }
+    },
+    [apiKey, applyControlsForModel, imageMode],
+  );
 
   // ── Handle Dropped Files ────────────────────────────────────────────────
   useEffect(() => {
@@ -783,11 +855,11 @@ export default function VideoStudio({
       if (videoFiles.length > 0) {
         processDroppedVideo(videoFiles[0]);
       } else if (imageFiles.length > 0) {
-        processDroppedImage(imageFiles[0]);
+        uploadImageReference(imageFiles[0]);
       }
       onFilesHandled?.();
     }
-  }, [droppedFiles, onFilesHandled, processDroppedImage, processDroppedVideo]);
+  }, [droppedFiles, onFilesHandled, processDroppedVideo, uploadImageReference]);
 
   // Initialise controls for default model on mount
   useEffect(() => {
@@ -816,71 +888,9 @@ export default function VideoStudio({
   const handleImageFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Image exceeds 10MB limit.");
-      return;
-    }
-    setImageUploading(true);
-    setImageProgress(0);
-
     try {
-      const url = await uploadFile(apiKey, file, (pct) => {
-        setImageProgress(pct);
-      });
-      setUploadedImageUrl(url);
-
-      // Motion-control v2v: image is a second input, not a mode switch
-      if (isMotionControlSelection(selectedModel, v2vMode)) {
-        setPromptDisabled(false);
-        setUploadedImageUrls([url]);
-      } else {
-        // Model-native image reference (e.g. Seedance 2.0 Extend with inputs.images_list):
-        // keep the current model & mode; just accumulate the image URL
-        const currentT2VOrExtend = t2vModels.find((m) => m.id === selectedModel);
-        if (currentT2VOrExtend?.inputs?.images_list) {
-          const maxImgs = currentT2VOrExtend.inputs?.images_list?.maxItems || 8;
-          setUploadedImageUrls((prev) => {
-            if (prev.includes(url)) return prev;
-            return [...prev, url].slice(0, maxImgs);
-          });
-          setPromptDisabled(false);
-        } else {
-          // Standard flow: clear v2v and switch to an I2V sibling model
-          setUploadedVideoUrl(null);
-          setUploadedVideoName(null);
-          setV2vMode(false);
-
-          let targetModelId = selectedModel;
-          if (!imageMode) {
-            const sibling = currentT2VOrExtend?.family
-              ? i2vModels.find((m) => m.family === currentT2VOrExtend.family)
-              : null;
-            const target = sibling || i2vModels[0];
-            targetModelId = target.id;
-            setImageMode(true);
-            setSelectedModel(target.id);
-            setSelectedModelName(target.name);
-            applyControlsForModel(target.id, true, false);
-          }
-
-          const maxImgs = getMaxImagesForI2VModel(targetModelId);
-          if (maxImgs > 2) {
-            setUploadedImageUrls((prev) => {
-              if (prev.includes(url)) return prev;
-              return [...prev, url].slice(0, maxImgs);
-            });
-          } else {
-            setUploadedImageUrls([url]);
-          }
-          setPromptDisabled(false);
-        }
-      }
-    } catch (err) {
-      console.error("[VideoStudio] Image upload failed:", err);
-      alert(`Image upload failed: ${err.message}`);
+      await uploadImageReference(file);
     } finally {
-      setImageUploading(false);
-      setImageProgress(0);
       if (imageFileInputRef.current) imageFileInputRef.current.value = "";
     }
   };
@@ -1328,6 +1338,11 @@ export default function VideoStudio({
     canvasModel === "seedance-v2.0-t2v" || canvasModel === "seedance-v2.0-i2v";
   const currentModelObj = getCurrentModel();
   const isExtendMode = currentModelObj?.requiresRequestId;
+  const showDrawButton = supportsImageReference(
+    selectedModel,
+    imageMode,
+    v2vMode,
+  );
 
   const promptPlaceholder = v2vMode
     ? currentModelObj?.imageField
@@ -2056,6 +2071,28 @@ export default function VideoStudio({
                   )}
                 </div>
               )}
+
+              {showDrawButton && (
+                <button
+                  type="button"
+                  className={promptControlClassName()}
+                  onClick={() => setIsDrawModalOpen(true)}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    className="opacity-40 text-white group-hover:text-[#22d3ee] transition-colors"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>Draw</span>
+                </button>
+              )}
             </PromptControls>
 
             {/* Generate button */}
@@ -2110,6 +2147,14 @@ export default function VideoStudio({
           />
         </div>
       )}
+
+      <DrawModal
+        isOpen={isDrawModalOpen}
+        onClose={() => setIsDrawModalOpen(false)}
+        apiKey={apiKey}
+        batchSize={1}
+        onAddHistoryItem={handleDrawReference}
+      />
     </div>
   );
 }
