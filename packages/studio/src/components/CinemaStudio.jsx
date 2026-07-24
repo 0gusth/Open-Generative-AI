@@ -163,209 +163,186 @@ function Dropdown({ title, items, selected, onSelect, triggerRef, onClose }) {
   );
 }
 
-// ─── Scroll Column (Camera Controls) ─────────────────────────────────────────
+// Camera configuration controls
 
 function ScrollColumn({ title, items, columnKey, value, onChange }) {
   const listRef = useRef(null);
   const isDragging = useRef(false);
   const startY = useRef(0);
   const scrollTopStart = useRef(0);
-  const isSnapEnabled = useRef(true);
 
-  // Scroll to initial value on mount
   useEffect(() => {
     const list = listRef.current;
-    if (!list) return;
+    if (!list) return undefined;
+
     const timer = setTimeout(() => {
       const target = Array.from(list.children).find(
-        (c) => c.dataset.value == String(value),
+        (child) => child.dataset.value === String(value),
       );
       if (target) target.scrollIntoView({ block: "center" });
     }, 100);
+
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleScroll = useCallback(() => {
     const list = listRef.current;
     if (!list) return;
-    const centerY = list.scrollTop + list.clientHeight / 2;
-    let closest = null;
-    let minDist = Infinity;
 
-    const children = Array.from(list.children).filter((c) => c.dataset.value);
+    const centerY = list.scrollTop + list.clientHeight / 2;
+    const children = Array.from(list.children).filter(
+      (child) => child.dataset.value,
+    );
+    let closest = null;
+    let minimumDistance = Infinity;
+
     children.forEach((child) => {
       const childCenter = child.offsetTop + child.offsetHeight / 2;
-      const dist = Math.abs(centerY - childCenter);
-      if (dist < minDist) {
-        minDist = dist;
+      const distance = Math.abs(centerY - childCenter);
+      if (distance < minimumDistance) {
+        minimumDistance = distance;
         closest = child;
       }
     });
 
     children.forEach((child) => {
-      const imgBox = child.querySelector("[data-imgbox]");
-      const label = child.querySelector("[data-label]");
-      const isClosest = child === closest;
-
-      if (isClosest) {
-        child.classList.remove("opacity-20", "scale-90");
-        child.classList.add("opacity-100", "scale-100", "z-30");
-        if (imgBox) {
-          imgBox.classList.add("border-primary/40", "bg-primary/5", "scale-110");
-          imgBox.classList.remove("border-transparent", "bg-transparent");
-        }
-        if (label) label.classList.add("text-primary");
-      } else {
-        child.classList.add("opacity-20", "scale-90");
-        child.classList.remove("opacity-100", "scale-100", "z-30");
-        if (imgBox) {
-          imgBox.classList.remove("border-primary/40", "bg-primary/5", "scale-110");
-          imgBox.classList.add("border-transparent", "bg-transparent");
-        }
-        if (label) label.classList.remove("text-primary");
-      }
+      const selected = child === closest;
+      child.dataset.selected = String(selected);
+      child.setAttribute("aria-selected", String(selected));
     });
 
     if (closest) {
-      const newVal =
+      const nextValue =
         columnKey === "focal"
-          ? parseInt(closest.dataset.value)
+          ? parseInt(closest.dataset.value, 10)
           : closest.dataset.value;
-      if (String(newVal) !== String(value)) {
-        onChange(newVal);
-      }
+      if (String(nextValue) !== String(value)) onChange(nextValue);
     }
-  }, [columnKey, value, onChange]);
+  }, [columnKey, onChange, value]);
 
-  // Attach scroll handler with initial check
   useEffect(() => {
     const list = listRef.current;
-    if (!list) return;
+    if (!list) return undefined;
+
     list.addEventListener("scroll", handleScroll);
     const timer = setTimeout(handleScroll, 150);
+
     return () => {
       list.removeEventListener("scroll", handleScroll);
       clearTimeout(timer);
     };
   }, [handleScroll]);
 
-  // Mouse drag handlers
-  const onMouseDown = (e) => {
-    isDragging.current = true;
-    isSnapEnabled.current = false;
-    listRef.current.classList.add("cursor-grabbing");
-    listRef.current.classList.remove("snap-y");
-    startY.current = e.pageY - listRef.current.offsetTop;
-    scrollTopStart.current = listRef.current.scrollTop;
-    e.preventDefault();
-  };
-
-  const onMouseLeave = () => {
-    isDragging.current = false;
-    listRef.current.classList.remove("cursor-grabbing");
-    listRef.current.classList.add("snap-y");
-  };
-
-  const onMouseUp = () => {
-    isDragging.current = false;
-    listRef.current.classList.remove("cursor-grabbing");
-    listRef.current.classList.add("snap-y");
-  };
-
-  const onMouseMove = (e) => {
-    if (!isDragging.current) return;
-    e.preventDefault();
-    const y = e.pageY - listRef.current.offsetTop;
-    const walk = (y - startY.current) * 1.5;
-    listRef.current.scrollTop = scrollTopStart.current - walk;
-  };
-
-  const onItemClick = (item) => {
+  const handleMouseDown = (event) => {
     const list = listRef.current;
     if (!list) return;
+
+    isDragging.current = true;
+    list.classList.add("cursor-grabbing");
+    list.classList.remove("snap-y");
+    startY.current = event.pageY - list.offsetTop;
+    scrollTopStart.current = list.scrollTop;
+    event.preventDefault();
+  };
+
+  const stopDragging = () => {
+    const list = listRef.current;
+    isDragging.current = false;
+    if (!list) return;
+    list.classList.remove("cursor-grabbing");
+    list.classList.add("snap-y");
+  };
+
+  const handleMouseMove = (event) => {
+    const list = listRef.current;
+    if (!isDragging.current || !list) return;
+
+    event.preventDefault();
+    const y = event.pageY - list.offsetTop;
+    list.scrollTop = scrollTopStart.current - (y - startY.current) * 1.5;
+  };
+
+  const handleItemClick = (item) => {
+    const list = listRef.current;
+    if (!list) return;
+
     const target = Array.from(list.children).find(
-      (c) => c.dataset.value == String(item),
+      (child) => child.dataset.value === String(item),
     );
     if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  const getSelectedDescription = () => {
-    if (columnKey === 'camera') return CAMERA_MAP[value] || '';
-    if (columnKey === 'lens') return LENS_MAP[value] || '';
-    if (columnKey === 'focal') return FOCAL_PERSPECTIVE[value] || '';
-    if (columnKey === 'aperture') return APERTURE_EFFECT[value] || '';
-    return '';
-  };
-
   return (
-    <div className="flex flex-col items-center relative w-[130px] md:w-[150px] shrink-0 snap-center">
-      <div className="mb-4 text-[10px] font-black text-white/20 uppercase tracking-[0.25em] text-center">
-        {title}
+    <section className="flex w-[170px] shrink-0 snap-center flex-col md:w-[190px]">
+      <div className="mb-3 flex items-center justify-between px-1">
+        <h3 className="text-xs font-semibold text-white/75">{title}</h3>
+        <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-b from-[#22d3ee] to-[#a855f7] shadow-[0_0_6px_rgba(34,211,238,0.5)]" />
       </div>
-      <div className="relative overflow-hidden w-full h-[280px] md:h-[300px] bg-gradient-to-b from-white/[0.02] to-transparent rounded-2xl border border-white/[0.03] shadow-2xl backdrop-blur-3xl group">
-        {/* Masks */}
-        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#0a0a0a] to-transparent z-20 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0a0a0a] to-transparent z-20 pointer-events-none" />
-        
-        {/* Active Selection Ring */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] h-[70px] bg-white/[0.02] border border-white/[0.05] rounded-xl pointer-events-none z-0" />
+
+      <div className="relative h-[320px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#030303] shadow-inner">
+        <div className="pointer-events-none absolute inset-x-2 top-1/2 z-0 h-[82px] -translate-y-1/2 rounded-xl border border-[#22d3ee]/20 bg-gradient-to-r from-[#22d3ee]/15 to-purple-500/10 shadow-[0_0_15px_rgba(34,211,238,0.1)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-gradient-to-b from-[#030303] via-[#030303]/85 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#030303] via-[#030303]/85 to-transparent" />
 
         <div
           ref={listRef}
-          className="h-full overflow-y-auto no-scrollbar snap-y snap-mandatory relative z-10"
-          onMouseDown={onMouseDown}
-          onMouseLeave={onMouseLeave}
-          onMouseUp={onMouseUp}
-          onMouseMove={onMouseMove}
+          role="listbox"
+          aria-label={title}
+          className="relative z-10 h-full cursor-grab snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onMouseDown={handleMouseDown}
+          onMouseLeave={stopDragging}
+          onMouseUp={stopDragging}
+          onMouseMove={handleMouseMove}
         >
-          <div style={{ height: "calc(50% - 35px)" }} />
-
+          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
           {items.map((item) => {
             const imageUrl = ASSET_URLS[item];
+            const selected = String(item) === String(value);
+
             return (
-              <div
+              <button
                 key={item}
+                type="button"
+                role="option"
+                aria-selected={selected}
                 data-value={item}
-                className="h-[70px] flex flex-col items-center justify-center gap-2 snap-center cursor-pointer transition-all duration-300 ease-out text-white p-2 select-none opacity-20 scale-90"
-                onClick={() => onItemClick(item)}
+                data-selected={selected}
+                onClick={() => handleItemClick(item)}
+                className="group flex h-[82px] w-full snap-center select-none items-center justify-center gap-2.5 px-4 text-left opacity-30 transition-all duration-200 data-[selected=true]:opacity-100"
               >
-                <div
-                  data-imgbox="true"
-                  className="w-10 h-10 rounded-lg border border-transparent flex items-center justify-center transition-all duration-300 overflow-hidden relative"
+                <span
+                  className={`flex shrink-0 items-center justify-center font-semibold transition-colors ${
+                    imageUrl
+                      ? "h-10 w-10"
+                      : "text-base text-white/55 group-data-[selected=true]:text-[#22d3ee]"
+                  }`}
                 >
                   {imageUrl ? (
                     <img
                       src={imageUrl}
-                      alt={String(item)}
-                      className="w-full h-full object-cover opacity-70"
+                      alt=""
+                      className="h-full w-full object-contain"
                     />
                   ) : (
-                    <span className="text-sm font-bold text-white/40">
+                    <>
                       {item}
-                    </span>
+                      {columnKey === "focal" ? "mm" : ""}
+                    </>
                   )}
-                </div>
-                <span
-                  data-label="true"
-                  className="text-[8px] md:text-[9px] font-black uppercase text-center leading-tight max-w-full truncate px-1 tracking-widest text-white/60"
-                >
-                  {item}
                 </span>
-              </div>
+                {columnKey !== "focal" && (
+                  <span className="line-clamp-2 min-w-0 text-[10px] font-medium leading-snug text-white/60 transition-colors group-data-[selected=true]:text-white">
+                    {item}
+                  </span>
+                )}
+              </button>
             );
           })}
-
-          <div style={{ height: "calc(50% - 35px)" }} />
+          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
         </div>
       </div>
-      
-      {/* Selection Helper Text */}
-      <div className="mt-4 h-8 px-2 text-center">
-        <span className="text-[9px] font-medium text-primary/60 uppercase tracking-widest animate-fade-in inline-block leading-tight">
-          {getSelectedDescription()}
-        </span>
-      </div>
-    </div>
+
+    </section>
   );
 }
 
@@ -385,30 +362,75 @@ function CameraControlsOverlay({
     onSettingsChange((prev) => ({ ...prev, [key]: val }));
   };
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
   return (
     <div
       ref={backdropRef}
-      className={`fixed inset-0 bg-[#0a0a0a]/80 backdrop-blur-2xl z-[100] flex items-center justify-center transition-all duration-500 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-xl animate-fade-in"
       onClick={handleBackdropClick}
     >
       <div
-        className={`w-full max-w-5xl bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-[0_0_100px_rgba(0,0,0,0.8)] transform transition-all duration-500 flex flex-col max-h-[90vh] ${isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-10"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="camera-config-title"
+        aria-describedby="camera-config-description"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0a0a0b]/95 shadow-[0_24px_100px_rgba(0,0,0,0.75)] backdrop-blur-2xl animate-scale-up"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-2xl font-black text-white tracking-tighter uppercase italic">
-              Camera Config
+        <div className="flex items-start justify-between border-b border-white/[0.05] px-5 py-5 md:px-7 md:py-6">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#22d3ee]">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14.5 4H9.5L8 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3Z" />
+                <circle cx="12" cy="12.5" r="3.5" />
+              </svg>
+              Cinema Studio
+            </div>
+            <h2
+              id="camera-config-title"
+              className="text-xl font-semibold tracking-tight text-white md:text-2xl"
+            >
+              Camera settings
             </h2>
-            <div className="h-[1px] w-12 bg-primary/40" />
+            <p
+              id="camera-config-description"
+              className="mt-1.5 max-w-2xl text-xs leading-relaxed text-white/45 md:text-sm"
+            >
+              Build a consistent cinematic look by choosing the camera, lens,
+              focal length, and depth of field.
+            </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-white/20 hover:text-white transition-all"
+            aria-label="Close camera settings"
+            title="Close"
+            className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.03] text-white/40 transition-all hover:border-white/15 hover:bg-white/[0.07] hover:text-white"
           >
             <svg
-              width="20"
-              height="20"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -419,36 +441,37 @@ function CameraControlsOverlay({
           </button>
         </div>
 
-        {/* Scroll columns */}
-        <div className="w-full flex justify-start md:justify-center gap-3 md:gap-6 py-4 md:py-8 overflow-x-auto no-scrollbar snap-x px-4 md:px-0">
-          <ScrollColumn
-            title="Camera"
-            items={CAMERAS}
-            columnKey="camera"
-            value={settings.camera}
-            onChange={updateSetting("camera")}
-          />
-          <ScrollColumn
-            title="Lens"
-            items={LENSES}
-            columnKey="lens"
-            value={settings.lens}
-            onChange={updateSetting("lens")}
-          />
-          <ScrollColumn
-            title="Focal Length"
-            items={FOCAL_LENGTHS}
-            columnKey="focal"
-            value={settings.focal}
-            onChange={updateSetting("focal")}
-          />
-          <ScrollColumn
-            title="Aperture"
-            items={APERTURES}
-            columnKey="aperture"
-            value={settings.aperture}
-            onChange={updateSetting("aperture")}
-          />
+        <div className="overflow-x-auto px-5 py-6 no-scrollbar md:px-7 md:py-7">
+          <div className="mx-auto flex w-max min-w-full justify-start gap-3 sm:justify-center md:gap-5">
+            <ScrollColumn
+              title="Camera"
+              items={CAMERAS}
+              columnKey="camera"
+              value={settings.camera}
+              onChange={updateSetting("camera")}
+            />
+            <ScrollColumn
+              title="Lens"
+              items={LENSES}
+              columnKey="lens"
+              value={settings.lens}
+              onChange={updateSetting("lens")}
+            />
+            <ScrollColumn
+              title="Focal length"
+              items={FOCAL_LENGTHS}
+              columnKey="focal"
+              value={settings.focal}
+              onChange={updateSetting("focal")}
+            />
+            <ScrollColumn
+              title="Aperture"
+              items={APERTURES}
+              columnKey="aperture"
+              value={settings.aperture}
+              onChange={updateSetting("aperture")}
+            />
+          </div>
         </div>
       </div>
     </div>
