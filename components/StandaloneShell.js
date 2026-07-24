@@ -178,6 +178,65 @@ const TABS = [
   }
 ];
 
+const NAVIGATION_CATEGORIES = [
+  {
+    id: 'images',
+    label: 'Images',
+    tabIds: ['image', 'cinema', 'design-agent', 'ai-influencer'],
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <path d="M21 15l-5-5L5 21"/>
+      </svg>
+    )
+  },
+  {
+    id: 'video',
+    label: 'Video',
+    tabIds: ['video', 'clipping', 'vibe-motion', 'lipsync', 'body-swap', 'marketing'],
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="15" height="16" rx="2"/>
+        <path d="M17 9l5-3v12l-5-3"/>
+        <path d="M8 9l4 3-4 3z"/>
+      </svg>
+    )
+  },
+  {
+    id: 'audio',
+    label: 'Audio',
+    tabIds: ['audio'],
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18V5l12-2v13"/>
+        <circle cx="6" cy="18" r="3"/>
+        <circle cx="18" cy="16" r="3"/>
+      </svg>
+    )
+  },
+  {
+    id: 'agents-automation',
+    label: 'Agents & Automation',
+    tabIds: ['agents', 'workflows'],
+    icon: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="6" height="6" rx="1"/>
+        <rect x="15" y="3" width="6" height="6" rx="1"/>
+        <rect x="9" y="15" width="6" height="6" rx="1"/>
+        <path d="M6 9v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9"/>
+        <path d="M12 13v2"/>
+      </svg>
+    )
+  }
+];
+
+const EXPLORE_APPS_TAB = TABS.find((tab) => tab.id === 'apps');
+
+const getNavigationCategory = (tabId) => (
+  NAVIGATION_CATEGORIES.find((category) => category.tabIds.includes(tabId))
+);
+
 const STORAGE_KEY = 'muapi_key';
 
 export default function StandaloneShell() {
@@ -231,6 +290,10 @@ export default function StandaloneShell() {
     return false;
   });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [expandedCategoryId, setExpandedCategoryId] = useState(() => (
+    getNavigationCategory(getInitialTab())?.id || NAVIGATION_CATEGORIES[0].id
+  ));
+  const activeCategory = getNavigationCategory(activeTab);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed(prev => {
@@ -239,6 +302,26 @@ export default function StandaloneShell() {
       return next;
     });
   }, []);
+
+  const handleCategoryToggle = useCallback((categoryId) => {
+    const isCollapsedNavigation = isSidebarCollapsed && !isMobileOpen;
+
+    if (!isCollapsedNavigation) {
+      setExpandedCategoryId((currentId) => (
+        currentId === categoryId ? null : categoryId
+      ));
+      return;
+    }
+
+    setExpandedCategoryId(categoryId);
+    toggleSidebar();
+  }, [isMobileOpen, isSidebarCollapsed, toggleSidebar]);
+
+  useEffect(() => {
+    if (activeCategory?.id) {
+      setExpandedCategoryId(activeCategory.id);
+    }
+  }, [activeCategory?.id]);
 
   // Drag and Drop State
   const [isDragging, setIsDragging] = useState(false);
@@ -294,6 +377,14 @@ export default function StandaloneShell() {
     if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
       e.preventDefault();
       handleTabChange(tabId);
+      return true;
+    }
+    return false;
+  };
+
+  const handleNavigationItemClick = (event, tabId) => {
+    if (handleTabClick(event, tabId)) {
+      setIsMobileOpen(false);
     }
   };
 
@@ -592,53 +683,137 @@ export default function StandaloneShell() {
               ${isSidebarCollapsed ? 'md:w-16' : 'md:w-52'}
             `}
           >
-            {/* Navigation Tab Links */}
-            <nav className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-2 px-2 space-y-1">
-              {TABS.map((tab) => {
-                const isActive = activeTab === tab.id;
-                const isCollapsed = isSidebarCollapsed && !isMobileOpen;
-                return (
+            <nav aria-label="Studio navigation" className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none py-2 px-2">
+              <div className="space-y-1">
+                {NAVIGATION_CATEGORIES.map((category) => {
+                  const isCategoryActive = activeCategory?.id === category.id;
+                  const isCollapsed = isSidebarCollapsed && !isMobileOpen;
+                  const isCategoryOpen = !isCollapsed && expandedCategoryId === category.id;
+                  const categoryPanelId = `navigation-category-${category.id}`;
+
+                  return (
+                    <div key={category.id} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => handleCategoryToggle(category.id)}
+                        aria-label={category.label}
+                        aria-expanded={isCategoryOpen}
+                        aria-controls={isCollapsed ? undefined : categoryPanelId}
+                        title={isCollapsed ? category.label : undefined}
+                        className={`
+                          group relative flex items-center rounded-xl transition-all duration-150 font-semibold
+                          ${isCollapsed ? 'h-11 w-11 justify-center mx-auto' : 'px-3 py-2.5 w-full gap-3 text-left'}
+                          ${isCategoryActive
+                            ? 'bg-gradient-to-r from-[#22d3ee]/15 to-purple-500/10 text-[#22d3ee] border border-[#22d3ee]/20 shadow-[0_0_15px_rgba(34,211,238,0.08)]'
+                            : isCategoryOpen
+                              ? 'bg-white/[0.06] text-white border border-white/[0.08]'
+                              : 'text-white/60 hover:text-white hover:bg-white/[0.04] border border-transparent'
+                          }
+                        `}
+                      >
+                        {isCategoryActive && (
+                          <span className="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-[#22d3ee] to-[#a855f7] rounded-r-full shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+                        )}
+
+                        <span className={`flex-shrink-0 transition-colors ${isCategoryActive ? 'text-[#22d3ee]' : 'text-white/55 group-hover:text-white'}`}>
+                          {category.icon}
+                        </span>
+
+                        {!isCollapsed && (
+                          <>
+                            <span className="flex-1 min-w-0 text-[12px] leading-4 tracking-tight">
+                              {category.label}
+                            </span>
+                            <svg
+                              width="15"
+                              height="15"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className={`flex-shrink-0 transition-transform duration-200 ${isCategoryOpen ? 'rotate-180' : ''}`}
+                              aria-hidden="true"
+                            >
+                              <path d="M6 9l6 6 6-6"/>
+                            </svg>
+                          </>
+                        )}
+                      </button>
+
+                      {!isCollapsed && isCategoryOpen && (
+                        <div
+                          id={categoryPanelId}
+                          role="group"
+                          aria-label={`${category.label} tools`}
+                          className="mt-1 ml-2 pl-2 border-l border-white/[0.08] space-y-1 max-h-64 overflow-y-auto scrollbar-none"
+                        >
+                          {category.tabIds.map((tabId) => {
+                            const tab = TABS.find((item) => item.id === tabId);
+                            if (!tab) return null;
+                            const isActive = activeTab === tab.id;
+
+                            return (
+                              <a
+                                key={tab.id}
+                                href={`/studio/${tab.id}`}
+                                onClick={(event) => handleNavigationItemClick(event, tab.id)}
+                                aria-current={isActive ? 'page' : undefined}
+                                className={`
+                                  group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] font-medium transition-all duration-150
+                                  ${isActive
+                                    ? 'bg-[#22d3ee]/12 text-[#22d3ee] border border-[#22d3ee]/20'
+                                    : 'text-white/55 hover:text-white hover:bg-white/[0.04] border border-transparent'
+                                  }
+                                `}
+                              >
+                                {isActive && (
+                                  <span className="absolute -left-[11px] top-2 bottom-2 w-0.5 rounded-full bg-[#22d3ee] shadow-[0_0_7px_rgba(34,211,238,0.7)]" />
+                                )}
+                                <span className={`flex-shrink-0 ${isActive ? 'text-[#22d3ee]' : 'text-white/45 group-hover:text-white/80'}`}>
+                                  {tab.icon}
+                                </span>
+                                <span className="truncate">{tab.label}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {EXPLORE_APPS_TAB && (
+                <div className="mt-3 pt-3 border-t border-white/[0.07]">
                   <a
-                    key={tab.id}
-                    href={`/studio/${tab.id}`}
-                    onClick={(e) => {
-                      handleTabClick(e, tab.id);
-                      setIsMobileOpen(false);
-                    }}
+                    href={`/studio/${EXPLORE_APPS_TAB.id}`}
+                    onClick={(event) => handleNavigationItemClick(event, EXPLORE_APPS_TAB.id)}
+                    aria-current={activeTab === EXPLORE_APPS_TAB.id ? 'page' : undefined}
+                    aria-label={EXPLORE_APPS_TAB.label}
+                    title={isSidebarCollapsed && !isMobileOpen ? EXPLORE_APPS_TAB.label : undefined}
                     className={`
-                      group relative flex items-center rounded-lg transition-all duration-150 text-[13px] font-medium
-                      ${isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'px-3 py-2.5 w-full gap-3'}
-                      ${isActive 
-                        ? 'bg-gradient-to-r from-[#22d3ee]/15 to-purple-500/10 text-[#22d3ee] font-semibold border border-[#22d3ee]/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]' 
-                        : 'text-white/60 hover:text-white hover:bg-white/[0.04]'
+                      group relative flex items-center rounded-xl transition-all duration-150 text-[13px] font-semibold
+                      ${isSidebarCollapsed && !isMobileOpen ? 'h-11 w-11 justify-center mx-auto' : 'px-3 py-2.5 w-full gap-3'}
+                      ${activeTab === EXPLORE_APPS_TAB.id
+                        ? 'bg-gradient-to-r from-[#22d3ee]/15 to-purple-500/10 text-[#22d3ee] border border-[#22d3ee]/20'
+                        : 'text-white/60 hover:text-white hover:bg-white/[0.04] border border-transparent'
                       }
                     `}
                   >
-                    {/* Active Accent Pill */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-gradient-to-b from-[#22d3ee] to-[#a855f7] rounded-r-full shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+                    {activeTab === EXPLORE_APPS_TAB.id && (
+                      <span className="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-[#22d3ee] to-[#a855f7] rounded-r-full" />
                     )}
-
-                    {/* SVG Icon */}
-                    <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-[#22d3ee]' : 'text-white/50 group-hover:text-white'}`}>
-                      {tab.icon}
+                    <span className={`flex-shrink-0 ${activeTab === EXPLORE_APPS_TAB.id ? 'text-[#22d3ee]' : 'text-white/50 group-hover:text-white'}`}>
+                      {EXPLORE_APPS_TAB.icon}
                     </span>
-
-                    {/* Tab Label (visible when expanded) */}
-                    {!isCollapsed && (
-                      <span className="truncate flex-1 tracking-tight">{tab.label}</span>
-                    )}
-
-                    {/* Sleek Custom Floating Tooltip (Fixed outside sidebar so it never clips or causes overflow) */}
-                    {isCollapsed && (
-                      <div className="fixed left-16 ml-1 px-3 py-1.5 bg-[#121215]/95 backdrop-blur-md text-white text-xs font-semibold rounded-lg shadow-2xl border border-white/15 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[100] whitespace-nowrap flex items-center gap-2 -translate-x-1 group-hover:translate-x-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#22d3ee] shadow-[0_0_6px_#22d3ee]" />
-                        <span>{tab.label}</span>
-                      </div>
+                    {(!isSidebarCollapsed || isMobileOpen) && (
+                      <span className="truncate">{EXPLORE_APPS_TAB.label}</span>
                     )}
                   </a>
-                );
-              })}
+                </div>
+              )}
             </nav>
           </aside>
         )}
