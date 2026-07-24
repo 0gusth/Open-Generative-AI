@@ -176,39 +176,6 @@ function Dropdown({
   className = "",
 }) {
   const dropRef = useRef(null);
-  const [style, setStyle] = useState({});
-
-  useEffect(() => {
-    if (!isOpen || !anchorRef?.current || !dropRef.current) return;
-
-    const rect = anchorRef.current.getBoundingClientRect();
-    const ddHeight = dropRef.current.offsetHeight;
-    const spaceBelow = window.innerHeight - rect.bottom - 8;
-    const spaceAbove = rect.top - 8;
-
-    let top, bottom, maxHeight;
-    if (spaceBelow >= ddHeight || spaceBelow >= spaceAbove) {
-      top = rect.bottom + 8;
-      bottom = "auto";
-      maxHeight = Math.min(
-        window.innerHeight * 0.4,
-        Math.max(150, spaceBelow - 8),
-      );
-    } else {
-      top = "auto";
-      bottom = window.innerHeight - rect.top + 8;
-      maxHeight = Math.min(
-        window.innerHeight * 0.4,
-        Math.max(150, spaceAbove - 8),
-      );
-    }
-    const dropdownWidth = dropRef.current.offsetWidth;
-    const left = Math.max(
-      8,
-      Math.min(rect.left, window.innerWidth - dropdownWidth - 8),
-    );
-    setStyle({ top, bottom, left, maxHeight });
-  }, [isOpen, anchorRef]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -229,9 +196,8 @@ function Dropdown({
   return (
     <PromptPopover
       ref={dropRef}
-      positionClassName="fixed z-[100]"
-      style={style}
       className={className}
+      onClick={(e) => e.stopPropagation()}
     >
       <PromptPopoverHeader>{title}</PromptPopoverHeader>
       <PromptMenuList>
