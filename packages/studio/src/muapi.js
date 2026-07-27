@@ -705,6 +705,25 @@ export async function getAppInterests(apiKey) {
     return await response.json();
 }
 
+// Paginated past-generations list, scoped server-side to the calling identity
+// (BYOK key or white-label session token) — see GET /api/v1/history.
+export async function getHistory(apiKey, { cursor, limit = 50 } = {}) {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    if (limit) params.set('limit', String(limit));
+    const response = await fetch(`${BASE_URL}/api/v1/history?${params.toString()}`, {
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey
+        }
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to fetch history: ${response.status} - ${errText.slice(0, 100)}`);
+    }
+    return await response.json();
+}
+
 export async function runClipping(apiKey, params) {
     const payload = {
         video_url: params.video_url,

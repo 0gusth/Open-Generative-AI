@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { runClipping, uploadFile } from "../muapi.js";
+import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PROMPT_MEDIA_PREVIEW_CLASS,
@@ -83,7 +84,11 @@ export default function ClippingStudio({
   droppedFiles,
   onFilesHandled,
 }) {
-  const PERSIST_KEY = "hg_clipping_studio_persistent";
+  const LEGACY_PERSIST_KEY = "hg_clipping_studio_persistent";
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  useEffect(() => {
+    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+  }, [PERSIST_KEY]);
 
   // ── Clipping Parameters State ───────────────────────────────────────────
   const [videoUrl, setVideoUrl] = useState("");

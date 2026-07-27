@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { runMotionGraphics, runMotionGraphicsEdit } from "../muapi.js";
+import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PromptAspectRatioIcon,
@@ -63,7 +64,11 @@ function DropdownItem({ label, selected, onClick }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function VibeMotionStudio({ apiKey, onGenerationComplete, onGenerationError }) {
-  const PERSIST_KEY = "hg_vibe_motion_studio_persistent";
+  const LEGACY_PERSIST_KEY = "hg_vibe_motion_studio_persistent";
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  useEffect(() => {
+    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+  }, [PERSIST_KEY]);
 
   // ── Params ────────────────────────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");

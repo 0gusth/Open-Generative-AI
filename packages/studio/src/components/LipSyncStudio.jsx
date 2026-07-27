@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { processLipSync, uploadFile } from "../muapi.js";
+import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
   lipsyncModels,
   imageLipSyncModels,
@@ -319,7 +320,11 @@ export default function LipSyncStudio({
   droppedFiles,
   onFilesHandled,
 }) {
-  const PERSIST_KEY = "hg_lipsync_studio_persistent";
+  const LEGACY_PERSIST_KEY = "hg_lipsync_studio_persistent";
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  useEffect(() => {
+    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+  }, [PERSIST_KEY]);
 
   // ── Mode & model state ──────────────────────────────────────────────────
   const [inputMode, setInputMode] = useState("image"); // 'image' | 'video'

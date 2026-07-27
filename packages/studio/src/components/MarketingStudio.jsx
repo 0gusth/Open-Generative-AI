@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { uploadFile, generateMarketingStudioAd } from "../muapi.js";
+import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
   PromptAspectRatioIcon,
@@ -268,7 +269,11 @@ function SimpleDropdown({ isOpen, title, options, selected, onSelect, onClose })
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, onGenerationComplete, onGenerationError, historyItems }) {
-  const PERSIST_KEY = "hg_marketing_studio_persistent";
+  const LEGACY_PERSIST_KEY = "hg_marketing_studio_persistent";
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  useEffect(() => {
+    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+  }, [PERSIST_KEY]);
   
   const [prompt, setPrompt] = useState("");
   const [productImage, setProductImage] = useState(null);

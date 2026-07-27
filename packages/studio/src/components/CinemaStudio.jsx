@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateImage, uploadFile } from "../muapi.js";
+import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
   PromptAspectRatioIcon,
   PromptAction,
@@ -486,7 +487,11 @@ export default function CinemaStudio({
   onGenerationError,
   historyItems,
 }) {
-  const PERSIST_KEY = "hg_cinema_studio_persistent";
+  const LEGACY_PERSIST_KEY = "hg_cinema_studio_persistent";
+  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  useEffect(() => {
+    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
+  }, [PERSIST_KEY]);
 
   // ── Settings state ──
   const [settings, setSettings] = useState({
