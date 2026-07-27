@@ -7,6 +7,22 @@ import {
   getRecastModelById,
   getAspectRatiosForRecastModel,
 } from "../models.js";
+import {
+  PROMPT_CONTROL_LABEL_CLASS,
+  PromptAspectRatioIcon,
+  PromptAction,
+  PromptChevronIcon,
+  PromptComposer,
+  PromptControls,
+  PromptFooter,
+  PromptMenuItem,
+  PromptMenuList,
+  PromptPopover,
+  PromptPopoverHeader,
+  PromptTextarea,
+  promptControlClassName,
+  promptMediaButtonClassName,
+} from "./prompt/PromptComposer.jsx";
 
 // ---------------------------------------------------------------------------
 // Upload button states
@@ -47,11 +63,6 @@ function MediaPickerButton({
     await onUpload(file);
   };
 
-  const borderClass =
-    uploadState === UPLOAD_STATE.READY
-      ? "border-primary/60 bg-primary/5"
-      : "border-white/[0.03] bg-white/[0.03] hover:bg-white/[0.06] hover:border-primary/40";
-
   return (
     <button
       type="button"
@@ -61,7 +72,9 @@ function MediaPickerButton({
           : `Upload ${label.toLowerCase()} file`
       }
       onClick={handleClick}
-      className={`flex-shrink-0 w-10 h-10 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group ${borderClass}`}
+      className={promptMediaButtonClassName({
+        active: uploadState === UPLOAD_STATE.READY,
+      })}
     >
       <input
         ref={inputRef}
@@ -169,11 +182,12 @@ function AssetsDropdown({
   const items = activeTab === "videos" ? videos : activeTab === "images" ? images : results;
 
   return (
-    <div
+    <PromptPopover
       ref={dropRef}
-      className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] border border-white/10 rounded-lg shadow-3xl p-3 custom-scrollbar w-80 max-h-80 flex flex-col gap-2 animate-fade-in"
+      className="w-80 max-h-80 overflow-hidden flex flex-col gap-2"
       onClick={(e) => e.stopPropagation()}
     >
+      <PromptPopoverHeader className="mb-0">Asset Library</PromptPopoverHeader>
       {/* Tabs */}
       <div className="flex border-b border-white/5 pb-1">
         {["videos", "images", "results"].map((tab) => (
@@ -286,14 +300,23 @@ function AssetsDropdown({
           ))
         )}
       </div>
-    </div>
+    </PromptPopover>
   );
 }
 
 // ---------------------------------------------------------------------------
 // Inline dropdown
 // ---------------------------------------------------------------------------
-function Dropdown({ isOpen, items, selectedId, onSelect, onClose, anchorRef }) {
+function Dropdown({
+  isOpen,
+  title,
+  items,
+  selectedId,
+  onSelect,
+  onClose,
+  anchorRef,
+  className = "",
+}) {
   const dropRef = useRef(null);
 
   useEffect(() => {
@@ -313,34 +336,28 @@ function Dropdown({ isOpen, items, selectedId, onSelect, onClose, anchorRef }) {
   if (!isOpen) return null;
 
   return (
-    <div
+    <PromptPopover
       ref={dropRef}
-      className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] border border-white/10 rounded-lg shadow-3xl p-2 custom-scrollbar w-64 max-h-60 overflow-y-auto animate-fade-in"
+      className={className}
       onClick={(e) => e.stopPropagation()}
     >
+      <PromptPopoverHeader>{title}</PromptPopoverHeader>
+      <PromptMenuList>
       {items.map((item) => (
-        <button
+        <PromptMenuItem
           key={item.id}
-          type="button"
+          selected={item.id === selectedId}
+          description={item.description?.slice(0, 75)}
           onClick={() => {
             onSelect(item);
             onClose();
           }}
-          className={`w-full text-left px-4 py-2 rounded text-sm transition-all hover:bg-white/10 ${
-            item.id === selectedId
-              ? "text-primary font-bold bg-primary/5"
-              : "text-white font-medium"
-          }`}
         >
-          <div>{item.name}</div>
-          {item.description && (
-            <div className="text-xs text-white/40 mt-0.5">
-              {item.description.slice(0, 75)}
-            </div>
-          )}
-        </button>
+          {item.name}
+        </PromptMenuItem>
       ))}
-    </div>
+      </PromptMenuList>
+    </PromptPopover>
   );
 }
 
@@ -606,10 +623,6 @@ export default function RecastStudio({
 
   const handlePromptInput = (e) => {
     setPrompt(e.target.value);
-    const el = e.target;
-    el.style.height = "auto";
-    const maxH = window.innerWidth < 768 ? 150 : 250;
-    el.style.height = Math.min(el.scrollHeight, maxH) + "px";
   };
 
   const handleImageUpload = useCallback(
@@ -914,8 +927,7 @@ export default function RecastStudio({
       </div>
 
       {/* ── BOTTOM PROMPT BAR ── */}
-      <div className="absolute bottom-4 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-        <div className="w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]">
+      <PromptComposer>
           {/* Uploads row */}
           <div className="flex items-center gap-2 px-1">
             <div className="flex items-center gap-2">
@@ -958,20 +970,18 @@ export default function RecastStudio({
 
             {/* Prompt textarea */}
             <div className="flex-1 flex flex-col">
-              <textarea
+              <PromptTextarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={handlePromptInput}
                 placeholder="Optional — describe the motion or scene..."
-                className="w-full bg-transparent border-none text-white text-sm placeholder:text-white/10 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40"
-                rows={1}
               />
             </div>
           </div>
 
           {/* Bottom controls row */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-3 border-t border-white/[0.03] relative">
-            <div className="flex items-center gap-2 px-1">
+          <PromptFooter>
+            <PromptControls>
               {/* Model selector */}
               <div className="relative">
                 <button
@@ -981,33 +991,27 @@ export default function RecastStudio({
                     e.stopPropagation();
                     setOpenDropdown(openDropdown === "model" ? null : "model");
                   }}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                  className={promptControlClassName({
+                    active: openDropdown === "model",
+                  })}
                 >
                   <div className="w-3.5 h-3.5 bg-[#22d3ee] rounded-sm flex items-center justify-center">
                     <span className="text-[9px] font-black text-black">R</span>
                   </div>
-                  <span className="text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {selectedModel?.name ?? "Select model"}
                   </span>
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    className="opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  >
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
+                  <PromptChevronIcon />
                 </button>
                 <Dropdown
                   isOpen={openDropdown === "model"}
+                  title="Model"
                   items={recastModels}
                   selectedId={selectedModelId}
                   onSelect={handleModelSelect}
                   onClose={() => setOpenDropdown(null)}
                   anchorRef={modelBtnRef}
+                  className="w-80 max-w-[calc(100vw-2rem)]"
                 />
               </div>
 
@@ -1021,25 +1025,19 @@ export default function RecastStudio({
                       e.stopPropagation();
                       setOpenDropdown(openDropdown === "aspect" ? null : "aspect");
                     }}
-                    className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                    className={promptControlClassName({
+                      active: openDropdown === "aspect",
+                    })}
                   >
-                    <span className="text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                    <PromptAspectRatioIcon />
+                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
                       {selectedAspectRatio}
                     </span>
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className="opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
+                    <PromptChevronIcon />
                   </button>
                   <Dropdown
                     isOpen={openDropdown === "aspect"}
+                    title="Aspect Ratio"
                     items={aspectDropdownItems}
                     selectedId={selectedAspectRatio}
                     onSelect={(item) => setSelectedAspectRatio(item.id)}
@@ -1059,28 +1057,21 @@ export default function RecastStudio({
                       e.stopPropagation();
                       setOpenDropdown(openDropdown === "orientation" ? null : "orientation");
                     }}
-                    className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                    className={promptControlClassName({
+                      active: openDropdown === "orientation",
+                    })}
                   >
-                    <span className="text-xs font-semibold text-white/50 group-hover:text-[#22d3ee] transition-colors">
+                    <span className="text-xs font-semibold text-current opacity-50 group-hover:opacity-100 transition-opacity">
                       Orientation:
                     </span>
-                    <span className="text-xs font-bold text-white group-hover:text-[#22d3ee] transition-colors capitalize">
+                    <span className="text-xs font-semibold text-current capitalize">
                       {characterOrientation}
                     </span>
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className="opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
+                    <PromptChevronIcon />
                   </button>
                   <Dropdown
                     isOpen={openDropdown === "orientation"}
+                    title="Orientation"
                     items={[
                       { id: "image", name: "Image", description: "Use image orientation (Max 10s video)" },
                       { id: "video", name: "Video", description: "Use video orientation (Max 30s video)" },
@@ -1089,6 +1080,7 @@ export default function RecastStudio({
                     onSelect={(item) => setCharacterOrientation(item.id)}
                     onClose={() => setOpenDropdown(null)}
                     anchorRef={orientationBtnRef}
+                    className="w-64"
                   />
                 </div>
               )}
@@ -1102,7 +1094,9 @@ export default function RecastStudio({
                     e.stopPropagation();
                     setOpenDropdown(openDropdown === "assets" ? null : "assets");
                   }}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                  className={promptControlClassName({
+                    active: openDropdown === "assets",
+                  })}
                 >
                   <svg
                     width="14"
@@ -1119,17 +1113,7 @@ export default function RecastStudio({
                   <span className="text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
                     Library
                   </span>
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    className="opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  >
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
+                  <PromptChevronIcon />
                 </button>
                 {openDropdown === "assets" && (
                   <AssetsDropdown
@@ -1161,14 +1145,12 @@ export default function RecastStudio({
                   />
                 )}
               </div>
-            </div>
+            </PromptControls>
 
             {/* Generate button */}
-            <button
-              type="button"
+            <PromptAction
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10"
             >
               {isGenerating ? (
                 <>
@@ -1180,10 +1162,9 @@ export default function RecastStudio({
               ) : (
                 <span>Swap Body</span>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </PromptAction>
+          </PromptFooter>
+      </PromptComposer>
 
       {/* ── FULLSCREEN MEDIA MODAL ── */}
       {fullscreenUrl && (

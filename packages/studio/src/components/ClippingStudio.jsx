@@ -2,6 +2,23 @@
 
 import { useState, useEffect, useRef } from "react";
 import { runClipping, uploadFile } from "../muapi.js";
+import {
+  PROMPT_CONTROL_LABEL_CLASS,
+  PROMPT_MEDIA_PREVIEW_CLASS,
+  PromptAspectRatioIcon,
+  PromptAction,
+  PromptComposer,
+  PromptControls,
+  PromptFooter,
+  PromptMenuItem,
+  PromptMenuList,
+  PromptPopover,
+  PromptPopoverHeader,
+  PromptDurationIcon,
+  PromptTextarea,
+  promptControlClassName,
+  promptMediaButtonClassName,
+} from "./prompt/PromptComposer.jsx";
 
 // ---------------------------------------------------------------------------
 // Inline SVG Icons
@@ -43,34 +60,6 @@ const CopyIcon = () => (
   </svg>
 );
 
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="3">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-const ChevronDownIcon = () => (
-  <svg
-    width="8"
-    height="8"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="4"
-    className="opacity-20 group-hover:opacity-100 transition-opacity ml-1"
-  >
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
-
-
 const getAspectClass = (ar) => {
   switch (ar) {
     case "16:9": return "aspect-video";
@@ -108,8 +97,6 @@ export default function ClippingStudio({
   const [highlightsDropdownOpen, setHighlightsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const highlightsDropdownRef = useRef(null);
-  const textareaRef = useRef(null);
-  const promptTextareaRef = useRef(null);
 
   // ── Upload State ──
   const [videoUploading, setVideoUploading] = useState(false);
@@ -239,18 +226,6 @@ export default function ClippingStudio({
   }, [droppedFiles, onFilesHandled, apiKey]);
 
   // Adjust URL textarea height dynamically
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (textareaRef.current) {
-        const el = textareaRef.current;
-        el.style.height = "auto";
-        const maxH = window.innerWidth < 768 ? 150 : 250;
-        el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [videoUrl]);
-
   // ── Highlight Seeking Helper ─────────────────────────────────────────────
   const seekToHighlight = (startSec) => {
     if (mainVideoRef.current) {
@@ -290,14 +265,6 @@ export default function ClippingStudio({
     }
   };
 
-  const handleUrlInput = (e) => {
-    setVideoUrl(e.target.value);
-    const el = e.target;
-    el.style.height = "auto";
-    const maxH = window.innerWidth < 768 ? 150 : 250;
-    el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-  };
-
   const handlePromptInput = (e) => {
     const val = e.target.value;
     if (val.trim().match(/^https?:\/\/[^\s]+$/i)) {
@@ -306,10 +273,6 @@ export default function ClippingStudio({
       return;
     }
     setPrompt(val);
-    const el = e.target;
-    el.style.height = "auto";
-    const maxH = window.innerWidth < 768 ? 150 : 250;
-    el.style.height = Math.min(el.scrollHeight, maxH) + "px";
   };
 
   // ── Video File Handlers ──
@@ -434,7 +397,7 @@ export default function ClippingStudio({
 
         {/* 1. Empty State (No history, no result active) */}
         {!result && history.length === 0 && (
-          <div className="flex-grow flex flex-col items-center justify-center animate-fade-in-up transition-all duration-700 min-h-[55vh]">
+          <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh]">
             {/* Overlapping floating cards */}
             <div className="flex items-center justify-center gap-1.5 md:gap-3 mb-10 select-none scale-90 sm:scale-100">
               <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl -rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] flex-shrink-0">
@@ -789,13 +752,12 @@ export default function ClippingStudio({
       </div>
 
       {/* ─── FLOATING BOTTOM PROMPT BAR ─── */}
-      <div className="absolute bottom-4 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-        <div className="w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]">
+      <PromptComposer>
           
           {/* Inline list of uploaded media files */}
           {videoUrl && (
             <div className="flex items-center gap-2.5 px-1 pb-1">
-              <div className="relative w-12 h-12 rounded-xl border border-white/10 overflow-hidden shadow-md group">
+              <div className={PROMPT_MEDIA_PREVIEW_CLASS}>
                 <video src={videoUrl} className="w-full h-full object-cover" muted playsInline />
                 <button
                   type="button"
@@ -826,7 +788,9 @@ export default function ClippingStudio({
                 type="button"
                 title="Upload source video"
                 onClick={() => videoFileInputRef.current?.click()}
-                className="w-10 h-10 shrink-0 rounded-full border bg-white/5 border-white/[0.03] hover:bg-white/10 hover:border-[#22d3ee]/40 transition-all flex items-center justify-center relative overflow-hidden group"
+                className={promptMediaButtonClassName({
+                  active: Boolean(videoUrl),
+                })}
               >
                 {videoUploading ? (
                   <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/85 z-20 backdrop-blur-[1px]">
@@ -859,27 +823,24 @@ export default function ClippingStudio({
 
             {/* Prompt textarea (supports direct URL pasting too) */}
             <div className="flex-1 flex flex-col gap-1">
-              <textarea
-                ref={promptTextareaRef}
+              <PromptTextarea
                 value={prompt}
                 onChange={handlePromptInput}
                 placeholder="Describe prompt / highlights to extract"
-                rows={1}
-                className="w-full bg-transparent border-none text-white text-sm placeholder:text-white/20 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] overflow-y-auto custom-scrollbar"
               />
             </div>
           </div>
 
           {/* Bottom row: controls + generate button */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-3 border-t border-white/[0.03] relative">
-            <div className="flex items-center gap-2 relative flex-wrap pb-1 md:pb-0">
+          <PromptFooter>
+            <PromptControls>
               
               {/* Model Identifier (C) */}
-              <div className="flex items-center gap-2 px-3.5 h-[34px] bg-[#16161a]/60 rounded-md border border-white/[0.06] shadow-inner whitespace-nowrap">
+              <div className={promptControlClassName()}>
                 <div className="w-4 h-4 bg-[#22d3ee] rounded flex items-center justify-center shadow-lg shadow-[#22d3ee]/10">
                   <span className="text-[9px] font-bold text-black uppercase">C</span>
                 </div>
-                <span className="text-xs font-semibold text-white/70">
+                <span className={PROMPT_CONTROL_LABEL_CLASS}>
                   AI Clipping
                 </span>
               </div>
@@ -889,39 +850,35 @@ export default function ClippingStudio({
                 <button
                   type="button"
                   onClick={() => setAspectDropdownOpen(!aspectDropdownOpen)}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                  className={promptControlClassName({
+                    active: aspectDropdownOpen,
+                  })}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40 text-white">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  </svg>
-                  <span className="text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                  <PromptAspectRatioIcon />
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {aspectRatio}
                   </span>
-                  <ChevronDownIcon />
                 </button>
                 {aspectDropdownOpen && (
-                  <div className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[160px]">
-                    <div className="text-xs font-bold text-white/20 border-b border-white/[0.03] mb-2 pb-1">
+                  <PromptPopover>
+                    <PromptPopoverHeader>
                       Aspect Ratio
-                    </div>
-                    <div className="flex flex-col gap-1 max-h-60 overflow-y-auto custom-scrollbar">
+                    </PromptPopoverHeader>
+                    <PromptMenuList>
                       {ASPECT_RATIOS.map((r) => (
-                        <div
+                        <PromptMenuItem
                           key={r.value}
-                          className="flex items-center justify-between p-2.5 hover:bg-white/5 rounded cursor-pointer transition-all group/opt"
+                          selected={aspectRatio === r.value}
                           onClick={() => {
                             setAspectRatio(r.value);
                             setAspectDropdownOpen(false);
                           }}
                         >
-                          <span className="text-[11px] font-semibold text-white/70 group-hover/opt:text-white transition-opacity">
-                            {r.value}
-                          </span>
-                          {aspectRatio === r.value && <CheckIcon />}
-                        </div>
+                          {r.value}
+                        </PromptMenuItem>
                       ))}
-                    </div>
-                  </div>
+                    </PromptMenuList>
+                  </PromptPopover>
                 )}
               </div>
 
@@ -930,19 +887,20 @@ export default function ClippingStudio({
                 <button
                   type="button"
                   onClick={() => setHighlightsDropdownOpen(!highlightsDropdownOpen)}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner"
+                  className={promptControlClassName({
+                    active: highlightsDropdownOpen,
+                  })}
                 >
-                  <ClockIcon />
-                  <span className="text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                  <PromptDurationIcon />
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {numHighlights} Highlights
                   </span>
-                  <ChevronDownIcon />
                 </button>
                 {highlightsDropdownOpen && (
-                  <div className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[180px]">
-                    <div className="text-xs font-bold text-white/20 border-b border-white/[0.03] mb-3 pb-1">
+                  <PromptPopover className="min-w-[180px] overflow-visible">
+                    <PromptPopoverHeader className="mb-3">
                       Max Highlights
-                    </div>
+                    </PromptPopoverHeader>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-white/60">Limit:</span>
@@ -960,7 +918,7 @@ export default function ClippingStudio({
                         className="w-full h-1 bg-zinc-850 rounded appearance-none cursor-pointer accent-primary"
                       />
                     </div>
-                  </div>
+                  </PromptPopover>
                 )}
               </div>
 
@@ -968,24 +926,25 @@ export default function ClippingStudio({
               <button
                 type="button"
                 onClick={() => setReturnCoordinatesOnly(!returnCoordinatesOnly)}
-                className={`h-[34px] flex items-center gap-2 px-3.5 rounded-md transition-all border whitespace-nowrap text-[11px] font-semibold shadow-inner ${
-                  returnCoordinatesOnly 
-                    ? "bg-[#22d3ee]/10 border-[#22d3ee]/20 text-[#22d3ee]" 
-                    : "bg-[#16161a]/60 border-white/[0.06] text-white/70 hover:bg-[#202026]/80 hover:text-white"
-                }`}
+                className={promptControlClassName({
+                  active: returnCoordinatesOnly,
+                  className: returnCoordinatesOnly
+                    ? "text-[#22d3ee]"
+                    : "text-white/70 hover:text-white",
+                })}
               >
-                <ScissorsIcon className="w-3.5 h-3.5 text-current" />
-                <span>Coordinates Only</span>
+                <ScissorsIcon className="w-4 h-4 text-current" />
+                <span className="text-xs font-semibold">
+                  Coordinates Only
+                </span>
               </button>
 
-            </div>
+            </PromptControls>
 
             {/* Generate button */}
-            <button
-              type="button"
+            <PromptAction
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10"
             >
               {isGenerating ? (
                 <>
@@ -997,10 +956,9 @@ export default function ClippingStudio({
                   <span>Generate ✦ 5</span>
                 </>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </PromptAction>
+          </PromptFooter>
+      </PromptComposer>
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {

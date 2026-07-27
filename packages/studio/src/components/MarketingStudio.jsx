@@ -2,6 +2,24 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { uploadFile, generateMarketingStudioAd } from "../muapi.js";
+import {
+  PROMPT_CONTROL_LABEL_CLASS,
+  PromptAspectRatioIcon,
+  PromptAction,
+  PromptChevronIcon,
+  PromptComposer,
+  PromptControls,
+  PromptFooter,
+  PromptMenuItem,
+  PromptMenuList,
+  PromptPopover,
+  PromptPopoverHeader,
+  PromptDurationIcon,
+  PromptQualityIcon,
+  PromptTextarea,
+  promptControlClassName,
+  promptMediaButtonClassName,
+} from "./prompt/PromptComposer.jsx";
 
 const SCROLLBAR_STYLE = `
   .custom-scrollbar-thin::-webkit-scrollbar {
@@ -103,9 +121,10 @@ function UploadSlot({ icon, url, progress, label, onUpload, onClear, multiple = 
       <div 
         onClick={() => inputRef.current?.click()}
         title={`Upload ${label}`}
-        className={`relative w-10 h-10 rounded-full border transition-all flex items-center justify-center cursor-pointer ${
-          url ? 'border-primary/40 bg-primary/5' : 'border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/20'
-        }`}
+        className={promptMediaButtonClassName({
+          active: Boolean(url),
+          className: "cursor-pointer",
+        })}
       >
         <input 
           ref={inputRef} 
@@ -159,11 +178,11 @@ function Dropdown({ isOpen, title, items, selectedId, onSelect, onClose, isVideo
   if (!isOpen) return null;
 
   return (
-    <div 
+    <PromptPopover
       ref={ref}
-      className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0a0a0a] rounded p-4 shadow-4xl border border-white/10 w-[420px] animate-fade-in-up"
+      className="w-[420px] max-w-[calc(100vw-2rem)]"
     >
-      <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-4 px-1">{title}</div>
+      <PromptPopoverHeader className="mb-3">{title}</PromptPopoverHeader>
       <div className="grid grid-cols-3 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
         {items.map(item => (
           <div 
@@ -208,7 +227,7 @@ function Dropdown({ isOpen, title, items, selectedId, onSelect, onClose, isVideo
           </div>
         ))}
       </div>
-    </div>
+    </PromptPopover>
   );
 }
 
@@ -227,24 +246,22 @@ function SimpleDropdown({ isOpen, title, options, selected, onSelect, onClose })
   if (!isOpen) return null;
 
   return (
-    <div 
+    <PromptPopover
       ref={ref}
-      className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0a0a0a] rounded p-1 max-h-[200px] overflow-y-auto custom-scrollbar shadow-3xl border border-white/10 min-w-[140px] animate-fade-in-up"
     >
-      <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2 px-3 pt-2">{title}</div>
+      <PromptPopoverHeader>{title}</PromptPopoverHeader>
+      <PromptMenuList>
       {options.map(opt => (
-        <button
+        <PromptMenuItem
           key={opt}
+          selected={selected === opt}
           onClick={() => { onSelect(opt); onClose(); }}
-          className={`w-full text-left px-4 py-2 rounded text-xs font-bold transition-all flex items-center justify-between ${
-            selected === opt ? 'bg-primary text-black' : 'text-white/60 hover:bg-white/5 hover:text-white'
-          }`}
         >
-          <span>{opt}</span>
-          {selected === opt && <CheckSvg />}
-        </button>
+          {opt}
+        </PromptMenuItem>
       ))}
-    </div>
+      </PromptMenuList>
+    </PromptPopover>
   );
 }
 
@@ -380,12 +397,6 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleTextareaInput = (e) => {
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 250) + "px";
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -532,8 +543,7 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
       </div>
 
       {/* ── BOTTOM PROMPT BAR ── */}
-      <div style={{ animationDelay: "0.2s" }} className="absolute bottom-4 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up">
-        <div className="w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]">
+      <PromptComposer>
           {additionalImages.length > 0 && (
             <div className="flex items-center gap-1.5">
               {additionalImages.map((img, idx) => (
@@ -551,20 +561,17 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
           )}
           {/* Top Row: Full-width Textarea */}
           <div className="w-full relative">
-            <textarea
+            <PromptTextarea
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              onInput={handleTextareaInput}
               placeholder="Describe your ad script... Use @image1 for product, @image2 for avatar."
-              rows={1}
-              className="w-full bg-transparent border-none text-white text-sm placeholder:text-white/20 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40"
             />
           </div>
 
           {/* Bottom Row: Uploads + Controls + Generate */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-3 border-t border-white/[0.03] relative">
-            <div className="flex items-center gap-3 flex-wrap">
+          <PromptFooter>
+            <PromptControls>
               
               {/* Asset Uploads Group */}
               <div className="flex items-center gap-1.5 pr-3 border-r border-white/10">
@@ -606,13 +613,15 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setDropdown(dropdown === 'format' ? null : 'format'); }}
-                  className={`flex items-center gap-2 px-3 py-2 bg-white/[0.03] hover:bg-white/[0.08] rounded border transition-all group whitespace-nowrap ${dropdown === 'format' ? 'border-primary/50' : 'border-white/5'}`}
+                  className={promptControlClassName({
+                    active: dropdown === "format",
+                  })}
                 >
                   <div className="w-4 h-4 bg-primary/10 rounded flex items-center justify-center border border-primary/20">
                     <span className="text-[8px] font-black text-primary uppercase">U</span>
                   </div>
-                  <span className="text-sm font-bold text-white/70 group-hover:text-primary transition-colors">{params.format}</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-20 group-hover:opacity-100 transition-opacity"><path d="M6 9l6 6 6-6" /></svg>
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>{params.format}</span>
+                  <PromptChevronIcon />
                 </button>
                 <Dropdown 
                   isOpen={dropdown === 'format'} 
@@ -629,15 +638,17 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
               <div className="relative flex items-center gap-1.5">
                 <button
                   onClick={(e) => { e.stopPropagation(); setDropdown(dropdown === 'avatar' ? null : 'avatar'); }}
-                  className={`flex items-center gap-2 px-3 py-2 bg-white/[0.03] hover:bg-white/[0.08] rounded border transition-all group whitespace-nowrap ${dropdown === 'avatar' ? 'border-primary/50' : 'border-white/5'}`}
+                  className={promptControlClassName({
+                    active: dropdown === "avatar",
+                  })}
                 >
                   <div className="w-4 h-4 rounded-full overflow-hidden border border-white/20 shadow-inner">
                     <img src={avatarImage || ASSETS.avatar[0].url} className="w-full h-full object-cover" />
                   </div>
-                  <span className="text-sm font-bold text-white/70 group-hover:text-primary transition-colors">
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
                     {ASSETS.avatar.find(a => a.url === avatarImage)?.name || "Select Avatar"}
                   </span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-20 group-hover:opacity-100 transition-opacity"><path d="M6 9l6 6 6-6" /></svg>
+                  <PromptChevronIcon />
                 </button>
 
                 {avatarImage && (
@@ -653,7 +664,10 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
                         setPreviewAvatar({ id: "custom", name: "Custom Uploaded Avatar", url: avatarImage });
                       }
                     }}
-                    className="h-[34px] w-[34px] flex items-center justify-center bg-white/[0.03] hover:bg-white/[0.08] rounded border border-white/5 text-white/40 hover:text-primary transition-all"
+                    className={promptControlClassName({
+                      iconOnly: true,
+                      className: "text-white/40 hover:text-[#22d3ee]",
+                    })}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <circle cx="11" cy="11" r="8" />
@@ -680,13 +694,34 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
                 <div key={key} className="relative">
                   <button
                     onClick={(e) => { e.stopPropagation(); setDropdown(dropdown === key ? null : key); }}
-                    className={`px-3 py-2 bg-white/[0.03] hover:bg-white/[0.08] rounded border transition-all text-sm font-bold ${dropdown === key ? 'border-primary/50 text-primary' : 'border-white/5 text-white/70'}`}
+                    className={promptControlClassName({
+                      active: dropdown === key,
+                      className:
+                        dropdown === key
+                          ? "text-xs font-semibold text-[#22d3ee]"
+                          : "text-xs font-semibold text-white/70",
+                    })}
                   >
-                    {key === 'duration' ? `${params[key]}s` : params[key]}
+                    {key === "ratio" ? (
+                      <PromptAspectRatioIcon />
+                    ) : key === "res" ? (
+                      <PromptQualityIcon />
+                    ) : (
+                      <PromptDurationIcon />
+                    )}
+                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
+                      {key === "duration" ? `${params[key]}s` : params[key]}
+                    </span>
                   </button>
                   <SimpleDropdown 
                     isOpen={dropdown === key} 
-                    title={key === 'res' ? 'Resolution' : key.toUpperCase()} 
+                    title={
+                      key === "ratio"
+                        ? "Aspect Ratio"
+                        : key === "res"
+                          ? "Resolution"
+                          : "Duration"
+                    }
                     options={OPTIONS[key]} 
                     selected={params[key]} 
                     onSelect={(val) => setParams({ ...params, [key]: val })} 
@@ -694,12 +729,11 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
                   />
                 </div>
               ))}
-            </div>
+            </PromptControls>
 
-            <button
+            <PromptAction
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10"
             >
               {isGenerating ? (
                 <>
@@ -709,10 +743,9 @@ export default function MarketingStudio({ apiKey, droppedFiles, onFilesHandled, 
               ) : (
                 <span>Launch</span>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </PromptAction>
+          </PromptFooter>
+      </PromptComposer>
 
       {/* Fullscreen Preview */}
       {fullscreenUrl && (

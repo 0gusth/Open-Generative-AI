@@ -2,6 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateImage, uploadFile } from "../muapi.js";
+import {
+  PromptAspectRatioIcon,
+  PromptAction,
+  PromptComposer,
+  PromptControls,
+  PromptFooter,
+  PromptMenuItem,
+  PromptMenuList,
+  PromptPopover,
+  PromptPopoverHeader,
+  PromptQualityIcon,
+  PromptTextarea,
+  promptControlClassName,
+  promptMediaButtonClassName,
+} from "./prompt/PromptComposer.jsx";
 
 // ─── Constants (inlined from promptUtils) ───────────────────────────────────
 
@@ -106,9 +121,8 @@ function buildNanoBananaPrompt(
 
 // ─── Dropdown ────────────────────────────────────────────────────────────────
 
-function Dropdown({ items, selected, onSelect, triggerRef, onClose }) {
+function Dropdown({ title, items, selected, onSelect, triggerRef, onClose }) {
   const menuRef = useRef(null);
-  const [position, setPosition] = useState({ bottom: 0, left: 0 });
 
   useEffect(() => {
     const handler = (e) => {
@@ -126,14 +140,15 @@ function Dropdown({ items, selected, onSelect, triggerRef, onClose }) {
   }, [onClose, triggerRef]);
 
   return (
-    <div
+    <PromptPopover
       ref={menuRef}
-      className="custom-dropdown absolute bottom-[calc(100%+8px)] left-0 bg-[#1a1a1a] border border-white/10 rounded py-1 shadow-2xl z-50 flex flex-col min-w-[120px] animate-fade-in"
     >
+      <PromptPopoverHeader>{title}</PromptPopoverHeader>
+      <PromptMenuList>
       {items.map((item) => (
-        <button
+        <PromptMenuItem
           key={item}
-          className={`px-3 py-2 text-xs font-bold text-left hover:bg-white/10 transition-colors ${item === selected ? "text-primary" : "text-white"}`}
+          selected={item === selected}
           onClick={(e) => {
             e.stopPropagation();
             onSelect(item);
@@ -141,215 +156,193 @@ function Dropdown({ items, selected, onSelect, triggerRef, onClose }) {
           }}
         >
           {item}
-        </button>
+        </PromptMenuItem>
       ))}
-    </div>
+      </PromptMenuList>
+    </PromptPopover>
   );
 }
 
-// ─── Scroll Column (Camera Controls) ─────────────────────────────────────────
+// Camera configuration controls
 
 function ScrollColumn({ title, items, columnKey, value, onChange }) {
   const listRef = useRef(null);
   const isDragging = useRef(false);
   const startY = useRef(0);
   const scrollTopStart = useRef(0);
-  const isSnapEnabled = useRef(true);
 
-  // Scroll to initial value on mount
   useEffect(() => {
     const list = listRef.current;
-    if (!list) return;
+    if (!list) return undefined;
+
     const timer = setTimeout(() => {
       const target = Array.from(list.children).find(
-        (c) => c.dataset.value == String(value),
+        (child) => child.dataset.value === String(value),
       );
       if (target) target.scrollIntoView({ block: "center" });
     }, 100);
+
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleScroll = useCallback(() => {
     const list = listRef.current;
     if (!list) return;
-    const centerY = list.scrollTop + list.clientHeight / 2;
-    let closest = null;
-    let minDist = Infinity;
 
-    const children = Array.from(list.children).filter((c) => c.dataset.value);
+    const centerY = list.scrollTop + list.clientHeight / 2;
+    const children = Array.from(list.children).filter(
+      (child) => child.dataset.value,
+    );
+    let closest = null;
+    let minimumDistance = Infinity;
+
     children.forEach((child) => {
       const childCenter = child.offsetTop + child.offsetHeight / 2;
-      const dist = Math.abs(centerY - childCenter);
-      if (dist < minDist) {
-        minDist = dist;
+      const distance = Math.abs(centerY - childCenter);
+      if (distance < minimumDistance) {
+        minimumDistance = distance;
         closest = child;
       }
     });
 
     children.forEach((child) => {
-      const imgBox = child.querySelector("[data-imgbox]");
-      const label = child.querySelector("[data-label]");
-      const isClosest = child === closest;
-
-      if (isClosest) {
-        child.classList.remove("opacity-20", "scale-90");
-        child.classList.add("opacity-100", "scale-100", "z-30");
-        if (imgBox) {
-          imgBox.classList.add("border-primary/40", "bg-primary/5", "scale-110");
-          imgBox.classList.remove("border-transparent", "bg-transparent");
-        }
-        if (label) label.classList.add("text-primary");
-      } else {
-        child.classList.add("opacity-20", "scale-90");
-        child.classList.remove("opacity-100", "scale-100", "z-30");
-        if (imgBox) {
-          imgBox.classList.remove("border-primary/40", "bg-primary/5", "scale-110");
-          imgBox.classList.add("border-transparent", "bg-transparent");
-        }
-        if (label) label.classList.remove("text-primary");
-      }
+      const selected = child === closest;
+      child.dataset.selected = String(selected);
+      child.setAttribute("aria-selected", String(selected));
     });
 
     if (closest) {
-      const newVal =
+      const nextValue =
         columnKey === "focal"
-          ? parseInt(closest.dataset.value)
+          ? parseInt(closest.dataset.value, 10)
           : closest.dataset.value;
-      if (String(newVal) !== String(value)) {
-        onChange(newVal);
-      }
+      if (String(nextValue) !== String(value)) onChange(nextValue);
     }
-  }, [columnKey, value, onChange]);
+  }, [columnKey, onChange, value]);
 
-  // Attach scroll handler with initial check
   useEffect(() => {
     const list = listRef.current;
-    if (!list) return;
+    if (!list) return undefined;
+
     list.addEventListener("scroll", handleScroll);
     const timer = setTimeout(handleScroll, 150);
+
     return () => {
       list.removeEventListener("scroll", handleScroll);
       clearTimeout(timer);
     };
   }, [handleScroll]);
 
-  // Mouse drag handlers
-  const onMouseDown = (e) => {
-    isDragging.current = true;
-    isSnapEnabled.current = false;
-    listRef.current.classList.add("cursor-grabbing");
-    listRef.current.classList.remove("snap-y");
-    startY.current = e.pageY - listRef.current.offsetTop;
-    scrollTopStart.current = listRef.current.scrollTop;
-    e.preventDefault();
-  };
-
-  const onMouseLeave = () => {
-    isDragging.current = false;
-    listRef.current.classList.remove("cursor-grabbing");
-    listRef.current.classList.add("snap-y");
-  };
-
-  const onMouseUp = () => {
-    isDragging.current = false;
-    listRef.current.classList.remove("cursor-grabbing");
-    listRef.current.classList.add("snap-y");
-  };
-
-  const onMouseMove = (e) => {
-    if (!isDragging.current) return;
-    e.preventDefault();
-    const y = e.pageY - listRef.current.offsetTop;
-    const walk = (y - startY.current) * 1.5;
-    listRef.current.scrollTop = scrollTopStart.current - walk;
-  };
-
-  const onItemClick = (item) => {
+  const handleMouseDown = (event) => {
     const list = listRef.current;
     if (!list) return;
+
+    isDragging.current = true;
+    list.classList.add("cursor-grabbing");
+    list.classList.remove("snap-y");
+    startY.current = event.pageY - list.offsetTop;
+    scrollTopStart.current = list.scrollTop;
+    event.preventDefault();
+  };
+
+  const stopDragging = () => {
+    const list = listRef.current;
+    isDragging.current = false;
+    if (!list) return;
+    list.classList.remove("cursor-grabbing");
+    list.classList.add("snap-y");
+  };
+
+  const handleMouseMove = (event) => {
+    const list = listRef.current;
+    if (!isDragging.current || !list) return;
+
+    event.preventDefault();
+    const y = event.pageY - list.offsetTop;
+    list.scrollTop = scrollTopStart.current - (y - startY.current) * 1.5;
+  };
+
+  const handleItemClick = (item) => {
+    const list = listRef.current;
+    if (!list) return;
+
     const target = Array.from(list.children).find(
-      (c) => c.dataset.value == String(item),
+      (child) => child.dataset.value === String(item),
     );
     if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  const getSelectedDescription = () => {
-    if (columnKey === 'camera') return CAMERA_MAP[value] || '';
-    if (columnKey === 'lens') return LENS_MAP[value] || '';
-    if (columnKey === 'focal') return FOCAL_PERSPECTIVE[value] || '';
-    if (columnKey === 'aperture') return APERTURE_EFFECT[value] || '';
-    return '';
-  };
-
   return (
-    <div className="flex flex-col items-center relative w-[130px] md:w-[150px] shrink-0 snap-center">
-      <div className="mb-4 text-[10px] font-black text-white/20 uppercase tracking-[0.25em] text-center">
-        {title}
+    <section className="flex w-[170px] shrink-0 snap-center flex-col md:w-[190px]">
+      <div className="mb-3 flex items-center justify-between px-1">
+        <h3 className="text-xs font-semibold text-white/75">{title}</h3>
+        <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-b from-[#22d3ee] to-[#a855f7] shadow-[0_0_6px_rgba(34,211,238,0.5)]" />
       </div>
-      <div className="relative overflow-hidden w-full h-[280px] md:h-[300px] bg-gradient-to-b from-white/[0.02] to-transparent rounded-2xl border border-white/[0.03] shadow-2xl backdrop-blur-3xl group">
-        {/* Masks */}
-        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#0a0a0a] to-transparent z-20 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0a0a0a] to-transparent z-20 pointer-events-none" />
-        
-        {/* Active Selection Ring */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] h-[70px] bg-white/[0.02] border border-white/[0.05] rounded-xl pointer-events-none z-0" />
+
+      <div className="relative h-[320px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#030303] shadow-inner">
+        <div className="pointer-events-none absolute inset-x-2 top-1/2 z-0 h-[82px] -translate-y-1/2 rounded-xl border border-[#22d3ee]/20 bg-gradient-to-r from-[#22d3ee]/15 to-purple-500/10 shadow-[0_0_15px_rgba(34,211,238,0.1)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-gradient-to-b from-[#030303] via-[#030303]/85 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#030303] via-[#030303]/85 to-transparent" />
 
         <div
           ref={listRef}
-          className="h-full overflow-y-auto no-scrollbar snap-y snap-mandatory relative z-10"
-          onMouseDown={onMouseDown}
-          onMouseLeave={onMouseLeave}
-          onMouseUp={onMouseUp}
-          onMouseMove={onMouseMove}
+          role="listbox"
+          aria-label={title}
+          className="relative z-10 h-full cursor-grab snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onMouseDown={handleMouseDown}
+          onMouseLeave={stopDragging}
+          onMouseUp={stopDragging}
+          onMouseMove={handleMouseMove}
         >
-          <div style={{ height: "calc(50% - 35px)" }} />
-
+          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
           {items.map((item) => {
             const imageUrl = ASSET_URLS[item];
+            const selected = String(item) === String(value);
+
             return (
-              <div
+              <button
                 key={item}
+                type="button"
+                role="option"
+                aria-selected={selected}
                 data-value={item}
-                className="h-[70px] flex flex-col items-center justify-center gap-2 snap-center cursor-pointer transition-all duration-300 ease-out text-white p-2 select-none opacity-20 scale-90"
-                onClick={() => onItemClick(item)}
+                data-selected={selected}
+                onClick={() => handleItemClick(item)}
+                className="group flex h-[82px] w-full snap-center select-none items-center justify-center gap-2.5 px-4 text-left opacity-30 transition-all duration-200 data-[selected=true]:opacity-100"
               >
-                <div
-                  data-imgbox="true"
-                  className="w-10 h-10 rounded-lg border border-transparent flex items-center justify-center transition-all duration-300 overflow-hidden relative"
+                <span
+                  className={`flex shrink-0 items-center justify-center font-semibold transition-colors ${
+                    imageUrl
+                      ? "h-10 w-10"
+                      : "text-base text-white/55 group-data-[selected=true]:text-[#22d3ee]"
+                  }`}
                 >
                   {imageUrl ? (
                     <img
                       src={imageUrl}
-                      alt={String(item)}
-                      className="w-full h-full object-cover opacity-70"
+                      alt=""
+                      className="h-full w-full object-contain"
                     />
                   ) : (
-                    <span className="text-sm font-bold text-white/40">
+                    <>
                       {item}
-                    </span>
+                      {columnKey === "focal" ? "mm" : ""}
+                    </>
                   )}
-                </div>
-                <span
-                  data-label="true"
-                  className="text-[8px] md:text-[9px] font-black uppercase text-center leading-tight max-w-full truncate px-1 tracking-widest text-white/60"
-                >
-                  {item}
                 </span>
-              </div>
+                {columnKey !== "focal" && (
+                  <span className="line-clamp-2 min-w-0 text-[10px] font-medium leading-snug text-white/60 transition-colors group-data-[selected=true]:text-white">
+                    {item}
+                  </span>
+                )}
+              </button>
             );
           })}
-
-          <div style={{ height: "calc(50% - 35px)" }} />
+          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
         </div>
       </div>
-      
-      {/* Selection Helper Text */}
-      <div className="mt-4 h-8 px-2 text-center">
-        <span className="text-[9px] font-medium text-primary/60 uppercase tracking-widest animate-fade-in inline-block leading-tight">
-          {getSelectedDescription()}
-        </span>
-      </div>
-    </div>
+
+    </section>
   );
 }
 
@@ -369,30 +362,75 @@ function CameraControlsOverlay({
     onSettingsChange((prev) => ({ ...prev, [key]: val }));
   };
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
   return (
     <div
       ref={backdropRef}
-      className={`fixed inset-0 bg-[#0a0a0a]/80 backdrop-blur-2xl z-[100] flex items-center justify-center transition-all duration-500 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-xl animate-fade-in"
       onClick={handleBackdropClick}
     >
       <div
-        className={`w-full max-w-5xl bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 md:p-10 shadow-[0_0_100px_rgba(0,0,0,0.8)] transform transition-all duration-500 flex flex-col max-h-[90vh] ${isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-10"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="camera-config-title"
+        aria-describedby="camera-config-description"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0a0a0b]/95 shadow-[0_24px_100px_rgba(0,0,0,0.75)] backdrop-blur-2xl animate-scale-up"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-2xl font-black text-white tracking-tighter uppercase italic">
-              Camera Config
+        <div className="flex items-start justify-between border-b border-white/[0.05] px-5 py-5 md:px-7 md:py-6">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#22d3ee]">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14.5 4H9.5L8 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3Z" />
+                <circle cx="12" cy="12.5" r="3.5" />
+              </svg>
+              Cinema Studio
+            </div>
+            <h2
+              id="camera-config-title"
+              className="text-xl font-semibold tracking-tight text-white md:text-2xl"
+            >
+              Camera settings
             </h2>
-            <div className="h-[1px] w-12 bg-primary/40" />
+            <p
+              id="camera-config-description"
+              className="mt-1.5 max-w-2xl text-xs leading-relaxed text-white/45 md:text-sm"
+            >
+              Build a consistent cinematic look by choosing the camera, lens,
+              focal length, and depth of field.
+            </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-white/20 hover:text-white transition-all"
+            aria-label="Close camera settings"
+            title="Close"
+            className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.03] text-white/40 transition-all hover:border-white/15 hover:bg-white/[0.07] hover:text-white"
           >
             <svg
-              width="20"
-              height="20"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -403,36 +441,37 @@ function CameraControlsOverlay({
           </button>
         </div>
 
-        {/* Scroll columns */}
-        <div className="w-full flex justify-start md:justify-center gap-3 md:gap-6 py-4 md:py-8 overflow-x-auto no-scrollbar snap-x px-4 md:px-0">
-          <ScrollColumn
-            title="Camera"
-            items={CAMERAS}
-            columnKey="camera"
-            value={settings.camera}
-            onChange={updateSetting("camera")}
-          />
-          <ScrollColumn
-            title="Lens"
-            items={LENSES}
-            columnKey="lens"
-            value={settings.lens}
-            onChange={updateSetting("lens")}
-          />
-          <ScrollColumn
-            title="Focal Length"
-            items={FOCAL_LENGTHS}
-            columnKey="focal"
-            value={settings.focal}
-            onChange={updateSetting("focal")}
-          />
-          <ScrollColumn
-            title="Aperture"
-            items={APERTURES}
-            columnKey="aperture"
-            value={settings.aperture}
-            onChange={updateSetting("aperture")}
-          />
+        <div className="overflow-x-auto px-5 py-6 no-scrollbar md:px-7 md:py-7">
+          <div className="mx-auto flex w-max min-w-full justify-start gap-3 sm:justify-center md:gap-5">
+            <ScrollColumn
+              title="Camera"
+              items={CAMERAS}
+              columnKey="camera"
+              value={settings.camera}
+              onChange={updateSetting("camera")}
+            />
+            <ScrollColumn
+              title="Lens"
+              items={LENSES}
+              columnKey="lens"
+              value={settings.lens}
+              onChange={updateSetting("lens")}
+            />
+            <ScrollColumn
+              title="Focal length"
+              items={FOCAL_LENGTHS}
+              columnKey="focal"
+              value={settings.focal}
+              onChange={updateSetting("focal")}
+            />
+            <ScrollColumn
+              title="Aperture"
+              items={APERTURES}
+              columnKey="aperture"
+              value={settings.aperture}
+              onChange={updateSetting("aperture")}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -470,6 +509,8 @@ export default function CinemaStudio({
   const [imageUploadProgress, setImageUploadProgress] = useState(0);
   const imageInputRef = useRef(null);
   const [activeHistoryIndex, setactiveHistoryIndex] = useState(null);
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState(null);
+  const [copiedImageIndex, setCopiedImageIndex] = useState(null);
 
   // ── Internal history state (used when historyItems prop is not provided) ──
   const [internalHistory, setInternalHistory] = useState([]);
@@ -525,17 +566,6 @@ export default function CinemaStudio({
   }, []);
 
   // ── Adjust height on load ────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (textareaRef.current) {
-        const el = textareaRef.current;
-        el.style.height = "auto";
-        el.style.height = el.scrollHeight + "px";
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, []);
-
   // ── Persistence: Save ────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -566,13 +596,6 @@ export default function CinemaStudio({
     `${settings.lens}, ${settings.focal}mm, ${settings.aperture}`;
 
   // ── Textarea auto-height ──
-  const handleTextareaInput = (e) => {
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-    setSettings((prev) => ({ ...prev, prompt: el.value }));
-  };
-
   // ── Generate ──
   const handleGenerate = useCallback(async () => {
     const basePrompt = settings.prompt.trim();
@@ -672,6 +695,75 @@ export default function CinemaStudio({
     }
   }, [canvasUrl]);
 
+  const handleCopyPrompt = useCallback(
+    async (prompt, index) => {
+      if (!prompt) return;
+
+      try {
+        await navigator.clipboard.writeText(prompt);
+        setCopiedPromptIndex(index);
+        window.setTimeout(() => {
+          setCopiedPromptIndex((current) => (current === index ? null : current));
+        }, 1600);
+      } catch (error) {
+        console.error("Failed to copy the prompt:", error);
+        onGenerationError?.("Could not copy the prompt to the clipboard.");
+      }
+    },
+    [onGenerationError],
+  );
+
+  const handleCopyImage = useCallback(
+    async (imageUrl, index) => {
+      try {
+        if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+          throw new Error("Image clipboard access is not supported.");
+        }
+
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+          throw new Error(`Image request failed with status ${response.status}.`);
+        }
+
+        const sourceBlob = await response.blob();
+        let clipboardBlob = sourceBlob;
+
+        if (sourceBlob.type !== "image/png") {
+          const bitmap = await createImageBitmap(sourceBlob);
+          const canvas = document.createElement("canvas");
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Could not create an image canvas.");
+          context.drawImage(bitmap, 0, 0);
+          bitmap.close?.();
+
+          clipboardBlob = await new Promise((resolve, reject) => {
+            canvas.toBlob(
+              (blob) =>
+                blob
+                  ? resolve(blob)
+                  : reject(new Error("Could not convert the image to PNG.")),
+              "image/png",
+            );
+          });
+        }
+
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": clipboardBlob }),
+        ]);
+        setCopiedImageIndex(index);
+        window.setTimeout(() => {
+          setCopiedImageIndex((current) => (current === index ? null : current));
+        }, 1600);
+      } catch (error) {
+        console.error("Failed to copy the image:", error);
+        onGenerationError?.("Could not copy the image to the clipboard.");
+      }
+    },
+    [onGenerationError],
+  );
+
   // ── Load history item ──
   const loadHistoryItem = (entry, idx) => {
     if (entry.settings) {
@@ -686,13 +778,6 @@ export default function CinemaStudio({
       }));
       if (entry.settings.resolution) setResolution(entry.settings.resolution);
 
-      // Sync textarea height
-      if (textareaRef.current) {
-        textareaRef.current.value = entry.settings.prompt || "";
-        textareaRef.current.style.height = "auto";
-        textareaRef.current.style.height =
-          textareaRef.current.scrollHeight + "px";
-      }
     }
     setCanvasUrl(entry.url);
   };
@@ -701,8 +786,6 @@ export default function CinemaStudio({
     setCanvasUrl(null);
     setSettings((prev) => ({ ...prev, prompt: "" }));
     if (textareaRef.current) {
-      textareaRef.current.value = "";
-      textareaRef.current.style.height = "auto";
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
   };
@@ -773,6 +856,49 @@ export default function CinemaStudio({
                   </button>
                   <button
                     type="button"
+                    title={
+                      copiedImageIndex === idx ? "Image copied" : "Copy image"
+                    }
+                    aria-label={
+                      copiedImageIndex === idx ? "Image copied" : "Copy image"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyImage(entry.url, idx);
+                    }}
+                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-[#22d3ee] hover:text-black transition-all border border-white/10"
+                  >
+                    {copiedImageIndex === idx ? (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m5 12 4 4L19 6" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="8" y="8" width="12" height="12" rx="2" />
+                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     title="Delete"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -793,10 +919,34 @@ export default function CinemaStudio({
 
                 {/* Details */}
                 <div className="p-3 bg-black/80 backdrop-blur-sm border-t border-white/5 flex-1 flex flex-col justify-between gap-2">
-                  <p className="text-white/70 text-xs line-clamp-3 leading-relaxed">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyPrompt(entry.settings?.prompt, idx);
+                    }}
+                    className={`w-full text-left text-xs line-clamp-3 leading-relaxed transition-colors cursor-copy ${
+                      copiedPromptIndex === idx
+                        ? "text-[#22d3ee]"
+                        : "text-white/70 hover:text-white"
+                    }`}
+                    title={
+                      copiedPromptIndex === idx
+                        ? "Prompt copied"
+                        : "Copy full prompt"
+                    }
+                    aria-label={
+                      copiedPromptIndex === idx
+                        ? "Prompt copied"
+                        : "Copy full prompt"
+                    }
+                  >
                     {entry.settings?.prompt || "No prompt"}
-                  </p>
-                  <div className="flex items-center justify-between mt-1 flex-wrap gap-1">
+                  </button>
+                  <span className="sr-only" aria-live="polite">
+                    {copiedPromptIndex === idx ? "Prompt copied" : ""}
+                  </span>
+                  <div className="flex items-center mt-1 flex-wrap gap-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-[#22d3ee] px-2 py-0.5 bg-[#22d3ee]/10 rounded border border-[#22d3ee]/20">
                         Cinema Studio
@@ -805,22 +955,6 @@ export default function CinemaStudio({
                         <span className="text-[10px] text-white/40">{entry.settings.camera}</span>
                       )}
                     </div>
-                    {entry.settings?.prompt && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(entry.settings.prompt);
-                          const btn = e.currentTarget;
-                          btn.innerText = "Copied!";
-                          setTimeout(() => { btn.innerText = "Copy"; }, 2000);
-                        }}
-                        className="px-2 py-0.5 bg-white/5 hover:bg-primary/20 hover:text-primary rounded text-[10px] font-medium text-white/70 transition-all border border-white/10"
-                        title="Copy prompt"
-                      >
-                        Copy Prompt
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -874,8 +1008,10 @@ export default function CinemaStudio({
       </div>
 
       {/* ── BOTTOM PROMPT BAR ── */}
-      <div className="absolute bottom-4 left-4 right-4 md:left-0 md:right-0 md:mx-auto md:max-w-[95%] lg:max-w-4xl z-30 transition-all duration-700 animate-fade-in-up">
-        <div className="w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]">
+      <PromptComposer
+        positionClassName="absolute bottom-4 left-4 right-4 md:left-0 md:right-0 md:mx-auto md:max-w-[95%] lg:max-w-4xl z-30 transition-all duration-700 animate-fade-in-up"
+        style={null}
+      >
           {/* Upper Row: Image Upload & Textarea */}
           <div className="flex items-start gap-4 w-full px-1">
             {/* Image Upload Button */}
@@ -895,7 +1031,9 @@ export default function CinemaStudio({
                     : imageInputRef.current?.click()
                 }
                 disabled={isUploadingImage}
-                className={`w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden ${uploadedImage ? "border-[#22d3ee]/60 bg-white/5" : "bg-white/[0.03] border-white/[0.03] hover:bg-white/10 hover:border-[#22d3ee]/40"} group`}
+                className={promptMediaButtonClassName({
+                  active: Boolean(uploadedImage),
+                })}
               >
                 {isUploadingImage ? (
                   <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
@@ -948,51 +1086,45 @@ export default function CinemaStudio({
               </button>
             </div>
 
-            <textarea
+            <PromptTextarea
               ref={textareaRef}
               value={settings.prompt}
-              onChange={(e) => {
-                setSettings(prev => ({ ...prev, prompt: e.target.value }));
-                const el = e.target;
-                el.style.height = "auto";
-                const maxH = window.innerWidth < 768 ? 150 : 250;
-                el.style.height = Math.min(el.scrollHeight, maxH) + "px";
-              }}
+              onChange={(e) =>
+                setSettings((prev) => ({ ...prev, prompt: e.target.value }))
+              }
               placeholder="Describe your cinema scene..."
-              className="w-full bg-transparent border-none text-white text-sm placeholder:text-white/20 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40"
-              rows={1}
             />
           </div>
 
           {/* Bottom Row: Controls & Generate */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-3 border-t border-white/[0.03] relative">
-            <div className="flex items-center gap-2 relative flex-wrap pb-1 md:pb-0">
+          <PromptFooter>
+            <PromptControls>
               {/* Aspect Ratio Button */}
               <div className="relative">
                 <button
                   ref={arBtnRef}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner text-[11px] font-semibold text-white/70 hover:text-white"
+                  className={promptControlClassName({
+                    active: openDropdown === "ar",
+                    className: "text-xs font-semibold",
+                  })}
                   onClick={() =>
                     setOpenDropdown((d) => (d === "ar" ? null : "ar"))
                   }
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40">
-                    <rect x="2" y="7" width="20" height="10" rx="2" ry="2" />
-                  </svg>
+                  <PromptAspectRatioIcon />
                   {settings.aspect_ratio}
                 </button>
                 {openDropdown === "ar" && (
-                  <div className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[140px]">
-                    <Dropdown
-                      items={ASPECT_RATIOS}
-                      selected={settings.aspect_ratio}
-                      onSelect={(val) =>
-                        setSettings((prev) => ({ ...prev, aspect_ratio: val }))
-                      }
-                      triggerRef={arBtnRef}
-                      onClose={() => setOpenDropdown(null)}
-                    />
-                  </div>
+                  <Dropdown
+                    title="Aspect Ratio"
+                    items={ASPECT_RATIOS}
+                    selected={settings.aspect_ratio}
+                    onSelect={(val) =>
+                      setSettings((prev) => ({ ...prev, aspect_ratio: val }))
+                    }
+                    triggerRef={arBtnRef}
+                    onClose={() => setOpenDropdown(null)}
+                  />
                 )}
               </div>
 
@@ -1000,44 +1132,45 @@ export default function CinemaStudio({
               <div className="relative">
                 <button
                   ref={resBtnRef}
-                  className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] group whitespace-nowrap shadow-inner text-[11px] font-semibold text-white/70 hover:text-white"
+                  className={promptControlClassName({
+                    active: openDropdown === "res",
+                    className: "text-xs font-semibold",
+                  })}
                   onClick={() =>
                     setOpenDropdown((d) => (d === "res" ? null : "res"))
                   }
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                  </svg>
+                  <PromptQualityIcon />
                   {resolution}
                 </button>
                 {openDropdown === "res" && (
-                  <div className="absolute bottom-[calc(100%+12px)] left-0 z-50 bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[140px]">
-                    <Dropdown
-                      items={RESOLUTIONS}
-                      selected={resolution}
-                      onSelect={setResolution}
-                      triggerRef={resBtnRef}
-                      onClose={() => setOpenDropdown(null)}
-                    />
-                  </div>
+                  <Dropdown
+                    title="Resolution"
+                    items={RESOLUTIONS}
+                    selected={resolution}
+                    onSelect={setResolution}
+                    triggerRef={resBtnRef}
+                    onClose={() => setOpenDropdown(null)}
+                  />
                 )}
               </div>
 
               {/* Summary Card (triggers overlay) */}
               <button
-                className="h-[34px] flex items-center gap-2 px-3.5 bg-[#16161a]/60 hover:bg-[#202026]/80 rounded-md transition-all border border-white/[0.06] text-left group overflow-hidden shadow-inner text-[11px] font-semibold text-white/70 hover:text-white"
+                className={promptControlClassName({
+                  className: "text-left overflow-hidden text-xs font-semibold text-white/70 hover:text-white",
+                })}
                 onClick={() => setIsOverlayOpen(true)}
               >
                 <div className="w-1.5 h-1.5 bg-[#22d3ee] rounded-full shadow-lg shadow-[#22d3ee]/20 shrink-0" />
-                <span className="max-w-[120px] truncate text-[11px] font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
+                <span className="max-w-[120px] truncate text-xs font-semibold text-white/70 group-hover:text-[#22d3ee] transition-colors">
                   {settings.camera} · {formatSummaryValue()}
                 </span>
               </button>
-            </div>
+            </PromptControls>
 
             {/* Generate Button */}
-            <button
-              className="bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10"
+            <PromptAction
               disabled={isGenerating || !settings.prompt.trim()}
               onClick={handleGenerate}
             >
@@ -1051,10 +1184,9 @@ export default function CinemaStudio({
                   <span>Shoot ✦ 10</span>
                 </>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </PromptAction>
+          </PromptFooter>
+      </PromptComposer>
       {fullscreenUrl && (
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"
