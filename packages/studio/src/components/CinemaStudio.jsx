@@ -510,7 +510,6 @@ export default function CinemaStudio({
   const imageInputRef = useRef(null);
   const [activeHistoryIndex, setactiveHistoryIndex] = useState(null);
   const [copiedPromptIndex, setCopiedPromptIndex] = useState(null);
-  const [copiedImageIndex, setCopiedImageIndex] = useState(null);
 
   // ── Internal history state (used when historyItems prop is not provided) ──
   const [internalHistory, setInternalHistory] = useState([]);
@@ -713,57 +712,6 @@ export default function CinemaStudio({
     [onGenerationError],
   );
 
-  const handleCopyImage = useCallback(
-    async (imageUrl, index) => {
-      try {
-        if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-          throw new Error("Image clipboard access is not supported.");
-        }
-
-        const response = await fetch(imageUrl);
-        if (!response.ok) {
-          throw new Error(`Image request failed with status ${response.status}.`);
-        }
-
-        const sourceBlob = await response.blob();
-        let clipboardBlob = sourceBlob;
-
-        if (sourceBlob.type !== "image/png") {
-          const bitmap = await createImageBitmap(sourceBlob);
-          const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          const context = canvas.getContext("2d");
-          if (!context) throw new Error("Could not create an image canvas.");
-          context.drawImage(bitmap, 0, 0);
-          bitmap.close?.();
-
-          clipboardBlob = await new Promise((resolve, reject) => {
-            canvas.toBlob(
-              (blob) =>
-                blob
-                  ? resolve(blob)
-                  : reject(new Error("Could not convert the image to PNG.")),
-              "image/png",
-            );
-          });
-        }
-
-        await navigator.clipboard.write([
-          new ClipboardItem({ "image/png": clipboardBlob }),
-        ]);
-        setCopiedImageIndex(index);
-        window.setTimeout(() => {
-          setCopiedImageIndex((current) => (current === index ? null : current));
-        }, 1600);
-      } catch (error) {
-        console.error("Failed to copy the image:", error);
-        onGenerationError?.("Could not copy the image to the clipboard.");
-      }
-    },
-    [onGenerationError],
-  );
-
   // ── Load history item ──
   const loadHistoryItem = (entry, idx) => {
     if (entry.settings) {
@@ -853,49 +801,6 @@ export default function CinemaStudio({
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                     </svg>
-                  </button>
-                  <button
-                    type="button"
-                    title={
-                      copiedImageIndex === idx ? "Image copied" : "Copy image"
-                    }
-                    aria-label={
-                      copiedImageIndex === idx ? "Image copied" : "Copy image"
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyImage(entry.url, idx);
-                    }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-[#22d3ee] hover:text-black transition-all border border-white/10"
-                  >
-                    {copiedImageIndex === idx ? (
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m5 12 4 4L19 6" />
-                      </svg>
-                    ) : (
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <rect x="8" y="8" width="12" height="12" rx="2" />
-                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-                      </svg>
-                    )}
                   </button>
                   <button
                     type="button"
