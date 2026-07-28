@@ -68,6 +68,36 @@ Use all studios (Image, Video, Audio, AI Clipping, Vibe Motion, Lip Sync, Cinema
 
 ---
 
+## 💰 Turn This Into Your Own Product — White Label & Resell
+
+Want to launch this as **your own branded AI studio** and charge your own customers for it? [MuAPI White Label](https://muapi.ai/white-label?utm_source=github&utm_medium=readme&utm_campaign=open-generative-ai) lets you spin up a fully white-labeled version of this app — your logo, your colors, your custom domain, your own pricing — with zero infra to manage. You keep the markup on every generation; MuAPI handles the models, the queue, and the billing plumbing underneath.
+
+- **Your branding** — logo, color theme, and a custom domain (e.g. `studio.yourbrand.com`)
+- **Your pricing** — set your own credit/subscription prices for end users, keep the margin
+- **No infra** — no servers, workers, or model hosting to run yourself
+- **All studios included** — Image, Video, Audio, Lip Sync, Cinema, Workflows, and more, depending on plan
+
+Plans start at $49/mo. [Get started with White Label →](https://muapi.ai/white-label?utm_source=github&utm_medium=readme&utm_campaign=open-generative-ai)
+
+### What similar AI studios charge their users
+
+Consumer AI image/video platforms almost all run on paid monthly subscriptions — this is the same playbook you'd run under your own brand:
+
+| Platform | Typical subscription range |
+|---|---|
+| Midjourney | ~$10–$120/mo (Basic → Mega) |
+| Runway | ~$12–$76/mo (Standard → Unlimited), custom Enterprise |
+| Kling AI | ~$10–$92/mo across Standard → Premier tiers |
+| Luma Dream Machine | ~$10–$100+/mo |
+| Pika | ~$8–$58/mo |
+| OpenArt | ~$10–$40/mo across Standard → Pro tiers |
+| Krea | ~$10–$60/mo across Basic → Pro/Max tiers |
+| Magnific (Freepik) | ~$10–$50+/mo bundled into Freepik premium tiers |
+
+*(Figures are approximate, general-market ranges and change over time — check each platform's current pricing page before quoting them.)* With MuAPI White Label, you set these numbers yourself for your own end users — the subscription revenue is yours.
+
+---
+
 ## ⬇️ Download Desktop App
 
 One-click installers — no Node.js or terminal required.
