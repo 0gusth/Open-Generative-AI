@@ -1703,7 +1703,7 @@ export default function ImageStudio({
                 </>
               ) : (
                 <>
-                  <span>Generate ✦ {batchSize}</span>
+                  <span>Generate ✦</span>
                 </>
               )}
             </PromptAction>
