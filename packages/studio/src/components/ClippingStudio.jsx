@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import { runClipping, uploadFile } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
@@ -371,7 +372,7 @@ export default function ClippingStudio({
       }
     } catch (err) {
       console.error("[ClippingStudio] Error generating clips:", err);
-      setGenerateError(err.message || "Failed to process AI clipping.");
+      toast.error(err.message || "Failed to process AI clipping.");
       onGenerationError?.(err.message?.slice(0, 120) || "AI Clipping failed");
     } finally {
       setIsGenerating(false);

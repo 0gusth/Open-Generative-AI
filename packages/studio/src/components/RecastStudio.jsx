@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { processRecast, uploadFile } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
@@ -762,8 +763,7 @@ export default function RecastStudio({
       }
     } catch (e) {
       console.error("[RecastStudio]", e);
-      setGenerateError(e.message?.slice(0, 80) ?? "Unknown error");
-      setTimeout(() => setGenerateError(null), 4000);
+      toast.error(e.message || "Body swap generation failed");
       onGenerationError?.(e.message?.slice(0, 120) || "Body swap generation failed");
     } finally {
       setIsGenerating(false);
@@ -1162,8 +1162,6 @@ export default function RecastStudio({
                   <span className="animate-spin inline-block text-black">◌</span>{" "}
                   Swapping...
                 </>
-              ) : generateError ? (
-                `Error: ${generateError}`
               ) : (
                 <span>Swap Body</span>
               )}

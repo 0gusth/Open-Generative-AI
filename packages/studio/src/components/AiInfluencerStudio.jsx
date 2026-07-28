@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import toast from "react-hot-toast";
 import { generateImage } from "../muapi.js";
 
 const CDN = "https://cdn.muapi.ai/influencer";
@@ -408,7 +409,7 @@ export default function AiInfluencerStudio({ apiKey, onGenerate, isGenerating: e
         setSelectedHistoryIdx(0);
       }
     } catch (err) {
-      setErrorMsg(err?.message || "Generation failed. Please try again.");
+      toast.error(err?.message || "Generation failed. Please try again.");
     } finally {
       setIsGeneratingInternal(false);
     }

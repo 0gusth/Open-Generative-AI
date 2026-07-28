@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { generateImage, generateI2I, uploadFile } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DrawModal from "./DrawModal.jsx";
@@ -1269,8 +1270,7 @@ export default function ImageStudio({
       });
     } catch (e) {
       console.error("[ImageStudio] Generation failed:", e);
-      setGenerateError(e.message.slice(0, 80));
-      setTimeout(() => setGenerateError(null), 4000);
+      toast.error(e.message || "Image generation failed");
       onGenerationError?.(e.message?.slice(0, 120) || "Image generation failed");
     } finally {
       setGenerating(false);
@@ -1699,8 +1699,6 @@ export default function ImageStudio({
                   <span className="animate-spin inline-block text-black">◌</span>
                   Generating...
                 </>
-              ) : generateError ? (
-                `Error: ${generateError}`
               ) : (
                 <>
                   <span>Generate ✦ {batchSize}</span>

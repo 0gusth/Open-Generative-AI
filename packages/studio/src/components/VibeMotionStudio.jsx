@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { runMotionGraphics, runMotionGraphicsEdit } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
@@ -189,20 +190,15 @@ export default function VibeMotionStudio({ apiKey, onGenerationComplete, onGener
         raw.includes("Original generation does not");
 
       if (isStaleEdit) {
-        // Known backend limitation — warn only (not error), keep console clean
         console.warn("[VibeMotionStudio] Remix unavailable:", raw.slice(0, 120));
-        setGenerateError(
-          "This generation can't be remixed — the animation code wasn't saved server-side. " +
-          "Generate a new motion graphic first, then remix that result."
-        );
-        // Exit edit mode WITHOUT persisting canEdit:false — let user retry after refresh
+        const msg = "This generation can't be remixed — the animation code wasn't saved server-side. Generate a new motion graphic first, then remix that result.";
+        toast.error(msg);
         setEditMode(false);
         setEditSourceId(null);
       } else {
         console.error("[VibeMotionStudio]", err);
-        setGenerateError(raw.slice(0, 120) || "Generation failed");
+        toast.error(raw || err.message || "Vibe Motion generation failed");
       }
-      setTimeout(() => setGenerateError(null), 10000);
       onGenerationError?.(err.message?.slice(0, 120) || "Vibe Motion generation failed");
     } finally {
       setGenerating(false);
@@ -670,8 +666,6 @@ export default function VibeMotionStudio({ apiKey, onGenerationComplete, onGener
                   <span className="animate-spin inline-block text-black">◌</span>{" "}
                   {editMode ? "Remixing..." : "Generating..."}
                 </>
-              ) : generateError ? (
-                `Error: ${generateError.slice(0, 40)}…`
               ) : editMode ? (
                 <span>Remix</span>
               ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { processLipSync, uploadFile } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
@@ -688,8 +689,7 @@ export default function LipSyncStudio({
       }
     } catch (e) {
       console.error("[LipSyncStudio]", e);
-      setGenerateError(e.message?.slice(0, 80) ?? "Unknown error");
-      setTimeout(() => setGenerateError(null), 4000);
+      toast.error(e.message || "Lip sync generation failed");
       onGenerationError?.(e.message?.slice(0, 120) || "Lip sync generation failed");
     } finally {
       setIsGenerating(false);
@@ -1114,8 +1114,6 @@ export default function LipSyncStudio({
                   </span>{" "}
                   Generating...
                 </>
-              ) : generateError ? (
-                `Error: ${generateError}`
               ) : (
                 <>
                   <span>Sync Lip</span>

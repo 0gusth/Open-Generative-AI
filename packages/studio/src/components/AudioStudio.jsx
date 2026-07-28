@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { generateAudio, uploadFile } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import { audioModels, getAudioModelById } from "../models.js";
@@ -680,7 +681,7 @@ export default function AudioStudio({
       }
     } catch (e) {
       console.error("[AudioStudio]", e);
-      setGenerateError(e.message?.slice(0, 100) ?? "Audio generation failed");
+      toast.error(e.message || "Audio generation failed");
       onGenerationError?.(e.message?.slice(0, 120) || "Audio generation failed");
     } finally {
       setIsGenerating(false);

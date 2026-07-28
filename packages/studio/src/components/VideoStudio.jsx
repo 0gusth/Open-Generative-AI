@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { generateVideo, generateI2V, processV2V, uploadFile } from "../muapi.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DrawModal from "./DrawModal.jsx";
@@ -1253,8 +1254,7 @@ export default function VideoStudio({
     } catch (e) {
       hadError = true;
       console.error("[VideoStudio]", e);
-      setGenerateError(e.message?.slice(0, 80) || "Generation failed");
-      setTimeout(() => setGenerateError(null), 4000);
+      toast.error(e.message || "Video generation failed");
       onGenerationError?.(e.message?.slice(0, 120) || "Video generation failed");
     } finally {
       setGenerating(false);
@@ -2090,8 +2090,6 @@ export default function VideoStudio({
                   </span>{" "}
                   Generating...
                 </>
-              ) : generateError ? (
-                `Error: ${generateError}`
               ) : (
                 <>
                   <span>Generate</span>
