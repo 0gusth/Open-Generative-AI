@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { runClipping, uploadFile } from "../muapi.js";
+import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import {
   PROMPT_CONTROL_LABEL_CLASS,
@@ -372,8 +373,9 @@ export default function ClippingStudio({
       }
     } catch (err) {
       console.error("[ClippingStudio] Error generating clips:", err);
-      toast.error(err.message || "Failed to process AI clipping.");
-      onGenerationError?.(err.message?.slice(0, 120) || "AI Clipping failed");
+      const errMsg = formatErrorMessage(err, "Failed to process AI clipping.");
+      toast.error(errMsg);
+      onGenerationError?.(errMsg);
     } finally {
       setIsGenerating(false);
     }
@@ -986,7 +988,7 @@ export default function ClippingStudio({
           scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
         }
       `}</style>
-      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#18181b', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' } }} />
+      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#18181b', color: '#ffffff', border: '1px solid rgba(255,255,255,0.15)', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.6)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
     </div>
   );
 }
