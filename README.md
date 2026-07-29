@@ -7,15 +7,8 @@
 
 **Community:** Join [Discord](https://discord.gg/tANKJkHck) for discussions and support
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=YhHHut-pDOY">
-    <img src="docs/assets/video-23-thumbnail-v2.png" alt="Uncensored AI Image & Video Generator — Free & Open Source (500+ Models)" width="640">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=YhHHut-pDOY"><b>📺 Uncensored AI Image & Video Generator — Free & Open Source (500+ Models) →</b></a>
-</p>
+<p align="center"><a href="https://www.youtube.com/watch?v=aJT-kRASzfE"><img src="thumbnail.png" width="720"></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=aJT-kRASzfE"><b>▶ Watch: Free Open-Source Opus Clip Alternative (Build It in 10 Minutes)</b></a></p>
 
 <p align="center">
   <a href="https://github.com/Anil-matcha/awesome-generative-ai-apps">
