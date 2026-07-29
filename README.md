@@ -50,6 +50,8 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 
 ## Related Projects
 
+> 🎞️ **MiniMax H3 API Python SDK:** [MiniMax-H3-API](https://github.com/Anil-matcha/MiniMax-H3-API) — Python SDK for MiniMax H3 text-to-video, image-to-video, and first/last-frame video workflows through Muapi.
+
 > 🌊 **Wan 3.0 API Python SDK:** [Wan-3.0-API](https://github.com/Anil-matcha/Wan-3.0-API) — Python SDK and MCP server for Wan 3.0-compatible text-to-video, image-to-video, multimodal references, uploads, and asynchronous generation jobs.
 
 > 🆕 **FLUX 3 Python SDK:** [Flux-3-Dev-API](https://github.com/Anil-matcha/Flux-3-Dev-API) — Python wrapper for Black Forest Labs' newly announced FLUX 3 — text-to-image, image-to-image, text-to-video, and image-to-video through one client, including the fast/low-cost Dev variant.
