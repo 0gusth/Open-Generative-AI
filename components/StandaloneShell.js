@@ -998,7 +998,7 @@ export default function StandaloneShell() {
         <div
           aria-live="polite"
           aria-label="Generation activity and notifications"
-          className="fixed bottom-5 right-5 z-[200] flex max-h-[calc(100vh-32px)] w-[340px] max-w-[calc(100vw-32px)] flex-col gap-2 overflow-y-auto pointer-events-none"
+          className="fixed top-16 right-5 z-[200] flex max-h-[calc(100vh-80px)] w-[340px] max-w-[calc(100vw-32px)] flex-col gap-2 overflow-x-hidden overflow-y-auto global-notif-stack pointer-events-none"
           data-testid="global-notification-stack"
         >
           {activeGenerations.map((generation) => (
@@ -1006,16 +1006,16 @@ export default function StandaloneShell() {
               key={generation.tabId}
               role="status"
               data-generation-tab={generation.tabId}
-              className="pointer-events-auto flex items-center gap-3 rounded-xl border border-cyan-400/30 bg-[#0d0d0f] px-3.5 py-3 text-[13px] text-zinc-100 shadow-[0_16px_48px_rgba(0,0,0,0.65)]"
+              className="pointer-events-auto flex items-center gap-3 rounded-xl border border-cyan-500/40 bg-white px-3.5 py-3 text-[13px] text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
               data-testid="generation-activity"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/35 bg-cyan-400/10">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/40 bg-cyan-50">
                 <span
-                  className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-300/25 border-t-cyan-300"
+                  className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-600/30 border-t-cyan-600"
                   aria-hidden="true"
                 />
               </span>
-              <p className="min-w-0 flex-1 font-semibold leading-5 text-zinc-100">
+              <p className="min-w-0 flex-1 font-semibold leading-5 text-zinc-900">
                 {generation.label} is generating
                 {generation.count > 1 ? ` (${generation.count})` : ''}
               </p>
@@ -1028,17 +1028,17 @@ export default function StandaloneShell() {
               role={notif.type === 'error' ? 'alert' : 'status'}
               data-notification-type={notif.type}
               data-notification-tab={notif.tabId}
-              className="pointer-events-auto flex items-start gap-3 rounded-xl border bg-[#0d0d0f] px-3.5 py-3 text-[13px] text-zinc-100 shadow-[0_16px_48px_rgba(0,0,0,0.65)]"
+              className="pointer-events-auto flex items-start gap-3 rounded-xl border bg-white px-3.5 py-3 text-[13px] text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
               style={{
-                borderColor: notif.type === 'success' ? 'rgba(34,211,238,0.35)' : 'rgba(239,68,68,0.35)',
+                borderColor: notif.type === 'success' ? 'rgba(6,182,212,0.4)' : 'rgba(239,68,68,0.4)',
                 animation: 'slideInRight 280ms cubic-bezier(0.16,1,0.3,1) forwards',
               }}
             >
               <span
                 className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                   notif.type === 'success'
-                    ? 'border-cyan-400/35 bg-cyan-400/10 text-cyan-300'
-                    : 'border-red-500/35 bg-red-500/10 text-red-400'
+                    ? 'border-cyan-400/40 bg-cyan-50 text-cyan-600'
+                    : 'border-red-400/40 bg-red-50 text-red-600'
                 }`}
               >
                 {notif.type === 'success' ? (
@@ -1055,19 +1055,19 @@ export default function StandaloneShell() {
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className="font-semibold leading-5 text-zinc-100">
+                <p className="font-semibold leading-5 text-zinc-900">
                   {notif.label}
-                  <span className="font-normal text-zinc-400">
+                  <span className="font-normal text-zinc-500">
                     {notif.type === 'success' ? ' - Generation complete' : ' - Generation failed'}
                   </span>
                 </p>
                 {notif.type === 'error' && notif.message && (
-                  <p className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-4 text-red-300/85" title={notif.message}>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-4 text-red-600" title={notif.message}>
                     {notif.message}
                   </p>
                 )}
                 {notif.type === 'success' && (
-                  <p className="mt-0.5 text-[12px] leading-4 text-zinc-400">
+                  <p className="mt-0.5 text-[12px] leading-4 text-zinc-500">
                     Your result is ready.
                   </p>
                 )}
@@ -1075,10 +1075,10 @@ export default function StandaloneShell() {
                   <button
                     type="button"
                     onClick={() => handleOpenNotification(notif)}
-                    className="mt-1.5 text-[11px] font-bold text-cyan-300 transition-colors hover:text-cyan-100"
+                    className="mt-1.5 text-[11px] font-bold text-cyan-600 transition-colors hover:text-cyan-700"
                     aria-label={`Open ${notif.label} result`}
                   >
-                    Open
+                    Open →
                   </button>
                 )}
               </div>
@@ -1086,7 +1086,7 @@ export default function StandaloneShell() {
               <button
                 type="button"
                 onClick={() => dismissNotification(notif.id)}
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-white/20"
+                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-300"
                 aria-label="Dismiss notification"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -1098,11 +1098,18 @@ export default function StandaloneShell() {
         </div>
       )}
 
-      {/* Keyframe for toast slide-in */}
+      {/* Keyframe for toast slide-in & scrollbar suppression */}
       <style>{`
         @keyframes slideInRight {
           from { transform: translateX(110%); opacity: 0; }
           to   { transform: translateX(0);    opacity: 1; }
+        }
+        .global-notif-stack::-webkit-scrollbar {
+          display: none;
+        }
+        .global-notif-stack {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
 

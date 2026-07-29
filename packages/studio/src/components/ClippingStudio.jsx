@@ -87,12 +87,12 @@ const CopyIcon = () => (
 
 const ErrorToast = ({ toastInstance, message }) => (
   <div
-    className={`pointer-events-auto flex w-[340px] max-w-[calc(100vw-32px)] items-start gap-3 rounded-xl border border-red-500/35 bg-[#0d0d0f] px-3.5 py-3 text-[13px] text-zinc-100 shadow-[0_16px_48px_rgba(0,0,0,0.65)] transition-all duration-200 ${
+    className={`pointer-events-auto flex w-[340px] max-w-[calc(100vw-32px)] items-start gap-3 rounded-xl border border-red-400/40 bg-white px-3.5 py-3 text-[13px] text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.15)] transition-all duration-200 ${
       toastInstance.visible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
     }`}
     role="alert"
   >
-    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-500/35 bg-red-500/10 text-red-400">
+    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-400/40 bg-red-50 text-red-600">
       <svg
         width="17"
         height="17"
@@ -109,11 +109,11 @@ const ErrorToast = ({ toastInstance, message }) => (
         <path d="M12 17h.01" />
       </svg>
     </span>
-    <span className="min-w-0 flex-1 py-1 font-medium leading-5">{message}</span>
+    <span className="min-w-0 flex-1 py-1 font-medium leading-5 text-zinc-900">{message}</span>
     <button
       type="button"
       onClick={() => dismissErrorToast(toastInstance.id)}
-      className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-red-400/60"
+      className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-300"
       aria-label="Dismiss notification"
     >
       <svg
