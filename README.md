@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=YhHHut-pDOY">
-    <img src="docs/assets/video-23-thumbnail.png" alt="Uncensored AI Image & Video Generator — Free & Open Source (500+ Models)" width="640">
+    <img src="docs/assets/video-23-thumbnail-v2.png" alt="Uncensored AI Image & Video Generator — Free & Open Source (500+ Models)" width="640">
   </a>
 </p>
 
