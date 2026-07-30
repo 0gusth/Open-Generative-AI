@@ -40,9 +40,6 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 | Kling AI | ~$10–$92/mo across Standard → Premier tiers |
 | Luma Dream Machine | ~$10–$100+/mo |
 | Pika | ~$8–$58/mo |
-| OpenArt | ~$10–$40/mo across Standard → Pro tiers |
-| Krea | ~$10–$60/mo across Basic → Pro/Max tiers |
-| Magnific (Freepik) | ~$10–$50+/mo bundled into Freepik premium tiers |
 
 *(Figures are approximate, general-market ranges and change over time — check each platform's current pricing page before quoting them.)* With MuAPI White Label, you set these numbers yourself for your own end users — the subscription revenue is yours.
 
