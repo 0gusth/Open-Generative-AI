@@ -1,11 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   getTemplateAgents,
   getUserAgents,
   getUserConversations,
+  getAgentBySlug,
+  getAgentConversation,
+  sendAgentChatMessage,
+  pollAgentChatResult,
+  createAgent,
 } from "../muapi.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -114,11 +121,47 @@ function ConversationCard({ conv, onClick }) {
   );
 }
 
+// Conversation history entries can carry `content` as a plain string or as a
+// list of structured blocks (matches the shape agent_router.py's own last-message
+// preview extraction already assumes for the "My Chats" list).
+function textFromContent(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((b) => (typeof b === "string" ? b : b?.text || "")).join("\n");
+  }
+  return "";
+}
+
+function ChatBubble({ message }) {
+  const isUser = message.role === "user";
+  const text = textFromContent(message.content);
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+          isUser
+            ? "bg-[#22d3ee] text-black font-medium"
+            : "bg-white/[0.04] border border-white/5 text-white/90"
+        }`}
+      >
+        {isUser ? (
+          <span className="whitespace-pre-wrap">{text}</span>
+        ) : (
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:bg-black/40">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text || "…"}</ReactMarkdown>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 const TABS = ["templates", "my-agents", "my-chats"];
 
 export default function AgentStudio({ apiKey }) {
   const router = useRouter();
+  const params = useParams();
 
   const [activeMainTab, setActiveMainTab] = useState("templates");
   const [agents, setAgents] = useState([]);
@@ -126,7 +169,32 @@ export default function AgentStudio({ apiKey }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Deep-link routing. `router.push('/agents/...')` below is a real full navigation
+  // away from the studio shell on muapi.ai (BYOK/dashboard) — AiAgent's own standalone
+  // pages handle it there, unaffected. On a white-label custom domain the same push is
+  // transparently rewritten by middleware.js back to this same catch-all shell route, so
+  // reading it back out via useParams() here drives an inline view instead of navigating
+  // anywhere — see docs/whitelabel_plan.md for the full routing writeup.
+  const tabSegments = Array.isArray(params?.tab) ? params.tab : [];
+  const agentsIdx = tabSegments.indexOf("agents");
+  const urlAgentSlug = agentsIdx === -1 ? null : tabSegments[agentsIdx + 1] || null;
+  const urlConversationId = agentsIdx === -1 ? null : tabSegments[agentsIdx + 2] || null;
+
+  const [view, setView] = useState("list"); // 'list' | 'chat' | 'create'
+  const [activeAgent, setActiveAgent] = useState(null);
+  const [conversationId, setConversationId] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState(null);
+
+  const [createForm, setCreateForm] = useState({ name: "", description: "", system_prompt: "", welcome_message: "" });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(null);
+
   // Navigate to the standalone /agents page — AiAgent handles its own routing there
+  // (on a custom domain, this instead drives the inline view below via urlAgentSlug)
   const handleSelectAgent = useCallback(
     (agent) => {
       const id = agent.agent_id || agent.id;
@@ -154,8 +222,97 @@ export default function AgentStudio({ apiKey }) {
     [router]
   );
 
+  // Resolve the inline view from the URL. 'edit' isn't built inline yet (only used
+  // from the standalone dashboard today) — treat it as "back to list" rather than
+  // trying to load an agent named "edit" and showing a confusing error.
   useEffect(() => {
     if (!apiKey) return;
+    if (!urlAgentSlug || urlAgentSlug === "edit") {
+      setView("list");
+      return;
+    }
+    if (urlAgentSlug === "create") {
+      setView("create");
+      return;
+    }
+
+    let cancelled = false;
+    async function openFromUrl() {
+      setChatLoading(true);
+      setChatError(null);
+      try {
+        const agent = await getAgentBySlug(apiKey, urlAgentSlug);
+        if (cancelled) return;
+        setActiveAgent(agent);
+        if (urlConversationId) {
+          const conv = await getAgentConversation(apiKey, urlAgentSlug, urlConversationId);
+          if (cancelled) return;
+          setConversationId(conv.id);
+          setChatMessages(conv.history || []);
+        } else {
+          setConversationId(null);
+          setChatMessages([]);
+        }
+        setView("chat");
+      } catch (err) {
+        if (!cancelled) setChatError(err.message || "Failed to load agent");
+      } finally {
+        if (!cancelled) setChatLoading(false);
+      }
+    }
+    openFromUrl();
+    return () => { cancelled = true; };
+  }, [apiKey, urlAgentSlug, urlConversationId]);
+
+  const handleSendMessage = useCallback(async () => {
+    if (!chatInput.trim() || sending || !activeAgent) return;
+    const text = chatInput.trim();
+    setChatInput("");
+    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
+    setSending(true);
+    setChatError(null);
+    try {
+      const agentSlug = activeAgent.agent_id;
+      const { request_id } = await sendAgentChatMessage(apiKey, agentSlug, {
+        message: text,
+        conversationId,
+      });
+      const result = await pollAgentChatResult(apiKey, request_id);
+      setConversationId(result.conversation_id);
+      setChatMessages(result.messages || []);
+    } catch (err) {
+      setChatError(err.message || "Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  }, [apiKey, activeAgent, conversationId, chatInput, sending]);
+
+  const handleCreateSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (!createForm.name.trim() || !createForm.system_prompt.trim() || creating) return;
+      setCreating(true);
+      setCreateError(null);
+      try {
+        const created = await createAgent(apiKey, {
+          name: createForm.name.trim(),
+          description: createForm.description.trim() || null,
+          system_prompt: createForm.system_prompt.trim(),
+          welcome_message: createForm.welcome_message.trim() || null,
+          skill_ids: [],
+        });
+        router.push(`/agents/${created.agent_id}`);
+      } catch (err) {
+        setCreateError(err.message || "Failed to create agent");
+      } finally {
+        setCreating(false);
+      }
+    },
+    [apiKey, createForm, creating, router]
+  );
+
+  useEffect(() => {
+    if (!apiKey || view !== "list") return;
     let cancelled = false;
 
     async function load() {
@@ -184,9 +341,182 @@ export default function AgentStudio({ apiKey }) {
 
     load();
     return () => { cancelled = true; };
-  }, [apiKey, activeMainTab]);
+  }, [apiKey, activeMainTab, view]);
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render: Create ───────────────────────────────────────────────────────────
+  if (view === "create") {
+    return (
+      <div className="h-full flex flex-col bg-[#030303] text-white overflow-y-auto custom-scrollbar">
+        <div className="flex-shrink-0 h-16 border-b border-white/5 flex items-center gap-6 px-8 bg-black/40">
+          <button
+            onClick={() => router.push("/agents")}
+            className="flex items-center gap-2 text-xs font-bold text-white/50 hover:text-white transition-colors"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Agents
+          </button>
+          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#22d3ee]">Create Agent</h2>
+        </div>
+
+        <form onSubmit={handleCreateSubmit} className="max-w-2xl w-full mx-auto p-8 space-y-6">
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest">Name</label>
+            <input
+              type="text"
+              required
+              value={createForm.name}
+              onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Caption Crafter Pro"
+              className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-[#22d3ee]/50 transition-colors"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest">Description</label>
+            <input
+              type="text"
+              value={createForm.description}
+              onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="What does this agent help with?"
+              className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-[#22d3ee]/50 transition-colors"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest">System Prompt</label>
+            <textarea
+              required
+              value={createForm.system_prompt}
+              onChange={(e) => setCreateForm((f) => ({ ...f, system_prompt: e.target.value }))}
+              placeholder="You are a helpful assistant that..."
+              className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-[#22d3ee]/50 transition-colors min-h-[140px] resize-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest">Welcome Message (optional)</label>
+            <input
+              type="text"
+              value={createForm.welcome_message}
+              onChange={(e) => setCreateForm((f) => ({ ...f, welcome_message: e.target.value }))}
+              placeholder="Hi! How can I help you today?"
+              className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-[#22d3ee]/50 transition-colors"
+            />
+          </div>
+
+          {createError && (
+            <p className="text-xs font-bold text-red-400">{createError}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={creating || !createForm.name.trim() || !createForm.system_prompt.trim()}
+            className="w-full py-4 bg-[#22d3ee] text-black text-xs font-black uppercase tracking-[0.2em] rounded-xl hover:bg-white transition-all disabled:opacity-40 flex items-center justify-center gap-3"
+          >
+            {creating ? (
+              <>
+                <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                <span>Creating...</span>
+              </>
+            ) : (
+              <span>Create Agent</span>
+            )}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // ── Render: Chat ─────────────────────────────────────────────────────────────
+  if (view === "chat") {
+    return (
+      <div className="h-full flex flex-col bg-[#030303] text-white">
+        <div className="flex-shrink-0 h-16 border-b border-white/5 flex items-center gap-4 px-8 bg-black/40">
+          <button
+            onClick={() => router.push("/agents")}
+            className="flex items-center gap-2 text-xs font-bold text-white/50 hover:text-white transition-colors"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Agents
+          </button>
+          <div className="h-4 w-[1px] bg-white/10" />
+          {activeAgent && (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 border border-white/5 shrink-0">
+                {activeAgent.icon_url ? (
+                  <img src={activeAgent.icon_url} alt={activeAgent.name} className="w-full h-full object-cover" />
+                ) : null}
+              </div>
+              <span className="text-sm font-bold text-white">{activeAgent.name}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-4 max-w-3xl w-full mx-auto">
+          {chatLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="w-10 h-10 border-2 border-white/5 border-t-[#22d3ee] rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {chatMessages.length === 0 && activeAgent?.welcome_message && (
+                <ChatBubble message={{ role: "assistant", content: activeAgent.welcome_message }} />
+              )}
+              {chatMessages.map((msg, i) => (
+                <ChatBubble key={i} message={msg} />
+              ))}
+              {sending && (
+                <div className="flex justify-start">
+                  <div className="bg-white/[0.04] border border-white/5 rounded-2xl px-4 py-3">
+                    <div className="w-4 h-4 border-2 border-white/10 border-t-[#22d3ee] rounded-full animate-spin" />
+                  </div>
+                </div>
+              )}
+              {chatError && (
+                <p className="text-xs font-bold text-red-400">{chatError}</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex-shrink-0 border-t border-white/5 p-6 bg-black/40">
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+            className="max-w-3xl w-full mx-auto flex items-end gap-3"
+          >
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder="Message this agent..."
+              rows={1}
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-[#22d3ee]/50 transition-colors resize-none max-h-40"
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || sending}
+              className="px-5 py-3 bg-[#22d3ee] text-black text-xs font-black uppercase tracking-widest rounded-xl hover:bg-white transition-all disabled:opacity-40"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: List ──────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col bg-[#030303] text-white">
       {/* Header */}

@@ -136,24 +136,29 @@ export default function WorkflowStudio({
 }) {
   const params = useParams();
   const router = useRouter();
-  const slug = params?.slug || [];
   const idFromParams = params?.id;     // exists on /workflow/[id]/[tab] route
-  const tabFromParams = params?.tab;   // exists on /workflow/[id]/[tab] route
-  
+  const tabFromParams = params?.tab;   // string on /workflow/[id]/[tab]; array on the [[...tab]] catch-all
+  // Catch-all routes (/studio/[brandSlug]/[[...tab]], /open-generative-ai/[[...tab]]) expose the
+  // whole remaining path as params.tab (an array) — NOT params.slug, which doesn't exist on either
+  // route and previously made this whole fallback branch permanently dead.
+  const catchAllSegments = Array.isArray(tabFromParams) ? tabFromParams : [];
+
   // Robustly extract ID and Tab from either route structure
   const getWorkflowInfo = useCallback(() => {
-    // Priority 1: Dedicated /workflow/[id]/[tab] route  
+    // Priority 1: Dedicated /workflow/[id]/[tab] route
     if (idFromParams) {
       return { id: idFromParams, tab: tabFromParams || null };
     }
-    // Priority 2: Catch-all /studio/[[...slug]] route
-    const wfIndex = slug.findIndex(s => s === 'workflows' || s === 'workflow');
+    // Priority 2: Catch-all studio shell route — also recognizes the singular
+    // "workflow" segment used by the standalone /workflow/[id]/[tab] URL scheme,
+    // since a white-label custom domain's middleware rewrite lands here too.
+    const wfIndex = catchAllSegments.findIndex(s => s === 'workflows' || s === 'workflow');
     if (wfIndex === -1) return { id: null, tab: null };
     return {
-      id: slug[wfIndex + 1] || null,
-      tab: slug[wfIndex + 2] || null
+      id: catchAllSegments[wfIndex + 1] || null,
+      tab: catchAllSegments[wfIndex + 2] || null
     };
-  }, [slug, idFromParams, tabFromParams]);
+  }, [catchAllSegments, idFromParams, tabFromParams]);
 
   const { id: urlWorkflowId, tab: urlTab } = getWorkflowInfo();
 
