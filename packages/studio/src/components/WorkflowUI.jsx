@@ -7,6 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 
 const WorkflowUI = ({
+  apiKey,
   workflowId,
   initialNodeSchemas,
   initialWorkflowData,
@@ -21,11 +22,12 @@ const WorkflowUI = ({
 
   return (
     <div className="w-full h-full bg-black">
-      <WorkflowBuilder 
+      <WorkflowBuilder
+        apiKey={apiKey}
         workflowId={workflowId}
-        initialNodeSchemas={initialNodeSchemas} 
+        initialNodeSchemas={initialNodeSchemas}
         initialWorkflowData={initialWorkflowData}
-        costType="dollars" 
+        costType="dollars"
         onGenerationStart={onGenerationStart}
         onGenerationEnd={onGenerationEnd}
         onGenerationComplete={onGenerationComplete}

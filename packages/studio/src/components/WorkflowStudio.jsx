@@ -829,6 +829,7 @@ export default function WorkflowStudio({
             <div className="flex-1 relative bg-[#050505]">
               {nodeSchemas && workflowDef ? (
                 <WorkflowUI
+                  apiKey={apiKey}
                   workflowId={selectedWorkflow?.id}
                   initialNodeSchemas={nodeSchemas}
                   initialWorkflowData={{
