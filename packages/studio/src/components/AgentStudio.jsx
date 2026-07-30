@@ -278,14 +278,26 @@ export default function AgentStudio({ apiKey }) {
         conversationId,
       });
       const result = await pollAgentChatResult(apiKey, request_id);
-      setConversationId(result.conversation_id);
-      setChatMessages(result.messages || []);
+      // result.messages is only this turn's assistant/pulse entries, not the
+      // full transcript (see AiAgent.jsx) — append, don't replace, or every
+      // send wipes the user's own message and all prior history from view.
+      const assistantMessage = (result.messages || []).find(
+        (m) => m.role === "assistant" && m.content
+      );
+      setChatMessages((prev) => [
+        ...prev,
+        assistantMessage || { role: "assistant", content: "" },
+      ]);
+      if (result.conversation_id && result.conversation_id !== conversationId) {
+        setConversationId(result.conversation_id);
+        router.replace(`/agents/${agentSlug}/${result.conversation_id}`, { scroll: false });
+      }
     } catch (err) {
       setChatError(err.message || "Failed to send message");
     } finally {
       setSending(false);
     }
-  }, [apiKey, activeAgent, conversationId, chatInput, sending]);
+  }, [apiKey, activeAgent, conversationId, chatInput, sending, router]);
 
   const handleCreateSubmit = useCallback(
     async (e) => {
