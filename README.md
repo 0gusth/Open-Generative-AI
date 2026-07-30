@@ -7,7 +7,7 @@
 
 **Community:** Join [Discord](https://discord.gg/tANKJkHck) for discussions and support
 
-<p align="center"><a href="https://www.youtube.com/watch?v=pq0B_A0K770"><img src="thumbnail.png" width="720"></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=pq0B_A0K770"><img src="thumbnail-ai-v2-1920x1080.png" width="720"></a></p>
 <p align="center"><a href="https://www.youtube.com/watch?v=pq0B_A0K770"><b>▶ Watch: How to Access Flux 3 API (Step-by-Step Guide): Image & Video Generation from One Multimodal Model</b></a></p>
 
 <p align="center">
