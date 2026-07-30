@@ -9886,6 +9886,7 @@ export const i2iModels = [
     "id": "bytedance-seedream-v4-edit",
     "name": "Seedream 4 Edit",
     "endpoint": "bytedance-seedream-edit-v4",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -9957,6 +9958,7 @@ export const i2iModels = [
     "id": "bytedance-seedream-v5.0-edit",
     "name": "Seedream 5.0 Edit",
     "endpoint": "seedream-5.0-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -10017,6 +10019,7 @@ export const i2iModels = [
     "id": "qwen-image-2.0-edit",
     "name": "Qwen Image 2.0 Edit",
     "endpoint": "qwen-image-2.0-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "description": "A description of the edits you want to make.",
@@ -10065,6 +10068,7 @@ export const i2iModels = [
     "id": "qwen-image-2.0-pro-edit",
     "name": "Qwen Image 2.0 Pro Edit",
     "endpoint": "qwen-image-2.0-pro-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "description": "A description of the edits you want to make.",
@@ -10113,6 +10117,7 @@ export const i2iModels = [
     "id": "flux-2-klein-4b-turbo-edit",
     "name": "Flux 2 Klein 4B Turbo Edit",
     "endpoint": "flux-2-klein-4b-turbo-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10161,6 +10166,7 @@ export const i2iModels = [
     "id": "flux-2-klein-9b-turbo-edit",
     "name": "Flux 2 Klein 9B Turbo Edit",
     "endpoint": "flux-2-klein-9b-turbo-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10272,6 +10278,7 @@ export const i2iModels = [
     "id": "seedance-2-character",
     "name": "Seedance 2 Character",
     "endpoint": "seedance-2-character",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -10314,6 +10321,7 @@ export const i2iModels = [
     "id": "wan2.7-image-edit",
     "name": "Wan 2.7 Image Edit",
     "endpoint": "wan2.7-image-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10364,6 +10372,7 @@ export const i2iModels = [
     "id": "wan2.7-image-edit-pro",
     "name": "Wan 2.7 Image Edit Pro",
     "endpoint": "wan2.7-image-edit-pro",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10414,6 +10423,7 @@ export const i2iModels = [
     "id": "flux-2-klein-4b-edit-lora",
     "name": "Flux 2 Klein 4B Edit LoRA",
     "endpoint": "flux-2-klein-4b-edit-lora",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10497,6 +10507,7 @@ export const i2iModels = [
     "id": "flux-2-klein-9b-edit-lora",
     "name": "Flux 2 Klein 9B Edit LoRA",
     "endpoint": "flux-2-klein-9b-edit-lora",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10580,6 +10591,7 @@ export const i2iModels = [
     "id": "kling-o3-image-edit",
     "name": "Kling O3 Image Edit",
     "endpoint": "kling-o3-image-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "examples": [
@@ -10652,6 +10664,7 @@ export const i2iModels = [
     "id": "nano-banana-2-lite-edit",
     "name": "Nano Banana 2 Lite Edit",
     "endpoint": "nano-banana-2-lite-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -10703,6 +10716,7 @@ export const i2iModels = [
     "id": "bytedance-seedream-5.0-pro-edit",
     "name": "Seedream 5.0 Pro Edit",
     "endpoint": "seedream-5.0-pro-edit",
+    "imageField": "images_list",
     "inputs": {
       "prompt": {
         "type": "string",
