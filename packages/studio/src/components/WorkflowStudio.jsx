@@ -271,7 +271,10 @@ export default function WorkflowStudio({
             data: { nodes: [] },
           };
           const response = await createWorkflow(apiKey, payload);
-          // Route to /workflow/[id] so useParams().id works in the builder library
+          // Route to /workflow/[id] so useParams().id works in the builder library.
+          // That page has no white-label session of its own, so hand off our token
+          // via sessionStorage — it reads "wl_workflow_token" on mount.
+          if (apiKey) sessionStorage.setItem("wl_workflow_token", apiKey);
           router.push(`/workflow/${response.workflow_id}/builder`);
           return;
         }
@@ -490,7 +493,10 @@ export default function WorkflowStudio({
                   <button
                     onClick={() => {
                         setActiveSubTab("builder");
-                        if (selectedWorkflow?.id) router.push(`/workflow/${selectedWorkflow.id}/builder`);
+                        if (selectedWorkflow?.id) {
+                          if (apiKey) sessionStorage.setItem("wl_workflow_token", apiKey);
+                          router.push(`/workflow/${selectedWorkflow.id}/builder`);
+                        }
                     }}
                     type="button"
                     className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${
