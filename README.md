@@ -7,8 +7,8 @@
 
 **Community:** Join [Discord](https://discord.gg/tANKJkHck) for discussions and support
 
-<p align="center"><a href="https://www.youtube.com/watch?v=pq0B_A0K770"><img src="https://i.ytimg.com/vi/pq0B_A0K770/maxresdefault.jpg" width="720"></a></p>
-<p align="center"><a href="https://www.youtube.com/watch?v=pq0B_A0K770"><b>▶ Watch: How to Access Flux 3 API (Step-by-Step Guide): Image & Video Generation from One Multimodal Model</b></a></p>
+<p align="center"><a href="https://youtu.be/C_46zmUEHnQ"><img src="https://i.ytimg.com/vi/C_46zmUEHnQ/maxresdefault.jpg" width="720"></a></p>
+<p align="center"><a href="https://youtu.be/C_46zmUEHnQ"><b>▶ Watch: How to Access MiniMax Hailuo H3 API (Step-by-Step Guide): Native 2K Video Generation with Sound</b></a></p>
 
 <p align="center">
   <a href="https://github.com/Anil-matcha/awesome-generative-ai-apps">
