@@ -7,8 +7,8 @@
 
 **Community:** Join [Discord](https://discord.gg/tANKJkHck) for discussions and support
 
-<p align="center"><a href="https://youtu.be/YhHHut-pDOY"><img src="https://i.ytimg.com/vi/YhHHut-pDOY/maxresdefault.jpg" width="720"></a></p>
-<p align="center"><a href="https://youtu.be/YhHHut-pDOY"><b>▶ Watch: How to Use Free Uncensored AI Image & Video Generator — Open Source (500+ Models) | Open Generative AI</b></a></p>
+<p align="center"><a href="https://youtu.be/Uszlw7H4VP4"><img src="https://i.ytimg.com/vi/Uszlw7H4VP4/maxresdefault.jpg" width="720"></a></p>
+<p align="center"><a href="https://youtu.be/Uszlw7H4VP4"><b>▶ Watch: How to Get Exclusive Access to Seedance 2.5 without restrictions</b></a></p>
 
 <p align="center">
   <a href="https://github.com/Anil-matcha/awesome-generative-ai-apps">
