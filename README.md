@@ -49,6 +49,8 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 
 > 🎞️ **MiniMax H3 API Python SDK:** [MiniMax-H3-API](https://github.com/Anil-matcha/MiniMax-H3-API) — Python SDK for MiniMax H3 text-to-video, image-to-video, and first/last-frame video workflows through Muapi.
 
+> 📝 **MiniMax H3 prompt gallery:** [awesome-minimax-h3-prompts](https://github.com/Anil-matcha/awesome-minimax-h3-prompts) — runnable MuAPI examples and creator-ready prompt references for MiniMax H3 video generation.
+
 > 🌊 **Wan 3.0 API Python SDK:** [Wan-3.0-API](https://github.com/Anil-matcha/Wan-3.0-API) — Python SDK and MCP server for Wan 3.0-compatible text-to-video, image-to-video, multimodal references, uploads, and asynchronous generation jobs.
 
 > 🆕 **FLUX 3 Python SDK:** [Flux-3-Dev-API](https://github.com/Anil-matcha/Flux-3-Dev-API) — Python wrapper for Black Forest Labs' newly announced FLUX 3 — text-to-image, image-to-image, text-to-video, and image-to-video through one client, including the fast/low-cost Dev variant.
@@ -62,6 +64,8 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 > 🎬 **Seedance 2.5 prompts & API guide:** [awesome-seedance-2.5-api-prompts](https://github.com/Anil-matcha/awesome-seedance-2.5-api-prompts) — Curated prompt templates, camera control vocabulary, MuAPI reference, and cinematic examples for Seedance 2.5 video generation.
 
 > 🎥 **Seedance 2.5 Python SDK:** [Seedance-2.5-API](https://github.com/SamurAIGPT/Seedance-2.5-API) — Python wrapper for ByteDance's Seedance 2.5 API — text-to-video, image-to-video, realistic human faces, character consistency.
+
+> 🧩 **Seedance 2.5 ComfyUI pack:** [seedance2.5-comfyui](https://github.com/Anil-matcha/seedance2.5-comfyui) — native ComfyUI nodes and example workflows for the same MuAPI video model.
 
 > 🍌 **Claude Fable 5 use cases + 20% off on MuAPI:** [awesome-claude-fable-5](https://github.com/Anil-matcha/awesome-claude-fable-5) — 60 curated real-world use cases, prompts, and benchmarks for Claude Fable 5, with **20% off Fable 5 access** via [MuAPI](https://muapi.ai/pricing?utm_source=github&utm_medium=readme&utm_campaign=open-generative-ai).
 
