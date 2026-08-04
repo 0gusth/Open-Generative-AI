@@ -84,6 +84,7 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 - [awesome-ai-video-models](https://github.com/Anil-matcha/awesome-ai-video-models) — compare AI video models by API, price & speed
 - [awesome-ai-image-models](https://github.com/Anil-matcha/awesome-ai-image-models) — compare AI image models by API, price & quality
 - [awesome-flux-3-api-prompts](https://github.com/Anil-matcha/awesome-flux-3-api-prompts) — FLUX 3 API guide, prompts, and parameters
+- [wan-3.0-comfyui](https://github.com/Anil-matcha/wan-3.0-comfyui) — ComfyUI custom nodes for Wan 3.0 text-to-image, image edit, text-to-video, and image-to-video via MuAPI.
 
 ## 🌐 Try it Online — No Install Required
 
