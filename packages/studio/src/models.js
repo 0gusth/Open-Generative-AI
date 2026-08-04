@@ -18509,7 +18509,7 @@ export const i2vModels = [
       },
       "images_list": {
         "examples": [],
-        "description": "Reference image URLs. Up to 20 images.",
+        "description": "Reference image URLs. Up to 30 images.",
         "field": "images_list",
         "type": "array",
         "items": {
@@ -18517,11 +18517,11 @@ export const i2vModels = [
         },
         "title": "Reference Images",
         "name": "images_list",
-        "maxItems": 20
+        "maxItems": 30
       },
       "videos_list": {
         "examples": [],
-        "description": "Reference video URLs. Up to 6 clips.",
+        "description": "Reference video URLs. Up to 10 clips.",
         "field": "videos_list",
         "type": "array",
         "items": {
@@ -18529,11 +18529,11 @@ export const i2vModels = [
         },
         "title": "Reference Videos",
         "name": "videos_list",
-        "maxItems": 6
+        "maxItems": 10
       },
       "audios_list": {
         "examples": [],
-        "description": "Reference audio URLs. Up to 6 files.",
+        "description": "Reference audio URLs. Up to 10 files.",
         "field": "audios_list",
         "type": "array",
         "items": {
@@ -18541,7 +18541,7 @@ export const i2vModels = [
         },
         "title": "Reference Audio",
         "name": "audios_list",
-        "maxItems": 6
+        "maxItems": 10
       },
       "duration": {
         "title": "Duration",
@@ -18601,7 +18601,7 @@ export const i2vModels = [
       },
       "images_list": {
         "examples": [],
-        "description": "Reference image URLs. Up to 20 images.",
+        "description": "Reference image URLs. Up to 30 images.",
         "field": "images_list",
         "type": "array",
         "items": {
@@ -18609,11 +18609,11 @@ export const i2vModels = [
         },
         "title": "Reference Images",
         "name": "images_list",
-        "maxItems": 20
+        "maxItems": 30
       },
       "videos_list": {
         "examples": [],
-        "description": "Reference video URLs. Up to 6 clips.",
+        "description": "Reference video URLs. Up to 10 clips.",
         "field": "videos_list",
         "type": "array",
         "items": {
@@ -18621,11 +18621,11 @@ export const i2vModels = [
         },
         "title": "Reference Videos",
         "name": "videos_list",
-        "maxItems": 6
+        "maxItems": 10
       },
       "audios_list": {
         "examples": [],
-        "description": "Reference audio URLs. Up to 6 files.",
+        "description": "Reference audio URLs. Up to 10 files.",
         "field": "audios_list",
         "type": "array",
         "items": {
@@ -18633,7 +18633,7 @@ export const i2vModels = [
         },
         "title": "Reference Audio",
         "name": "audios_list",
-        "maxItems": 6
+        "maxItems": 10
       },
       "duration": {
         "title": "Duration",
