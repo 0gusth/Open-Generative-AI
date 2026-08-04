@@ -3,10 +3,13 @@ import { NextResponse } from 'next/server';
 const MUAPI_BASE = 'https://api.muapi.ai';
 
 function getApiKey(request) {
-    // Only accept x-api-key header. Cookie-based auth is removed for security:
-    // cookies without HttpOnly flag can be stolen by XSS (CWE-522).
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7).trim();
+        if (token) return token;
+    }
     const headerKey = request.headers.get('x-api-key');
-    return headerKey || null;
+    return (headerKey && headerKey.trim()) || null;
 }
 
 function cleanHeaders(request) {
@@ -14,6 +17,7 @@ function cleanHeaders(request) {
     headers.delete('host');
     headers.delete('connection');
     headers.delete('cookie'); // CRITICAL: Stop forwarding browser cookies to MuAPI to avoid auth conflicts
+    headers.delete('authorization');
     return headers;
 }
 
@@ -25,12 +29,16 @@ export async function GET(request, { params }) {
     // Handle alias: get_upload_file -> get_file_upload_url
     const effectivePath = path === 'get_upload_file' ? 'get_file_upload_url' : path;
     
+    const apiKey = getApiKey(request);
+    if (effectivePath === 'get_file_upload_url' && !apiKey) {
+        return NextResponse.json({ error: 'Unauthorized: Missing API key' }, { status: 401 });
+    }
+
     const { search } = new URL(request.url);
     const targetUrl = `${MUAPI_BASE}/app/${effectivePath}${search}`;
 
     const headers = cleanHeaders(request);
 
-    const apiKey = getApiKey(request);
     if (apiKey) headers.set('x-api-key', apiKey);
 
     try {

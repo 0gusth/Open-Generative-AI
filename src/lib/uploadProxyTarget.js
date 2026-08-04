@@ -88,6 +88,57 @@ function isAllowedS3Host(hostname) {
     return false;
 }
 
+export function getApiKeyFromRequest(request) {
+    if (!request || !request.headers) return null;
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7).trim();
+        if (token) return token;
+    }
+    const headerKey = request.headers.get('x-api-key');
+    if (headerKey && headerKey.trim()) {
+        return headerKey.trim();
+    }
+    return null;
+}
+
+const BLOCKED_EXTENSIONS = new Set([
+    'html', 'htm', 'xhtml', 'svg', 'php', 'phtml', 'php3', 'php4', 'php5', 'phps',
+    'exe', 'bat', 'cmd', 'sh', 'bash', 'js', 'cgi', 'pl', 'py', 'jar', 'vbs', 'scr', 'msi'
+]);
+
+const BLOCKED_MIME_TYPES = new Set([
+    'text/html',
+    'image/svg+xml',
+    'application/xhtml+xml',
+    'application/x-httpd-php',
+    'application/x-msdownload',
+    'application/x-executable',
+    'application/x-sh',
+    'application/x-shellscript',
+    'application/javascript',
+    'text/javascript'
+]);
+
+export function isBlockedFileType(filename = '', contentType = '') {
+    if (contentType) {
+        const normalizedMime = contentType.toLowerCase().split(';')[0].trim();
+        if (BLOCKED_MIME_TYPES.has(normalizedMime)) {
+            return true;
+        }
+    }
+    if (filename) {
+        const parts = filename.toLowerCase().split('.');
+        if (parts.length > 1) {
+            const ext = parts[parts.length - 1].trim();
+            if (BLOCKED_EXTENSIONS.has(ext)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 export function validateUploadProxyTarget(rawTarget, { env = process.env } = {}) {
     if (typeof rawTarget !== 'string' || rawTarget.trim() === '') {
         return { ok: false, reason: 'missing_target' };
@@ -116,3 +167,4 @@ export function validateUploadProxyTarget(rawTarget, { env = process.env } = {})
 
     return { ok: true, url: url.toString() };
 }
+
