@@ -841,23 +841,27 @@ export default function AudioStudio({
 
                     {isOpen && (
                       <div className="absolute left-0 right-0 mt-1 z-50 bg-[#161618] border border-zinc-700 rounded shadow-3xl max-h-60 overflow-y-auto custom-scrollbar p-1">
-                        {schema.enum.map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => {
-                              setParams(prev => ({ ...prev, [key]: opt }));
-                              setOpenParamDropdown(null);
-                            }}
-                            className={`w-full text-left px-4 py-2.5 rounded text-xs font-bold transition-all border ${
-                              params[key] === opt
-                                ? "text-primary bg-primary/10 border-primary/20"
-                                : "text-zinc-200 border-transparent hover:bg-zinc-900 hover:text-white"
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
+                        {schema.enum.map((opt) => {
+                          const optionValue = typeof opt === "object" ? opt.value : opt;
+                          const optionLabel = typeof opt === "object" ? (opt.label || opt.value) : opt;
+                          return (
+                            <button
+                              key={optionValue}
+                              type="button"
+                              onClick={() => {
+                                setParams(prev => ({ ...prev, [key]: optionValue }));
+                                setOpenParamDropdown(null);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 rounded text-xs font-bold transition-all border ${
+                                params[key] === optionValue
+                                  ? "text-primary bg-primary/10 border-primary/20"
+                                  : "text-zinc-200 border-transparent hover:bg-zinc-900 hover:text-white"
+                              }`}
+                            >
+                              {optionLabel}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                     {schema.description && (

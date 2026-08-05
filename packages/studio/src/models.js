@@ -217,6 +217,7 @@ export const t2iModels = [
   {
     "id": "hidream-i1-fast",
     "name": "Hidream I1 Fast",
+    "endpoint": "hidream_i1_fast_image",
     "inputs": {
       "prompt": {
         "examples": [
@@ -264,6 +265,7 @@ export const t2iModels = [
   {
     "id": "hidream-i1-dev",
     "name": "Hidream I1 Dev",
+    "endpoint": "hidream_i1_dev_image",
     "inputs": {
       "prompt": {
         "examples": [
@@ -311,6 +313,7 @@ export const t2iModels = [
   {
     "id": "hidream-i1-full",
     "name": "Hidream I1 Full",
+    "endpoint": "hidream_i1_full_image",
     "inputs": {
       "prompt": {
         "examples": [
@@ -668,6 +671,7 @@ export const t2iModels = [
   {
     "id": "bytedance-seedream-v3",
     "name": "Bytedance Seedream v3",
+    "endpoint": "bytedance-seedream-image",
     "inputs": {
       "prompt": {
         "examples": [
@@ -3235,6 +3239,100 @@ export const t2iModels = [
     },
     "provider": "bytedance",
     "provider_name": "ByteDance"
+  },
+  {
+    "id": "qwen3-text-to-image",
+    "name": "Qwen 3 Text to Image",
+    "endpoint": "qwen3-text-to-image",
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text prompt describing the image to generate."
+      },
+      "resolution": {
+        "enum": ["1k", "2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "1k"
+      },
+      "aspect_ratio": {
+        "enum": ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "output_format": {
+        "enum": ["png", "jpeg"],
+        "type": "string",
+        "title": "Output Format",
+        "name": "output_format",
+        "default": "png"
+      },
+      "prompt_extend": {
+        "type": "boolean",
+        "title": "Intelligent Prompt Extend",
+        "name": "prompt_extend",
+        "default": true
+      },
+      "negative_prompt": {
+        "type": "string",
+        "title": "Negative Prompt",
+        "name": "negative_prompt"
+      }
+    },
+    "provider": "alibaba",
+    "provider_name": "Alibaba"
+  },
+  {
+    "id": "qwen3-pro-text-to-image",
+    "name": "Qwen 3 Pro Text to Image",
+    "endpoint": "qwen3-pro-text-to-image",
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text prompt describing the image to generate."
+      },
+      "resolution": {
+        "enum": ["1k", "2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "1k"
+      },
+      "aspect_ratio": {
+        "enum": ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "output_format": {
+        "enum": ["png", "jpeg"],
+        "type": "string",
+        "title": "Output Format",
+        "name": "output_format",
+        "default": "png"
+      },
+      "prompt_extend": {
+        "type": "boolean",
+        "title": "Intelligent Prompt Extend",
+        "name": "prompt_extend",
+        "default": true
+      },
+      "negative_prompt": {
+        "type": "string",
+        "title": "Negative Prompt",
+        "name": "negative_prompt"
+      }
+    },
+    "provider": "alibaba",
+    "provider_name": "Alibaba"
   }
 ];
 
@@ -5534,6 +5632,7 @@ export const t2vModels = [
     "id": "wan2.7-text-to-video",
     "name": "Wan2.7",
     "endpoint": "wan2.7-text-to-video",
+    "family": "wan2.7",
     "inputs": {
       "prompt": {
         "type": "string",
@@ -7629,6 +7728,80 @@ export const t2vModels = [
     },
     "provider": "bytedance",
     "provider_name": "ByteDance"
+  },
+  {
+    "id": "minimax-h3-text-to-video",
+    "name": "MiniMax H3 Text to Video",
+    "endpoint": "minimax-h3-text-to-video",
+    "family": "minimax-h3",
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text prompt describing the video to generate."
+      },
+      "aspect_ratio": {
+        "enum": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "resolution": {
+        "enum": ["2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "2k"
+      },
+      "duration": {
+        "enum": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "type": "integer",
+        "title": "Duration",
+        "name": "duration",
+        "default": 5
+      }
+    },
+    "provider": "minimax",
+    "provider_name": "Minimax"
+  },
+  {
+    "id": "minimax-h3-open-text-to-video",
+    "name": "MiniMax H3 Open Text to Video",
+    "endpoint": "minimax-h3-open-text-to-video",
+    "family": "minimax-h3",
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text prompt describing the video to generate."
+      },
+      "aspect_ratio": {
+        "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "resolution": {
+        "enum": ["480p", "768p"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "480p"
+      },
+      "duration": {
+        "enum": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "type": "integer",
+        "title": "Duration",
+        "name": "duration",
+        "default": 5
+      }
+    },
+    "provider": "minimax",
+    "provider_name": "Minimax"
   }
 ];
 
@@ -10826,6 +10999,122 @@ export const i2iModels = [
     },
     "provider": "bytedance",
     "provider_name": "ByteDance"
+  },
+  {
+    "id": "qwen3-image-to-image",
+    "name": "Qwen 3 Image to Image",
+    "endpoint": "qwen3-image-to-image",
+    "family": "qwen3",
+    "imageField": "images_list",
+    "maxImages": 3,
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text prompt describing the desired image edit."
+      },
+      "images_list": {
+        "type": "array",
+        "field": "images_list",
+        "title": "Input Images",
+        "name": "images_list",
+        "maxItems": 3,
+        "items": {"type": "string"}
+      },
+      "resolution": {
+        "enum": ["1k", "2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "1k"
+      },
+      "aspect_ratio": {
+        "enum": ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "output_format": {
+        "enum": ["png", "jpeg"],
+        "type": "string",
+        "title": "Output Format",
+        "name": "output_format",
+        "default": "png"
+      },
+      "prompt_extend": {
+        "type": "boolean",
+        "title": "Intelligent Prompt Extend",
+        "name": "prompt_extend",
+        "default": true
+      },
+      "negative_prompt": {
+        "type": "string",
+        "title": "Negative Prompt",
+        "name": "negative_prompt"
+      }
+    },
+    "provider": "alibaba",
+    "provider_name": "Alibaba"
+  },
+  {
+    "id": "qwen3-pro-image-to-image",
+    "name": "Qwen 3 Pro Image to Image",
+    "endpoint": "qwen3-pro-image-to-image",
+    "family": "qwen3",
+    "imageField": "images_list",
+    "maxImages": 3,
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text prompt describing the desired image edit."
+      },
+      "images_list": {
+        "type": "array",
+        "field": "images_list",
+        "title": "Input Images",
+        "name": "images_list",
+        "maxItems": 3,
+        "items": {"type": "string"}
+      },
+      "resolution": {
+        "enum": ["1k", "2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "1k"
+      },
+      "aspect_ratio": {
+        "enum": ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "output_format": {
+        "enum": ["png", "jpeg"],
+        "type": "string",
+        "title": "Output Format",
+        "name": "output_format",
+        "default": "png"
+      },
+      "prompt_extend": {
+        "type": "boolean",
+        "title": "Intelligent Prompt Extend",
+        "name": "prompt_extend",
+        "default": true
+      },
+      "negative_prompt": {
+        "type": "string",
+        "title": "Negative Prompt",
+        "name": "negative_prompt"
+      }
+    },
+    "provider": "alibaba",
+    "provider_name": "Alibaba"
   }
 ];
 
@@ -18892,6 +19181,220 @@ export const i2vModels = [
     },
     "provider": "bytedance",
     "provider_name": "ByteDance"
+  },
+  {
+    "id": "minimax-h3-image-to-video",
+    "name": "MiniMax H3 Image to Video",
+    "endpoint": "minimax-h3-image-to-video",
+    "family": "minimax-h3",
+    "imageField": "image_url",
+    "lastImageField": "last_image_url",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Motion prompt describing the desired video."
+      },
+      "image_url": {
+        "type": "string",
+        "field": "image",
+        "title": "Image URL",
+        "name": "image_url"
+      },
+      "last_image_url": {
+        "type": "string",
+        "field": "image",
+        "title": "Last Image URL",
+        "name": "last_image_url"
+      },
+      "resolution": {
+        "enum": ["2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "2k"
+      },
+      "duration": {
+        "enum": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "type": "integer",
+        "title": "Duration",
+        "name": "duration",
+        "default": 5
+      }
+    },
+    "provider": "minimax",
+    "provider_name": "Minimax"
+  },
+  {
+    "id": "minimax-h3-reference-to-video",
+    "name": "MiniMax H3 Reference to Video",
+    "endpoint": "minimax-h3-reference-to-video",
+    "family": "minimax-h3",
+    "imageField": "reference_images",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Prompt describing the desired video."
+      },
+      "reference_images": {
+        "type": "array",
+        "field": "image",
+        "title": "Reference Images",
+        "name": "reference_images",
+        "items": {"type": "string"}
+      },
+      "reference_videos": {
+        "type": "array",
+        "field": "video",
+        "title": "Reference Videos",
+        "name": "reference_videos",
+        "items": {"type": "string"}
+      },
+      "reference_audios": {
+        "type": "array",
+        "field": "audio",
+        "title": "Reference Audio",
+        "name": "reference_audios",
+        "items": {"type": "string"}
+      },
+      "aspect_ratio": {
+        "enum": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "resolution": {
+        "enum": ["2k"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "2k"
+      },
+      "duration": {
+        "enum": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "type": "integer",
+        "title": "Duration",
+        "name": "duration",
+        "default": 5
+      }
+    },
+    "provider": "minimax",
+    "provider_name": "Minimax"
+  },
+  {
+    "id": "minimax-h3-open-image-to-video",
+    "name": "MiniMax H3 Open Image to Video",
+    "endpoint": "minimax-h3-open-image-to-video",
+    "family": "minimax-h3",
+    "imageField": "image_url",
+    "lastImageField": "last_image",
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Motion prompt describing the desired video."
+      },
+      "image_url": {
+        "type": "string",
+        "field": "image",
+        "title": "First Frame Image URL",
+        "name": "image_url"
+      },
+      "last_image": {
+        "type": "string",
+        "field": "image",
+        "title": "Last Frame Image URL",
+        "name": "last_image"
+      },
+      "resolution": {
+        "enum": ["480p", "768p"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "480p"
+      },
+      "duration": {
+        "enum": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "type": "integer",
+        "title": "Duration",
+        "name": "duration",
+        "default": 5
+      }
+    },
+    "provider": "minimax",
+    "provider_name": "Minimax"
+  },
+  {
+    "id": "minimax-h3-open-reference-to-video",
+    "name": "MiniMax H3 Open Reference to Video",
+    "endpoint": "minimax-h3-open-reference-to-video",
+    "family": "minimax-h3",
+    "imageField": "images_list",
+    "maxImages": 9,
+    "hasPrompt": true,
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Prompt describing the desired video."
+      },
+      "images_list": {
+        "type": "array",
+        "field": "images_list",
+        "title": "Reference Images",
+        "name": "images_list",
+        "maxItems": 9,
+        "items": {"type": "string"}
+      },
+      "videos_list": {
+        "type": "array",
+        "field": "videos_list",
+        "title": "Reference Videos",
+        "name": "videos_list",
+        "maxItems": 3,
+        "items": {"type": "string"}
+      },
+      "audios_list": {
+        "type": "array",
+        "field": "audios_list",
+        "title": "Reference Audio",
+        "name": "audios_list",
+        "maxItems": 3,
+        "items": {"type": "string"}
+      },
+      "aspect_ratio": {
+        "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"],
+        "type": "string",
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "default": "16:9"
+      },
+      "resolution": {
+        "enum": ["480p", "768p"],
+        "type": "string",
+        "title": "Resolution",
+        "name": "resolution",
+        "default": "480p"
+      },
+      "duration": {
+        "enum": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "type": "integer",
+        "title": "Duration",
+        "name": "duration",
+        "default": 5
+      }
+    },
+    "provider": "minimax",
+    "provider_name": "Minimax"
   }
 ];
 
@@ -18902,6 +19405,8 @@ export const getMaxImagesForI2VModel = (modelId) => {
     const model = getI2VModelById(modelId);
     if (!model) return 1;
     if (model.maxImages) return model.maxImages;
+    const imageInput = model.inputs?.[model.imageField];
+    if (imageInput?.type === 'array') return imageInput.maxItems || 1;
     if (model.lastImageField) return 2;
     return 1;
 };
@@ -22735,6 +23240,80 @@ export const audioModels = [
         "default": 1,
         "minimum": 0,
         "maximum": 2
+      }
+    }
+  },
+  {
+    "id": "elevenlabs-tts-turbo-2-5",
+    "name": "ElevenLabs TTS Turbo 2.5",
+    "endpoint": "elevenlabs-tts-turbo-2-5",
+    "family": "audio-generation",
+    "description": "Convert text to natural-sounding speech with adjustable voice stability, similarity, and speed.",
+    "required": ["prompt"],
+    "inputs": {
+      "prompt": {
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt",
+        "description": "Text to convert to speech."
+      },
+      "voice_id": {
+        "type": "string",
+        "title": "Voice ID",
+        "name": "voice_id",
+        "default": "21m00Tcm4TlvDq8ikWAM",
+        "enum": [
+          {"label": "James — Husky, Engaging and Bold", "value": "ZQe5CZNOzWyzPSCn5a3c"},
+          {"label": "Arabella — Mysterious and Emotive", "value": "Z3R5wn05IrDiVCyEkUrK"},
+          {"label": "Bradford — Expressive and Articulate", "value": "NNl6r8mD7vthiJatiJt1"},
+          {"label": "Xavier — Dominating, Metallic Announcer", "value": "YOq2y2Up4RgXP2HyXjE5"},
+          {"label": "Taksh — Calm, Serious and Smooth", "value": "qDuRKMlYmrm8trt5QyBn"},
+          {"label": "Monika Sogam — Deep and Natural", "value": "iP95p4xoKVk53GoZ742B"},
+          {"label": "Mark — Casual, Relaxed and Light", "value": "UgBBYS2sOqTuMpoF3BR0"},
+          {"label": "Adeline — Feminine and Conversational", "value": "5l5f8iK3YPeGga21rQIX"},
+          {"label": "Sam — Support Agent", "value": "yoZ06aMxZJJ28mfd3POQ"},
+          {"label": "Spuds Oxley — Wise and Approachable", "value": "NOpBlnGInO9m6vDvFkFC"},
+          {"label": "Eve — Authentic, Energetic and Happy", "value": "scOwDtmlLZohaFMFCHFe"},
+          {"label": "Callum — Husky Trickster", "value": "N2lVS1w4EtoT3dr4eOWO"},
+          {"label": "Laura — Enthusiast, Quirky Attitude", "value": "FGY2WhTYpPnrIDTdsKH5"},
+          {"label": "Brian — Deep, Resonant and Comforting", "value": "zPhCVfO2NBER7bRLIdbq"},
+          {"label": "Nathan — Virtual Radio Host", "value": "nPczCjzI2devNBz1zQrb"},
+          {"label": "Charlie — Natural", "value": "IKne3meq5aSn9XLyUdCD"},
+          {"label": "George — Warm", "value": "JBFqnCBsd6RMkjVDRZzb"},
+          {"label": "Sarah — Soft", "value": "EXAVITQu4vr4xnSDxMaL"},
+          {"label": "Charlotte — Clear", "value": "XB0fDUnXU5powFXDhCwa"},
+          {"label": "Hope — Bubbly, Gossipy and Girly", "value": "tnSpp4vdxKPjI9w0GnoV"},
+          {"label": "Finn — Youthful, Eager and Energetic", "value": "DYkrAHD8iwork3YSUBbs"},
+          {"label": "Tom — Conversations and Books", "value": "56AoDkrOh6qfVPDXZ7Pt"},
+          {"label": "Lucy — Fresh and Casual", "value": "lcMyyd2HUfFzxdCaC4Ta"},
+          {"label": "Tiffany — Natural and Welcoming", "value": "6aDn1KB0hjpdcocrUkmq"},
+          {"label": "Brock — Commanding and Loud Sergeant", "value": "7ftFdxRlmR6Z9V3nTdUh"},
+          {"label": "Viraj — Rich and Soft", "value": "bajNon13EdhNMndG3z05"}
+        ]
+      },
+      "stability": {
+        "type": "number",
+        "title": "Stability",
+        "name": "stability",
+        "default": 0.5
+      },
+      "similarity_boost": {
+        "type": "number",
+        "title": "Similarity Boost",
+        "name": "similarity_boost",
+        "default": 0.75
+      },
+      "speed": {
+        "type": "number",
+        "title": "Speed",
+        "name": "speed",
+        "default": 1
+      },
+      "language_code": {
+        "enum": ["en", "fr", "de", "ja", "vi", "hu", "no"],
+        "type": "string",
+        "title": "Language Code",
+        "name": "language_code"
       }
     }
   }

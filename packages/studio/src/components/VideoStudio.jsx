@@ -146,15 +146,38 @@ const PROVIDER_LOGOS = {
 
 const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
-function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
+function ModelDropdown({ selectedModel, onSelect, onClose }) {
   const [search, setSearch] = useState("");
-  const generationModels = imageMode ? i2vModels : t2vModels;
-  
-  // Find current model's provider to pre-select the provider tab ("slide")
-  const allCurrentModels = [...generationModels, ...v2vModels];
-  const currentModelObj = allCurrentModels.find((m) => m.id === selectedModel);
-  const initialProvider = currentModelObj?.provider || "all";
-  const [selectedProvider, setSelectedProvider] = useState(initialProvider);
+  const modelCategories = [
+    {
+      id: "all",
+      label: "All",
+      entries: [
+        ...t2vModels.map((model) => ({ model, category: "t2v" })),
+        ...i2vModels.map((model) => ({ model, category: "i2v" })),
+        ...v2vModels.map((model) => ({ model, category: "v2v" })),
+      ],
+    },
+    {
+      id: "t2v",
+      label: "Text to Video",
+      entries: t2vModels.map((model) => ({ model, category: "t2v" })),
+    },
+    {
+      id: "i2v",
+      label: "Image to Video",
+      entries: i2vModels.map((model) => ({ model, category: "i2v" })),
+    },
+    {
+      id: "v2v",
+      label: "Video Tools",
+      entries: v2vModels.map((model) => ({ model, category: "v2v" })),
+    },
+  ];
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedProvider, setSelectedProvider] = useState("all");
+  const activeCategory = modelCategories.find((category) => category.id === selectedCategory) || modelCategories[0];
+  const modelEntries = activeCategory.entries;
 
   const activeItemRef = useRef(null);
 
@@ -205,7 +228,7 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
   const availableProviders = [];
   const seenProviders = new Set();
   
-  allCurrentModels.forEach(m => {
+  modelEntries.forEach(({ model: m }) => {
     const pId = m.provider || 'muapi';
     const pName = m.provider_name || 'Muapi';
     if (!seenProviders.has(pId)) {
@@ -216,7 +239,7 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
 
   const lf = search.toLowerCase();
 
-  const filterFn = (m) => {
+  const filterFn = ({ model: m }) => {
     // 1. Filter by provider tab
     if (selectedProvider !== "all") {
       const pId = m.provider || 'muapi';
@@ -229,8 +252,8 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
     );
   };
 
-  const filteredMain = generationModels.filter(filterFn);
-  const filteredV2V = v2vModels.filter(filterFn);
+  const filteredMain = modelEntries.filter(filterFn).filter(({ category }) => category !== "v2v");
+  const filteredV2V = modelEntries.filter(filterFn).filter(({ category }) => category === "v2v");
 
   const getIconColor = (m, isV2V) => {
     if (isV2V) return "bg-orange-500/10 text-orange-400 border-orange-500/10";
@@ -240,14 +263,16 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
     return "bg-primary/10 text-primary border-primary/10";
   };
 
-  const renderItem = (m, isV2V = false) => (
+  const renderItem = ({ model: m, category }) => {
+    const isV2V = category === "v2v";
+    return (
     <div
-      key={m.id}
+      key={`${category}:${m.id}`}
       ref={selectedModel === m.id ? activeItemRef : null}
       className={`flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-white/5 ${selectedModel === m.id ? "bg-white/5 border-white/5" : ""}`}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(m, isV2V);
+        onSelect(m, category);
         onClose();
       }}
     >
@@ -286,7 +311,8 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
       </div>
       {selectedModel === m.id && <CheckSvg />}
     </div>
-  );
+    );
+  };
 
   const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
@@ -340,7 +366,26 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
 
       {/* Right Pane: Search + Lists */}
       <div className="flex-1 flex flex-col gap-2 min-w-0">
-        <div className="px-1 pb-2 border-b border-white/5 shrink-0">
+        <div className="px-1 pb-2 border-b border-white/5 shrink-0 space-y-2">
+          <div className="flex gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
+            {modelCategories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => {
+                  setSelectedCategory(category.id);
+                  setSelectedProvider("all");
+                }}
+                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors border ${
+                  selectedCategory === category.id
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-white/[0.02] text-white/50 border-white/[0.04] hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/5 focus-within:border-primary/50 transition-colors">
             <svg
               width="14"
@@ -366,7 +411,7 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
         </div>
         
         <div className="text-xs font-bold text-secondary px-2 py-1 shrink-0 flex items-center justify-between">
-          <span>Video models</span>
+          <span>{activeCategory.label} models</span>
           {selectedProvider !== "all" && (
             <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60">
               {availableProviders.find(p => p.id === selectedProvider)?.name || selectedProvider}
@@ -381,13 +426,13 @@ function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
             </div>
           ) : (
             <>
-              {filteredMain.map((m) => renderItem(m, false))}
+              {filteredMain.map((entry) => renderItem(entry))}
               {filteredV2V.length > 0 && (
                 <>
                   <div className="text-xs font-bold text-orange-400/70 px-3 py-2 mt-1 border-t border-white/5">
                     Video Tools
                   </div>
-                  {filteredV2V.map((m) => renderItem(m, true))}
+                  {filteredV2V.map((entry) => renderItem(entry))}
                 </>
               )}
             </>
@@ -1011,7 +1056,8 @@ export default function VideoStudio({
 
   // ── model selection from dropdown ─────────────────────────────────────────
   const handleModelSelect = useCallback(
-    (m, isV2V) => {
+    (m, category = imageMode ? "i2v" : "t2v") => {
+      const isV2V = category === "v2v";
       if (isV2V) {
         setV2vMode(true);
         setImageMode(false);
@@ -1037,9 +1083,16 @@ export default function VideoStudio({
           setUploadedVideoName(null);
           setPromptDisabled(false);
         }
+        const nextImageMode = category === "i2v";
+        if (!nextImageMode && imageMode) {
+          setUploadedImageUrl(null);
+          setUploadedImageUrls([]);
+          setUploadedEndImageUrl(null);
+        }
+        setImageMode(nextImageMode);
         setSelectedModel(m.id);
         setSelectedModelName(m.name);
-        applyControlsForModel(m.id, imageMode, false);
+        applyControlsForModel(m.id, nextImageMode, false);
       }
     },
     [v2vMode, imageMode, applyControlsForModel],
@@ -1881,7 +1934,6 @@ export default function VideoStudio({
                   >
                     <PromptPopoverHeader>Model</PromptPopoverHeader>
                     <ModelDropdown
-                      imageMode={imageMode}
                       selectedModel={selectedModel}
                       onSelect={handleModelSelect}
                       onClose={() => setOpenDropdown(null)}

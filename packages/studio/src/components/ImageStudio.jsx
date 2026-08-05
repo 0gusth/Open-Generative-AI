@@ -582,13 +582,32 @@ const PROVIDER_LOGOS = {
 
 const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
-function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
+function ModelDropdown({ selectedModel, onSelect, onClose }) {
   const [search, setSearch] = useState("");
-  
-  // Find current model's provider to pre-select the provider tab ("slide")
-  const currentModelObj = models.find((m) => m.id === selectedModel);
-  const initialProvider = currentModelObj?.provider || "all";
-  const [selectedProvider, setSelectedProvider] = useState(initialProvider);
+  const modelCategories = [
+    {
+      id: "all",
+      label: "All",
+      entries: [
+        ...t2iModels.map((model) => ({ model, category: "t2i" })),
+        ...i2iModels.map((model) => ({ model, category: "i2i" })),
+      ],
+    },
+    {
+      id: "t2i",
+      label: "Text to Image",
+      entries: t2iModels.map((model) => ({ model, category: "t2i" })),
+    },
+    {
+      id: "i2i",
+      label: "Image to Image",
+      entries: i2iModels.map((model) => ({ model, category: "i2i" })),
+    },
+  ];
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedProvider, setSelectedProvider] = useState("all");
+  const activeCategory = modelCategories.find((category) => category.id === selectedCategory) || modelCategories[0];
+  const modelEntries = activeCategory.entries;
 
   const activeItemRef = useRef(null);
 
@@ -639,7 +658,7 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
   const availableProviders = [];
   const seenProviders = new Set();
   
-  models.forEach(m => {
+  modelEntries.forEach(({ model: m }) => {
     const pId = m.provider || 'muapi';
     const pName = m.provider_name || 'Muapi';
     if (!seenProviders.has(pId)) {
@@ -648,7 +667,7 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
     }
   });
 
-  const filtered = models.filter((m) => {
+  const filtered = modelEntries.filter(({ model: m }) => {
     // 1. Filter by provider tab
     if (selectedProvider !== "all") {
       const pId = m.provider || 'muapi';
@@ -714,7 +733,26 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
 
       {/* Right Pane: Search input + Models list */}
       <div className="flex-1 flex flex-col gap-2 min-w-0">
-        <div className="border-b border-white/5 shrink-0 pb-2">
+        <div className="border-b border-white/5 shrink-0 pb-2 space-y-2">
+          <div className="flex gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
+            {modelCategories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => {
+                  setSelectedCategory(category.id);
+                  setSelectedProvider("all");
+                }}
+                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors border ${
+                  selectedCategory === category.id
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-white/[0.02] text-white/50 border-white/[0.04] hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/5 focus-within:border-primary/50 transition-colors">
             <svg
               width="14"
@@ -740,7 +778,7 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
         </div>
         
         <div className="text-xs font-semibold text-secondary py-1 shrink-0 flex items-center justify-between">
-          <span>Available models</span>
+          <span>{activeCategory.label} models</span>
           {selectedProvider !== "all" && (
             <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60">
               {availableProviders.find(p => p.id === selectedProvider)?.name || selectedProvider}
@@ -754,13 +792,13 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
               No models found
             </div>
           ) : (
-            filtered.map((m) => (
+            filtered.map(({ model: m, category }) => (
               <div
-                key={m.id}
+                key={`${category}:${m.id}`}
                 ref={selectedModel === m.id ? activeItemRef : null}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelect(m);
+                  onSelect(m, category);
                   onClose();
                 }}
                 className={`flex items-center justify-between p-3 hover:bg-white/5 rounded-lg cursor-pointer transition-all border border-transparent hover:border-white/5 ${
@@ -1149,23 +1187,30 @@ export default function ImageStudio({
   }, [selectedModelId]);
 
   // ── Model selection ──────────────────────────────────────────────────────
-  const handleModelSelect = (m) => {
-    const ars = imageMode
+  const handleModelSelect = (m, category = imageMode ? "i2i" : "t2i") => {
+    const nextImageMode = category === "i2i";
+    const ars = nextImageMode
       ? getAspectRatiosForI2IModel(m.id)
       : getAspectRatiosForModel(m.id);
-    const resolutions = imageMode
+    const resolutions = nextImageMode
       ? getResolutionsForI2IModel(m.id)
       : getResolutionsForModel(m.id);
+    if (!nextImageMode && imageMode) {
+      setUploadedImageUrls([]);
+      setSwapImageUrl(null);
+    }
+    setImageMode(nextImageMode);
     setSelectedModelId(m.id);
     setSelectedModelName(m.name);
     setSelectedAr(ars[0] || "1:1");
     setSelectedQuality(resolutions[0] || null);
     setSwapImageUrl(null);
-    if (imageMode) {
+    if (nextImageMode) {
       setMaxImages(getMaxImagesForI2IModel(m.id));
       const effects = getEffectsForI2IModel(m.id);
       setSelectedEffect(effects.length > 0 ? (getDefaultEffectForI2IModel(m.id) || effects[0]) : "");
     } else {
+      setMaxImages(1);
       setSelectedEffect("");
     }
   };
@@ -1542,7 +1587,6 @@ export default function ImageStudio({
                   >
                     <PromptPopoverHeader>Model</PromptPopoverHeader>
                     <ModelDropdown
-                      models={currentModels}
                       selectedModel={selectedModelId}
                       onSelect={handleModelSelect}
                       onClose={() => setDropdownOpen(null)}

@@ -125,12 +125,16 @@ export async function generateI2V(apiKey, params) {
     const payload = {};
     if (params.prompt) payload.prompt = params.prompt;
     const imageField = modelInfo?.imageField || 'image_url';
-    if (params.images_list && params.images_list.length > 0) {
-        if (imageField === 'images_list') payload.images_list = params.images_list;
-        else payload[imageField] = params.images_list[0];
-    } else if (params.image_url) {
-        if (imageField === 'images_list') payload.images_list = [params.image_url];
-        else payload[imageField] = params.image_url;
+    const imageInput = modelInfo?.inputs?.[imageField];
+    const imageUrls = params.images_list?.length > 0
+        ? params.images_list
+        : (params.image_url ? [params.image_url] : []);
+    if (imageUrls.length > 0) {
+        if (imageInput?.type === 'array' || imageField === 'images_list') {
+            payload[imageField] = imageUrls;
+        } else {
+            payload[imageField] = imageUrls[0];
+        }
     }
     const lastImageField = modelInfo?.lastImageField;
     if (lastImageField && params.last_image) {
