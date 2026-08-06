@@ -7,8 +7,8 @@
 
 **Community:** Join [Discord](https://discord.gg/tANKJkHck) for discussions and support
 
-<p align="center"><a href="https://youtu.be/pq0B_A0K770"><img src="https://i.ytimg.com/vi/pq0B_A0K770/maxresdefault.jpg" width="720"></a></p>
-<p align="center"><a href="https://youtu.be/pq0B_A0K770"><b>▶ Watch: How to Get Exclusive Access to Flux 3 video without restrictions</b></a></p>
+<p align="center"><a href="https://youtu.be/T4Oddw74O44"><img src="https://i.ytimg.com/vi/T4Oddw74O44/maxresdefault.jpg" width="720"></a></p>
+<p align="center"><a href="https://youtu.be/pq0B_A0K770"><b>▶ Watch: How to Access Wan 3.0 API - Best Uncensored Alternative to Seedance 2 </b></a></p>
 
 <p align="center">
   <a href="https://github.com/Anil-matcha/awesome-generative-ai-apps">
