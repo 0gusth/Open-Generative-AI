@@ -7,8 +7,8 @@
 
 **Community:** Join [Discord](https://discord.gg/tANKJkHck) for discussions and support
 
-<p align="center"><a href="https://youtu.be/T4Oddw74O44"><img src="https://i.ytimg.com/vi/T4Oddw74O44/maxresdefault.jpg" width="720"></a></p>
-<p align="center"><a href="https://youtu.be/T4Oddw74O44"><b>▶ Watch: How to Access Wan 3.0 API - Best Uncensored Alternative to Seedance 2 </b></a></p>
+<p align="center"><a href="https://youtu.be/Uszlw7H4VP4"><img src="https://i.ytimg.com/vi/Uszlw7H4VP4/maxresdefault.jpg" width="720"></a></p>
+<p align="center"><a href="https://youtu.be/Uszlw7H4VP4"><b>▶ Watch: How to Get Exclusive Access to Seedance 2.5 API (Step-by-Step Guide) </b></a></p>
 
 <p align="center">
   <a href="https://github.com/Anil-matcha/awesome-generative-ai-apps">
