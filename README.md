@@ -55,6 +55,8 @@ Consumer AI image/video platforms almost all run on paid monthly subscriptions �
 
 > 🆕 **FLUX 3 Python SDK:** [Flux-3-Dev-API](https://github.com/Anil-matcha/Flux-3-Dev-API) — Python wrapper for Black Forest Labs' newly announced FLUX 3 — text-to-image, image-to-image, text-to-video, and image-to-video through one client, including the fast/low-cost Dev variant.
 
+> 🖼️ **Grok Imagine Image 2.0 API:** [Grok-Imagine-Image-2-API](https://github.com/Anil-matcha/Grok-Imagine-Image-2-API) — Python SDK and MCP server for xAI image generation, image editing, and multi-reference workflows through MuAPI.
+
 > 🎬 **FLUX 3 video, specifically:** [flux-3-video-api](https://github.com/SamurAIGPT/flux-3-video-api) — a focused Python wrapper for just the FLUX 3 Text-to-Video and Image-to-Video endpoints, with native synchronized audio.
 
 > 🎓 **Learn to monetize generative AI:** [ai-creator-academy](https://github.com/Anil-matcha/ai-creator-academy) — a free, open-source curriculum teaching creators, freelancers, and agencies how to make money with generative AI image/video/audio tools, covering monetization, pricing, and client delivery — not just how the models work.
