@@ -893,6 +893,7 @@ export default function ImageStudio({
   onGenerationComplete,
   onGenerationError,
   historyItems,
+  onDeleteHistoryItem,
   droppedFiles,
   onFilesHandled,
 }) {
@@ -937,6 +938,19 @@ export default function ImageStudio({
 
   // Use prop history if provided, otherwise local
   const history = historyItems ?? localHistory;
+
+  // When historyItems is server-backed (White Label / backfilled sessions),
+  // localHistory isn't what's rendered — removal has to go through the
+  // parent so it deletes server-side (UsageLog + S3) and updates the same
+  // state `history` reads from. Falls back to the old local-only removal
+  // when there's no server-backed list (e.g. standalone/embedded studio).
+  const handleDeleteEntry = useCallback(async (entry, idx) => {
+    if (historyItems && onDeleteHistoryItem) {
+      await onDeleteHistoryItem(entry);
+    } else {
+      setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+    }
+  }, [historyItems, onDeleteHistoryItem]);
 
   // ── Refs ────────────────────────────────────────────────────────────────
   const textareaRef = useRef(null);
@@ -1384,7 +1398,9 @@ export default function ImageStudio({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (confirm("Are you sure you want to delete this generated item?")) {
-                        setLocalHistory(prev => prev.filter((_, i) => i !== idx));
+                        handleDeleteEntry(entry, idx).catch((err) => {
+                          onGenerationError?.(err.message || "Failed to delete item");
+                        });
                       }
                     }}
                     className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
@@ -1414,7 +1430,9 @@ export default function ImageStudio({
                       danger: true,
                       onSelect: () => {
                         if (confirm("Are you sure you want to delete this generated item?")) {
-                          setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+                          handleDeleteEntry(entry, idx).catch((err) => {
+                            onGenerationError?.(err.message || "Failed to delete item");
+                          });
                         }
                       },
                     },

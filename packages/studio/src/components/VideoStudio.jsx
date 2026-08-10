@@ -457,6 +457,7 @@ export default function VideoStudio({
   onGenerationComplete,
   onGenerationError,
   historyItems,
+  onDeleteHistoryItem,
   droppedFiles,
   onFilesHandled,
 }) {
@@ -546,6 +547,18 @@ export default function VideoStudio({
 
   // ── derived data ──
   const history = historyItems ?? localHistory;
+
+  // See ImageStudio's handleDeleteEntry: when historyItems is server-backed
+  // (White Label / backfilled sessions), localHistory isn't what's rendered,
+  // so removal has to go through the parent to delete server-side and
+  // update the same state `history` reads from.
+  const handleDeleteEntry = useCallback(async (entry, idx) => {
+    if (historyItems && onDeleteHistoryItem) {
+      await onDeleteHistoryItem(entry);
+    } else {
+      setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+    }
+  }, [historyItems, onDeleteHistoryItem]);
 
   const getCurrentModels = useCallback(() => {
     if (v2vMode) return v2vModels;
@@ -1482,7 +1495,9 @@ export default function VideoStudio({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm("Are you sure you want to delete this generated item?")) {
-                          setLocalHistory(prev => prev.filter((_, i) => i !== idx));
+                          handleDeleteEntry(entry, idx).catch((err) => {
+                            onGenerationError?.(err.message || "Failed to delete item");
+                          });
                         }
                       }}
                       className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
@@ -1519,7 +1534,9 @@ export default function VideoStudio({
                         danger: true,
                         onSelect: () => {
                           if (confirm("Are you sure you want to delete this generated item?")) {
-                            setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+                            handleDeleteEntry(entry, idx).catch((err) => {
+                              onGenerationError?.(err.message || "Failed to delete item");
+                            });
                           }
                         },
                       },

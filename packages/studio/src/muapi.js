@@ -831,6 +831,24 @@ export async function getHistory(apiKey, { cursor, limit = 50 } = {}) {
     return await response.json();
 }
 
+// DELETE /api/v1/predictions/{requestId}/media — strips input/output media
+// URLs from the request (S3 objects removed) and clears them from the row;
+// used to back the "delete generated item" action against server-backed
+// (backfilled) history lists, since removing an item from local component
+// state alone doesn't touch the server record or its stored media.
+export async function deleteMedia(apiKey, requestId) {
+    const response = await fetch(`${BASE_URL}/api/v1/predictions/${requestId}/media`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        notifyAuthRequired(response.status, errText);
+        throw new Error(`Failed to delete: ${response.status} - ${errText.slice(0, 100)}`);
+    }
+    return await response.json();
+}
+
 export async function runClipping(apiKey, params) {
     const payload = {
         video_url: params.video_url,
