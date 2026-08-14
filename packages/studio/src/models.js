@@ -7886,9 +7886,23 @@ export const i2iModels = [
     "imageField": "image_url",
     "hasPrompt": false,
     "inputs": {},
+    "cost": 0.01,
     "provider": "muapi",
     "provider_name": "Fal"
   },
+  {
+    "id": "ai-image-extension",
+    "name": "AI Image Extension",
+    "endpoint": "ai-image-extension",
+    "family": "tools",
+    "imageField": "image_url",
+    "hasPrompt": false,
+    "inputs": {},
+    "cost": 0.03,
+    "provider": "muapi",
+    "provider_name": "Fal"
+  },
+
   {
     "id": "ai-product-shot",
     "name": "AI Product Shot",
