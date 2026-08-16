@@ -1,11 +1,32 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+// Robust media download: direct fetch first, same-origin proxy fallback
+// (provider CDNs without CORS), then a blob-powered save.
+async function downloadMedia(url, filename) {
+  let res;
+  try {
+    res = await fetch(url);
+    if (!res.ok) throw new Error();
+  } catch {
+    res = await fetch(`/api/proxy-media?url=${encodeURIComponent(url)}`);
+  }
+  if (!res.ok) throw new Error("Download failed");
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 // Gallery lightbox: fullscreen viewer over the whole creation set.
 // ← → navigate, Esc closes, backdrop click closes. Works for images and videos.
 export default function Lightbox({ items, index, onClose, onNavigate }) {
   const item = items[index];
+  const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const go = useCallback(
     (delta) => {
@@ -76,11 +97,45 @@ export default function Lightbox({ items, index, onClose, onNavigate }) {
           />
         )}
         {(item.prompt || item.model) && (
-          <div className="max-w-2xl text-center px-4">
+          <div className="max-w-2xl w-full px-4 flex flex-col items-center gap-2">
             {item.prompt && (
-              <p className="text-[13px] text-white/70 leading-relaxed line-clamp-2">{item.prompt}</p>
+              <p className="text-[13px] text-white/70 leading-relaxed text-center max-h-[16vh] overflow-y-auto custom-scrollbar select-text">
+                {item.prompt}
+              </p>
             )}
-            <p className="text-[11px] text-white/35 mt-1 tabular-nums">
+            <div className="flex items-center gap-2">
+              {item.prompt && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(item.prompt);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1600);
+                    } catch { /* clipboard unavailable */ }
+                  }}
+                  className="pressable h-8 px-3 rounded-full bg-[#1d1d1f]/80 backdrop-blur-xl border border-white/[0.12] text-[11px] font-medium text-white/80 hover:text-white flex items-center gap-1.5"
+                >
+                  {copied ? "✓ Copiado" : "Copiar prompt"}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={downloading}
+                onClick={async () => {
+                  setDownloading(true);
+                  try {
+                    const isVideo = item.type === "video" || /\.(mp4|webm|mov)($|\?)/i.test(item.url);
+                    await downloadMedia(item.url, `${(item.model || "generation").replace(/[^a-z0-9-]/gi, "-")}-${index + 1}.${isVideo ? "mp4" : "png"}`);
+                  } catch { /* surfaced by silence — rare */ }
+                  setDownloading(false);
+                }}
+                className="pressable h-8 px-3 rounded-full bg-[#1d1d1f]/80 backdrop-blur-xl border border-white/[0.12] text-[11px] font-medium text-white/80 hover:text-white flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {downloading ? "Baixando…" : "⬇ Baixar"}
+              </button>
+            </div>
+            <p className="text-[11px] text-white/35 tabular-nums">
               {item.model}{items.length > 1 ? ` · ${index + 1} / ${items.length}` : ""}
             </p>
           </div>

@@ -436,8 +436,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // resolved summary chips (what Auto decided)
   const resolvedChips = useMemo(() => {
     const r = compiled.resolved;
-    return [r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.tempo : null]
-      .filter(Boolean);
+    return [...new Set(
+      [r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.tempo : null]
+        .filter(Boolean),
+    )];
   }, [compiled, mode]);
 
   const panelButton = (id, label, keys) => (
@@ -508,8 +510,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 <div className="p-3.5">
                   <p className="text-white/65 text-[12px] line-clamp-2 leading-relaxed" title={entry.prompt}>{entry.prompt}</p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    {[entry.resolved?.camera, entry.resolved?.lens, entry.resolved?.palette].filter(Boolean).slice(0, 3).map((chip) => (
-                      <span key={chip} className="text-[9px] font-medium text-white/50 px-1.5 py-0.5 bg-white/[0.06] rounded-full border border-white/[0.07] truncate max-w-[140px]">
+                    {[...new Set([entry.resolved?.camera, entry.resolved?.lens, entry.resolved?.palette].filter(Boolean))].slice(0, 3).map((chip, ci) => (
+                      <span key={`${ci}-${chip}`} className="text-[9px] font-medium text-white/50 px-1.5 py-0.5 bg-white/[0.06] rounded-full border border-white/[0.07] truncate max-w-[140px]">
                         {chip}
                       </span>
                     ))}
@@ -690,8 +692,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           {resolvedChips.length > 0 && prompt.trim() && (
             <div className="flex items-center gap-1.5 flex-wrap -mt-1">
               <span className="text-[10px] text-white/30">→</span>
-              {resolvedChips.slice(0, 6).map((chip) => (
-                <span key={chip} className="text-[10px] text-white/45 px-1.5 py-0.5 bg-white/[0.04] rounded-full border border-white/[0.06]">
+              {resolvedChips.slice(0, 6).map((chip, i) => (
+                <span key={`${i}-${chip}`} className="text-[10px] text-white/45 px-1.5 py-0.5 bg-white/[0.04] rounded-full border border-white/[0.06]">
                   {chip}
                 </span>
               ))}
