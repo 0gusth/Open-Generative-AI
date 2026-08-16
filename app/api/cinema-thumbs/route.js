@@ -7,6 +7,7 @@ import { PALETTES } from "../../../packages/studio/src/cinema/palettes.js";
 import { LIGHTING } from "../../../packages/studio/src/cinema/lighting.js";
 import { MOVEMENTS } from "../../../packages/studio/src/cinema/movement.js";
 import { SHOT_SIZES, ANGLES } from "../../../packages/studio/src/cinema/shots.js";
+import { EFFECTS } from "../../../packages/studio/src/cinema/effects.js";
 
 // Maintenance route: generates any MISSING catalog thumbnails (FLUX Schnell,
 // ~$0.0013/image) into public/cinema-thumbs. The Runware key arrives per
@@ -31,6 +32,7 @@ const BASES = {
   "movement": (p) => `cinematic film still frozen mid-camera-move with visible motion energy and blur trails, ${p}`,
   "shot": (p) => `cinematic film still of a woman in a red coat inside a vast train station hall, ${p}`,
   "angle": (p) => `cinematic film still of a man in a long coat on a rain-slick city plaza at night, ${p}`,
+  "effect": (p) => `cinematic film still of a figure in a dark studio void, dramatic rim light, ${p}`,
 };
 
 function allJobs() {
@@ -52,6 +54,7 @@ function allJobs() {
   add("movement", MOVEMENTS);
   add("shot", SHOT_SIZES);
   add("angle", ANGLES);
+  add("effect", EFFECTS);
   return jobs;
 }
 

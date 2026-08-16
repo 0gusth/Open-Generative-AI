@@ -21,6 +21,7 @@ import { PALETTES, paletteById, palettesForGenre } from "./palettes.js";
 import { LIGHTING, lightingById, lightingForGenre } from "./lighting.js";
 import { MOVEMENTS, movementById, movementsForGenre } from "./movement.js";
 import { shotSizeById, angleById } from "./shots.js";
+import { effectById } from "./effects.js";
 
 const pickDeterministic = (list, seedString) => {
   // Stable "auto" pick: same setup → same choice (no Date/random — respects
@@ -98,6 +99,8 @@ export function compileCinematography(setup) {
   const lighting = setup.lighting && setup.lighting !== "auto" ? lightingById(setup.lighting) : null;
   const movement = mode === "video" && setup.movement && setup.movement !== "auto"
     ? movementById(setup.movement) : null;
+  const effect = mode === "video" && setup.effect && setup.effect !== "auto"
+    ? effectById(setup.effect) : null;
   const tempo = mode === "video" && setup.tempo && setup.tempo !== "auto"
     ? tempoById(setup.tempo) : null;
 
@@ -116,6 +119,7 @@ export function compileCinematography(setup) {
 
   if (mode === "video") {
     blocks.push(movement ? movement.prompt : genre ? genre.blocks.motion : null);
+    if (effect) blocks.push(`VFX event: ${effect.prompt}`);
     blocks.push(tempo ? tempo.prompt : genre ? genre.blocks.pace : null);
   }
 
@@ -144,6 +148,7 @@ export function compileCinematography(setup) {
       palette: palette?.name || (genre ? `${genre.name} default` : null),
       lighting: lighting?.name || (genre ? `${genre.name} default` : null),
       movement: movement?.name || (mode === "video" && genre ? `${genre.name} default` : null),
+      effect: effect?.name || null,
       tempo: tempo?.name || (mode === "video" && genre ? `${genre.name} default` : null),
     },
   };

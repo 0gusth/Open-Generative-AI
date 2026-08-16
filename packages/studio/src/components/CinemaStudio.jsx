@@ -19,6 +19,7 @@ import { PALETTES } from "../cinema/palettes.js";
 import { LIGHTING } from "../cinema/lighting.js";
 import { MOVEMENTS } from "../cinema/movement.js";
 import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
+import { EFFECTS } from "../cinema/effects.js";
 import {
   PromptComposer,
   PromptTextarea,
@@ -110,7 +111,7 @@ const DEFAULT_SETUP = {
   genre: "auto", era: "auto", tempo: "auto",
   camera: "auto", lens: "auto", aperture: "auto", medium: "auto",
   shotSize: "auto", angle: "auto",
-  palette: "auto", lighting: "auto", movement: "auto",
+  palette: "auto", lighting: "auto", movement: "auto", effect: "auto",
 };
 
 const thumb = (category, id) => `/cinema-thumbs/${category}-${id}.webp`;
@@ -507,6 +508,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           continuation: isContinuation,
           hasCharacterRefs: castRefs.length > 0,
           characters: mentionedCast.map((c) => ({ name: c.name, identity: c.identity })),
+          audio: mode === "video" && audioOn && caps.audio,
         });
       }
       let res;
@@ -596,7 +598,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const resolvedChips = useMemo(() => {
     const r = compiled.resolved;
     return [...new Set(
-      [r.shotSize, r.angle, r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.tempo : null]
+      [r.shotSize, r.angle, r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.effect : null, mode === "video" ? r.tempo : null]
         .filter(Boolean),
     )];
   }, [compiled, mode]);
@@ -740,7 +742,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 </>
               )}
               {openPanel === "movement" && (
-                <PickerSection label="Camera Movement" category="movement" items={MOVEMENTS} value={setup.movement} onSelect={set("movement")} />
+                <>
+                  <PickerSection label="Camera Movement" category="movement" items={MOVEMENTS} value={setup.movement} onSelect={set("movement")} />
+                  <PickerSection label="VFX Event" category="effect" items={EFFECTS} value={setup.effect} onSelect={set("effect")} />
+                </>
               )}
               {openPanel === "cast" && (
                 <CastPanel cast={cast} apiKey={apiKey} onChanged={loadCast} />
@@ -844,7 +849,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
             {panelButton("film", "Film", ["genre", "era", "tempo"])}
             {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium", "shotSize", "angle"])}
             {panelButton("look", "Look", ["palette", "lighting"])}
-            {mode === "video" && panelButton("movement", "Movement", ["movement"])}
+            {mode === "video" && panelButton("movement", "Movement", ["movement", "effect"])}
             <button
               type="button"
               onClick={() => setOpenPanel(openPanel === "cast" ? null : "cast")}

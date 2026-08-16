@@ -38,7 +38,20 @@ VIDEO-SPECIFIC:
 - The camera is the emotional double of the character: tension = unstable handheld breathing; calm = smooth breathing; sadness = slow, low, drifting down; shock = static then a very slow push; a breakdown = slow pull-back that gives the character space.
 - Fast action morphs — describe measured, readable motion; explosive beats live in the cut, not in one clip.
 - In multi-shot direction, every cut changes BOTH shot size AND camera character.
+- Beat density: the model resolves 1-2 distinct action beats per 5 seconds. Packing 4+ beats into a 5s window produces blur, jitter and morphing — cut beats or state them as one flowing intent.
+- Intent over timestamps: describe the intent and consequence of action ("she raises her arm until the energy erupts, sparks scattering"), never frame-by-frame choreography with clock times.
 - Atmospheric micro-motion sells life: dust floating, steam rising, fabric breathing.
+`.trim();
+
+// Audio layers — applied when the model generates native audio.
+export const CRAFT_AUDIO = `
+AUDIO (this model generates sound):
+- Dialogue in double quotes with speaker and tone: She says quietly: "We leave at dawn." Keep lines breath-sized — one short sentence per beat.
+- SFX tied to the visible action, described not spelled: "the glass shatters — sharp crack, then settling tinkle", never "BANG".
+- Ambient bed in 2-3 elements max, with the space's acoustics: "tight car interior, rain on the roof, wipers".
+- Music as texture, never artist or song names: "low strings rising, sparse piano" beats "suspenseful music".
+- If dialogue must lip-sync: medium close-up or tighter, ONE speaking face, calm camera, and no head-motion words (nodding, turning) — they fight the mouth.
+- Silence is a tool: "dead quiet, then a single footstep" hits harder than a full mix.
 `.trim();
 
 export const CRAFT_I2V_EXTRA = `
@@ -110,6 +123,7 @@ export function fusionInstruction(mode /* "image" | "video" */, hasStartFrame, o
     CRAFT_CORE,
     CRAFT_ACTING,
     mode === "video" ? CRAFT_VIDEO_EXTRA : "",
+    mode === "video" && opts.audio ? CRAFT_AUDIO : "",
     i2v ? CRAFT_I2V_EXTRA : "",
     opts.hasCharacterRefs ? CRAFT_IDENTITY_SEPARATION : "",
     characterLines

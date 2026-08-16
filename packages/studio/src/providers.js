@@ -565,6 +565,7 @@ export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartF
         dialect: dialectFor(opts.modelId, mode, mode === "video" && hasStartFrame),
         hasCharacterRefs: !!opts.hasCharacterRefs,
         characters: opts.characters || [],
+        audio: !!opts.audio,
     });
     try {
         const results = await runwareCall([
