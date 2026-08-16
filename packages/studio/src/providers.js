@@ -304,8 +304,9 @@ async function pollRunwareTask(taskUUID, kind) {
         await new Promise((r) => setTimeout(r, delay));
         let results;
         try {
+            // getResponse looks up the ORIGINAL task by its own taskUUID field
             results = await runwareCall([
-                { taskType: "getResponse", taskUUID: makeUUID(), responseTaskUUID: taskUUID },
+                { taskType: "getResponse", taskUUID },
             ]);
         } catch (error) {
             continue; // transient poll failure — keep waiting
