@@ -11,7 +11,7 @@ import toast from "react-hot-toast";
 import { generateImage, generateVideo, generateI2V, uploadFile } from "../muapi.js";
 import { cinemaFusePrompt } from "../providers.js";
 import { compileCinematography } from "../cinema/compiler.js";
-import { t2iModels, t2vModels, i2vModels } from "../models.js";
+import { t2iModels, t2vModels, i2vModels, getMaxImagesForI2VModel } from "../models.js";
 import { PROVIDER_LOGOS, INVERT_LOGOS } from "../providerLogos.js";
 import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, APERTURES, mediaForCamera } from "../cinema/gear.js";
 import { GENRES, ERAS, TEMPOS } from "../cinema/filmSetup.js";
@@ -199,7 +199,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try { window.localStorage.setItem("cinema_audio_on", next ? "1" : "0"); } catch {}
     return next;
   });
+  const [startFrame, setStartFrame] = useState(null);
   const [endFrame, setEndFrame] = useState(null);
+  const startFrameInputRef = useRef(null);
   const endFrameInputRef = useRef(null);
   const [openPanel, setOpenPanel] = useState(null); // "film" | "camera" | "look" | "movement"
   const [generating, setGenerating] = useState(false);
@@ -306,7 +308,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       durations: modelDurations(modelObj),
       resolutions: mode === "video" ? modelResolutions(modelObj) : null,
       audio: mode === "video" && modelSupportsAudio(modelObj),
+      startFrame: mode === "video" && !!sib,
       endFrame: mode === "video" && !!sib?.lastImageField,
+      multiRef: mode === "video" ? getMaxImagesForI2VModel(sib?.id || "") > 2 : true,
     };
   }, [modelObj, mode, modelId]);
 
@@ -316,6 +320,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     if (mode === "video" && !caps.durations.includes(duration)) setDuration(caps.durations[0]);
     if (caps.resolutions && !caps.resolutions.includes(resolution)) setResolution(caps.resolutions.includes("720p") ? "720p" : caps.resolutions[0]);
     if (!caps.endFrame) setEndFrame(null);
+    if (!caps.startFrame) setStartFrame(null);
   }, [caps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compiled = useMemo(
@@ -341,17 +346,18 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect };
         if (refs.length) params.images_list = refs;
         res = await generateImage(apiKey, params);
-      } else if (refs.length || endFrame) {
+      } else if (startFrame || refs.length || endFrame) {
+        const allImages = [startFrame, ...refs].filter(Boolean);
         const params = {
           model: i2vSibling(modelId),
-          image_url: refs[0] || endFrame,
-          images_list: refs,
+          image_url: allImages[0] || endFrame,
           prompt: finalPrompt,
           aspect_ratio: aspect,
           duration,
           __audio: audioOn,
           generate_audio: audioOn,
         };
+        if (allImages.length > 1) params.images_list = allImages;
         if (caps.resolutions) params.resolution = resolution;
         if (endFrame) params.last_image = endFrame;
         res = await generateI2V(apiKey, params);
@@ -394,7 +400,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       const url = await uploadFile(apiKey, file);
       setSetup((s) => ({ ...s, mode: "video" }));
       if (direction === "sequel") {
-        setRefs([url]);
+        setStartFrame(url);
+        setRefs([]);
         setEndFrame(null);
         setPrompt(entry.prompt ? `${entry.prompt.split(".")[0]} — the scene continues` : "");
         toast.success("Último frame carregado como início. Descreva a continuação e Direct.", { id: toastId });
@@ -566,6 +573,30 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 </div>
               </div>
             ))}
+            {/* Start frame — where the video begins (video mode) */}
+            {caps.startFrame && startFrame && (
+              <div className={`${PROMPT_MEDIA_PREVIEW_CLASS} border-2 border-[#30D158]/70`}>
+                <img src={startFrame} alt="" className="w-full h-full object-cover" />
+                <button type="button" onClick={() => setStartFrame(null)}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 text-[8px] border border-white/5">×</button>
+                <span className="absolute bottom-0 inset-x-0 bg-[#30D158] text-black text-[7px] font-bold text-center leading-3 pointer-events-none">START</span>
+              </div>
+            )}
+            {caps.startFrame && !startFrame && (
+              <>
+                <input ref={startFrameInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files[0]; e.target.value = "";
+                    if (!f) return;
+                    try { setStartFrame(await uploadFile(apiKey, f)); } catch (err) { toast.error(err.message); }
+                  }} />
+                <button type="button" onClick={() => startFrameInputRef.current?.click()}
+                  className="group/ref h-9 px-3 flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.07] transition-colors duration-150 active:scale-[0.97]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />
+                  <span className="text-[12px] font-medium text-white/60 group-hover/ref:text-white/85">Start frame</span>
+                </button>
+              </>
+            )}
             {caps.endFrame && endFrame && (
               <div className={`${PROMPT_MEDIA_PREVIEW_CLASS} border-2 border-[#64D2FF]/70`}>
                 <img src={endFrame} alt="" className="w-full h-full object-cover" />
@@ -574,7 +605,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 <span className="absolute bottom-0 inset-x-0 bg-[#64D2FF] text-black text-[7px] font-bold text-center leading-3 pointer-events-none">END</span>
               </div>
             )}
-            {caps.endFrame && !endFrame && refs.length > 0 && (
+            {caps.endFrame && !endFrame && (
               <>
                 <input ref={endFrameInputRef} type="file" accept="image/*" className="hidden"
                   onChange={async (e) => {
@@ -589,7 +620,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 </button>
               </>
             )}
-            {refs.length < 9 && (
+            {caps.multiRef && refs.length < 9 && (
               <button type="button" onClick={() => refInputRef.current?.click()}
                 className="group/ref h-9 px-3 flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.07] cursor-pointer transition-colors duration-150 active:scale-[0.97]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#EF0328]" />
