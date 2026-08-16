@@ -45,6 +45,7 @@ import {
   promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
+import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 
@@ -539,6 +540,32 @@ export default function VideoStudio({
 
   // ── history ──
   const [localHistory, setLocalHistory] = useState([]);
+  const [pendingRenders, setPendingRenders] = useState([]);
+
+  // Server ledger sync (cross-browser history + live pending queue)
+  useEffect(() => {
+    let alive = true;
+    const sync = async () => {
+      const [ledger, pending] = await Promise.all([fetchLedger(), fetchPending()]);
+      if (!alive) return;
+      const videos = ledger.filter((e) => e.type === "video");
+      setLocalHistory((prev) => {
+        const known = new Set(prev.map((e) => e.url));
+        const fresh = videos.filter((e) => !known.has(e.url));
+        if (fresh.length === 0) return prev;
+        const merged = [...fresh, ...prev];
+        merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        return merged.slice(0, 100);
+      });
+      setPendingRenders(pending.filter((p) => p.type === "video"));
+    };
+    sync();
+    const interval = setInterval(async () => {
+      await reconcilePending();
+      sync();
+    }, 15000);
+    return () => { alive = false; clearInterval(interval); };
+  }, []);
   const [activeHistoryIdx, setActiveHistoryIdx] = useState(0);
 
   // ── dropdown ──
@@ -1444,6 +1471,20 @@ export default function VideoStudio({
     >
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
+        {pendingRenders.length > 0 && (
+          <div className="w-full pt-4 space-y-2 animate-fade-in-up">
+            {pendingRenders.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 bg-[#171719]/90 border border-white/[0.08] rounded-xl px-4 py-3">
+                <div className="w-4 h-4 rounded-full border-2 border-white/15 border-t-white/70 animate-spin shrink-0" />
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-[13px] text-white/85 font-medium truncate">{p.prompt || "Rendering…"}</span>
+                  <span className="text-[11px] text-white/40">{p.model || p.provider} · rendering for {Math.max(1, Math.round((Date.now() - (p.startedAt || Date.now())) / 60000))} min</span>
+                </div>
+                <span className="text-[10px] text-white/35 border border-white/[0.09] rounded-full px-2 py-0.5 shrink-0 capitalize">{p.provider}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {history.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full pt-4 animate-fade-in-up">
             {history.map((entry, idx) => {

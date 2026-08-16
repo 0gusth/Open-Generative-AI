@@ -1,3 +1,5 @@
+import { addPending, removePending } from "./ledger.js";
+
 // Multi-provider router — Muapi is the LAST resort, not the default.
 //
 // Policy (user-defined):
@@ -236,11 +238,15 @@ async function generateImageRunware(air, params) {
     if (accepted?.imageURL) {
         return { url: accepted.imageURL, id: accepted.taskUUID, provider: "runware" };
     }
+    const pendingId = accepted?.taskUUID || task.taskUUID;
+    addPending({ id: pendingId, provider: "runware", type: "image", model: params.__modelId || "", prompt: params.prompt || "" });
     try {
-        const result = await pollRunwareTask(accepted?.taskUUID || task.taskUUID, "image");
+        const result = await pollRunwareTask(pendingId, "image");
+        removePending(pendingId);
         return { url: result.imageURL, id: result.taskUUID, provider: "runware" };
     } catch (error) {
         // Task was accepted — regenerating elsewhere would double-charge.
+        // It stays in the pending queue; the reconciler will deliver it.
         error.noFallback = true;
         throw error;
     }
@@ -363,8 +369,10 @@ async function generateVideoRunware(air, params) {
     const submitted = await runwareCall([task]);
     const accepted = submitted.find((t) => t.taskType === "videoInference");
     const taskUUID = accepted?.taskUUID || task.taskUUID;
+    addPending({ id: taskUUID, provider: "runware", type: "video", model: params.__modelId || "", prompt: params.prompt || "" });
     try {
         const result = await pollRunwareTask(taskUUID, "video");
+        removePending(taskUUID);
         return { url: result.videoURL, id: taskUUID, provider: "runware" };
     } catch (error) {
         error.timedOutAfterAccept = true;
