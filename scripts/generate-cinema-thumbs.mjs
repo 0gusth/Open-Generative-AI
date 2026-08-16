@@ -12,6 +12,7 @@ import { GENRES, ERAS, TEMPOS } from "../packages/studio/src/cinema/filmSetup.js
 import { PALETTES } from "../packages/studio/src/cinema/palettes.js";
 import { LIGHTING } from "../packages/studio/src/cinema/lighting.js";
 import { MOVEMENTS } from "../packages/studio/src/cinema/movement.js";
+import { SHOT_SIZES, ANGLES } from "../packages/studio/src/cinema/shots.js";
 
 const KEY = process.env.RUNWARE_KEY;
 if (!KEY) { console.error("RUNWARE_KEY env var required"); process.exit(1); }
@@ -34,6 +35,8 @@ const BASES = {
   "palette": (p) => `cinematic film still of a woman in a diner by the window at dusk, cars outside, ${p}`,
   "lighting": (p) => `cinematic portrait of a man seated in a dark studio space, ${p}`,
   "movement": (p) => `cinematic film still frozen mid-camera-move with visible motion energy and blur trails, ${p}`,
+  "shot": (p) => `cinematic film still of a woman in a red coat inside a vast train station hall, ${p}`,
+  "angle": (p) => `cinematic film still of a man in a long coat on a rain-slick city plaza at night, ${p}`,
 };
 
 const JOBS = [];
@@ -52,6 +55,8 @@ add("tempo", TEMPOS, (t) => t);
 add("palette", PALETTES);
 add("lighting", LIGHTING);
 add("movement", MOVEMENTS);
+add("shot", SHOT_SIZES);
+add("angle", ANGLES);
 
 const only = process.argv.find((a) => a.startsWith("--only="))?.split("=")[1];
 const jobs = only ? JOBS.filter((j) => j.category === only) : JOBS;

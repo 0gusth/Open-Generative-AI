@@ -20,6 +20,7 @@ import { GENRES, ERAS, TEMPOS, genreById, eraById, tempoById } from "./filmSetup
 import { PALETTES, paletteById, palettesForGenre } from "./palettes.js";
 import { LIGHTING, lightingById, lightingForGenre } from "./lighting.js";
 import { MOVEMENTS, movementById, movementsForGenre } from "./movement.js";
+import { shotSizeById, angleById } from "./shots.js";
 
 const pickDeterministic = (list, seedString) => {
   // Stable "auto" pick: same setup → same choice (no Date/random — respects
@@ -86,6 +87,12 @@ export function compileCinematography(setup) {
 
   const aperture = setup.aperture && setup.aperture !== "auto" ? apertureById(setup.aperture) : null;
 
+  // Shot grammar: explicit size/angle replace the genre's framing block
+  // (rule 1 — a chosen frame outranks the genre default; mixing both would
+  // ship contradictory framing to the model).
+  const shotSize = setup.shotSize && setup.shotSize !== "auto" ? shotSizeById(setup.shotSize) : null;
+  const angle = setup.angle && setup.angle !== "auto" ? angleById(setup.angle) : null;
+
   // ── Treatment dimensions: explicit > genre block > silence ──
   const palette = setup.palette && setup.palette !== "auto" ? paletteById(setup.palette) : null;
   const lighting = setup.lighting && setup.lighting !== "auto" ? lightingById(setup.lighting) : null;
@@ -98,7 +105,12 @@ export function compileCinematography(setup) {
   const blocks = [];
   if (subject) blocks.push(subject);
 
-  if (genre) blocks.push(`${genre.name.toLowerCase()} visual language: ${genre.blocks.framing}`);
+  if (shotSize || angle) {
+    blocks.push([shotSize?.prompt, angle?.prompt].filter(Boolean).join(", "));
+    if (genre) blocks.push(`${genre.name.toLowerCase()} visual language`);
+  } else if (genre) {
+    blocks.push(`${genre.name.toLowerCase()} visual language: ${genre.blocks.framing}`);
+  }
 
   blocks.push(lighting ? lighting.prompt : genre ? genre.blocks.light : null);
 
@@ -127,6 +139,8 @@ export function compileCinematography(setup) {
       lens: lens?.name || null,
       aperture: aperture?.name || null,
       medium: medium?.name || null,
+      shotSize: shotSize?.name || null,
+      angle: angle?.name || null,
       palette: palette?.name || (genre ? `${genre.name} default` : null),
       lighting: lighting?.name || (genre ? `${genre.name} default` : null),
       movement: movement?.name || (mode === "video" && genre ? `${genre.name} default` : null),

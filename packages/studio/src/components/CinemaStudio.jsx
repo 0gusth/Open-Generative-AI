@@ -18,6 +18,7 @@ import { GENRES, ERAS, TEMPOS } from "../cinema/filmSetup.js";
 import { PALETTES } from "../cinema/palettes.js";
 import { LIGHTING } from "../cinema/lighting.js";
 import { MOVEMENTS } from "../cinema/movement.js";
+import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import {
   PromptComposer,
   PromptTextarea,
@@ -107,6 +108,7 @@ const DEFAULT_SETUP = {
   mode: "image",
   genre: "auto", era: "auto", tempo: "auto",
   camera: "auto", lens: "auto", aperture: "auto", medium: "auto",
+  shotSize: "auto", angle: "auto",
   palette: "auto", lighting: "auto", movement: "auto",
 };
 
@@ -447,7 +449,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const resolvedChips = useMemo(() => {
     const r = compiled.resolved;
     return [...new Set(
-      [r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.tempo : null]
+      [r.shotSize, r.angle, r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.tempo : null]
         .filter(Boolean),
     )];
   }, [compiled, mode]);
@@ -576,6 +578,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
               )}
               {openPanel === "camera" && (
                 <>
+                  <PickerSection label="Shot Size" category="shot" items={SHOT_SIZES} value={setup.shotSize} onSelect={set("shotSize")} />
+                  <PickerSection label="Angle" category="angle" items={ANGLES} value={setup.angle} onSelect={set("angle")} />
                   <PickerSection label="Camera" category="cine-camera" items={cameraItems} value={setup.camera} onSelect={set("camera")} />
                   <PickerSection label="Lens" category="cine-lens" items={lensItems} value={setup.lens} onSelect={set("lens")} />
                   <PickerSection label="Aperture" category="aperture" items={APERTURES} value={setup.aperture} onSelect={set("aperture")} />
@@ -688,7 +692,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
             </div>
             <div className="w-px h-5 bg-white/[0.08]" />
             {panelButton("film", "Film", ["genre", "era", "tempo"])}
-            {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium"])}
+            {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium", "shotSize", "angle"])}
             {panelButton("look", "Look", ["palette", "lighting"])}
             {mode === "video" && panelButton("movement", "Movement", ["movement"])}
             <div className="w-px h-5 bg-white/[0.08]" />
