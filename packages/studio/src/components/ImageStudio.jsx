@@ -66,15 +66,16 @@ function RefField({ label, color, onFiles, onClick }) {
         const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
         if (files.length) onFiles(files);
       }}
-      className="h-11 px-3.5 flex items-center gap-2 rounded-xl border border-dashed cursor-pointer select-none transition-[background-color,border-color,transform] duration-150 active:scale-[0.97]"
+      className="group/ref h-9 px-3 flex items-center gap-2 rounded-lg border cursor-pointer select-none transition-[background-color,border-color,transform,box-shadow] duration-150 active:scale-[0.97]"
       style={{
-        borderColor: over ? color : `${color}55`,
-        background: over ? `${color}26` : `${color}0d`,
-        color,
+        borderColor: over ? color : "rgba(255,255,255,0.07)",
+        background: over ? `${color}1f` : "rgba(255,255,255,0.04)",
+        boxShadow: over ? `0 0 0 3px ${color}26` : "none",
       }}
     >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-      <span className="text-[12px] font-medium whitespace-nowrap">{label}</span>
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+      <span className={`text-[12px] font-medium whitespace-nowrap transition-colors duration-150 ${over ? "text-white" : "text-white/60 group-hover/ref:text-white/85"}`}>{label}</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={over ? "text-white" : "text-white/30"}><path d="M12 5v14M5 12h14" /></svg>
     </div>
   );
 }

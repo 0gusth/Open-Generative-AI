@@ -555,6 +555,21 @@ export default function StandaloneShell() {
     setDroppedFiles(null);
   }, []);
 
+  // The drag overlay must NEVER stick: capture-phase listeners clear it on
+  // any drop (even ones a child handled with stopPropagation), drag end, or Esc.
+  useEffect(() => {
+    const clear = () => setIsDragging(false);
+    const onKey = (e) => { if (e.key === 'Escape') clear(); };
+    window.addEventListener('drop', clear, true);
+    window.addEventListener('dragend', clear, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('drop', clear, true);
+      window.removeEventListener('dragend', clear, true);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, []);
+
   // Paste-to-attach: Cmd/Ctrl+V with an image (or video) on the clipboard
   // feeds the same pipeline as drag-and-drop. Plain text pastes untouched.
   useEffect(() => {
@@ -596,19 +611,12 @@ export default function StandaloneShell() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag Overlay */}
+      {/* Drag Overlay — light dim so drop targets stay visible */}
       {isDragging && (
-        <div className="fixed inset-0 z-[100] bg-white/10 backdrop-blur-md border-4 border-dashed border-white/15 flex items-center justify-center pointer-events-none transition-all duration-300">
-          <div className="bg-[#171719] p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 scale-110 animate-pulse">
-            <div className="w-20 h-20 bg-white/15 rounded-2xl flex items-center justify-center">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-              </svg>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-white">Drop your media here</span>
-              <span className="text-sm text-white/40">Images, videos, or audio files</span>
-            </div>
+        <div className="fixed inset-0 z-[100] bg-black/35 flex items-start justify-center pt-16 pointer-events-none transition-opacity duration-200">
+          <div className="bg-[#1d1d1f]/95 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/[0.12] shadow-2xl flex items-center gap-2.5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/70"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            <span className="text-[13px] font-medium text-white/85">Solte aqui — ou mire num campo de referência</span>
           </div>
         </div>
       )}
@@ -1097,17 +1105,25 @@ export default function StandaloneShell() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-white/40 mb-1.5">
-                  Pasta no computador <span className="text-white/25 font-normal">(vazio = ~/Documents/OpenGenerativeAI/&lt;nome&gt;)</span>
-                </label>
-                <input
-                  type="text"
-                  value={newProjectPath}
-                  onChange={(e) => setNewProjectPath(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && createProject()}
-                  placeholder={'~/Documents/OpenGenerativeAI/' + (newProjectName.trim() || 'MeuProjeto')}
-                  className="w-full bg-white/[0.06] border border-white/[0.09] rounded-lg px-4 py-3 text-sm font-mono text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[#EF0328]/40 focus:border-[#EF0328]/40 transition-[border-color,box-shadow] duration-150"
-                />
+                <label className="block text-xs font-medium text-white/40 mb-1.5">Pasta no computador</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const r = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pick-folder' }) });
+                        const data = await r.json();
+                        if (data.ok && data.path) setNewProjectPath(data.path);
+                      } catch { /* picker unavailable */ }
+                    }}
+                    className="pressable shrink-0 h-11 px-4 rounded-lg bg-white/[0.08] border border-white/[0.1] text-[13px] font-medium text-white/85 hover:bg-white/[0.12]"
+                  >
+                    Escolher pasta…
+                  </button>
+                  <div className="flex-1 min-w-0 h-11 px-3 flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] text-[12px] font-mono text-white/50 truncate">
+                    {newProjectPath || `~/Documents/OpenGenerativeAI/${newProjectName.trim() || '…'}`}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex gap-3">

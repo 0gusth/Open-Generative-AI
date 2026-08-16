@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // Project registry: each project owns a folder on disk where every creation
 // is saved. Registry lives in .data/projects.json; the active project id is
@@ -56,6 +60,24 @@ export async function POST(request) {
         registry.activeId = project.id;
         await writeRegistry(registry);
         return NextResponse.json({ ok: true, project, activeId: registry.activeId });
+    }
+
+    if (body.action === 'pick-folder') {
+        // The Next server runs on the user's own machine, so it can open the
+        // NATIVE macOS folder picker and return the chosen absolute path.
+        if (process.platform !== 'darwin') {
+            return NextResponse.json({ error: 'Native picker only on macOS' }, { status: 501 });
+        }
+        try {
+            const { stdout } = await execFileAsync('osascript', [
+                '-e',
+                'POSIX path of (choose folder with prompt "Escolha a pasta do projeto")',
+            ], { timeout: 120000 });
+            return NextResponse.json({ ok: true, path: stdout.trim().replace(/\/$/, '') });
+        } catch (error) {
+            // User hit Cancel (osascript exits non-zero) — not an error state
+            return NextResponse.json({ ok: false, canceled: true });
+        }
     }
 
     if (body.action === 'set-active') {
