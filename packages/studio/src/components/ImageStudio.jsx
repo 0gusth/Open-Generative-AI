@@ -1498,7 +1498,7 @@ export default function ImageStudio({
     let sentPrompt = finalPrompt;
     if (enhanceOn && finalPrompt) {
       setGenerating(true); // placeholder appears while the prompt is enriched
-      finalPrompt = await enhancePrompt(finalPrompt, "image");
+      finalPrompt = await enhancePrompt(finalPrompt, "image", selectedModelId);
     }
     setGenerating(true);
     setGenerateError(null);

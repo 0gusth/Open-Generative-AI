@@ -353,7 +353,12 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try {
       let finalPrompt = compiled.prompt;
       if (enhanceOn) {
-        finalPrompt = await cinemaFusePrompt(compiled.prompt, mode, !!(startFrame || refs.length));
+        const cont = continuationRef.current;
+        const isContinuation = !!cont && (startFrame === cont.url || endFrame === cont.url);
+        finalPrompt = await cinemaFusePrompt(compiled.prompt, mode, !!(startFrame || refs.length), {
+          modelId,
+          continuation: isContinuation,
+        });
       }
       let res;
       if (mode === "image") {
@@ -406,6 +411,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // Sequel: last frame becomes the START reference of the next clip.
   // Prequel: first frame becomes the END frame the new clip must land on.
   const [extracting, setExtracting] = useState(null); // entry id while working
+  // Remembers which uploaded frame came from a sequel/prequel so the fusion
+  // applies continuation discipline (extend, never loop) only while that
+  // exact frame is still in its slot.
+  const continuationRef = useRef(null); // { url, direction } | null
   const startContinuation = async (entry, direction /* "sequel" | "prequel" */) => {
     if (extracting) return;
     setExtracting(entry.id);
@@ -413,6 +422,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try {
       const file = await extractVideoFrame(entry.url, direction === "sequel" ? "last" : "first");
       const url = await uploadFile(apiKey, file);
+      continuationRef.current = { url, direction };
       setSetup((s) => ({ ...s, mode: "video" }));
       if (direction === "sequel") {
         setStartFrame(url);

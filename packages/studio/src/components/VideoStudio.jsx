@@ -1260,7 +1260,7 @@ export default function VideoStudio({
     let trimmedPrompt = prompt.trim();
     if (enhanceOn && trimmedPrompt) {
       setGenerating(true); // placeholder appears while the prompt is enriched
-      trimmedPrompt = await enhancePrompt(trimmedPrompt, "video");
+      trimmedPrompt = await enhancePrompt(trimmedPrompt, "video", currentModel?.id);
     }
 
     if (v2vMode) {

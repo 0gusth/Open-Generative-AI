@@ -1,5 +1,6 @@
 import { addPending, removePending } from "./ledger.js";
 import { fusionInstruction, CRAFT_CORE } from "./cinema/craft.js";
+import { dialectFor } from "./cinema/modelDialects.js";
 
 // Multi-provider router — Muapi is the LAST resort, not the default.
 //
@@ -524,11 +525,12 @@ const ENHANCE_MODEL = "deepseek:v4@flash";
 
 // Rewrite a short prompt into a rich generation prompt. Fails soft: any
 // error returns the original prompt so generation never blocks on enhance.
-export async function enhancePrompt(prompt, kind = "image") {
+export async function enhancePrompt(prompt, kind = "image", modelId = "") {
     if (!prompt || !getProviderKey("runware")) return prompt;
     const motion = kind === "video"
         ? " Describe motion explicitly: camera movement, subject action, pacing."
         : "";
+    const dialect = dialectFor(modelId, kind);
     try {
         const results = await runwareCall([
             {
@@ -540,7 +542,7 @@ export async function enhancePrompt(prompt, kind = "image") {
                         role: "user",
                         content:
                             "You are a prompt engineer for AI " + kind + " generation. Rewrite the prompt below into a vivid, specific generation prompt in English: subject details, lighting, composition, lens/camera language, mood, materials." + motion +
-                            " Preserve any reference tokens like @img1, @image2 or 'image 1' EXACTLY as written.\n\n" + CRAFT_CORE + "\n\nOutput ONLY the rewritten prompt — no quotes, no commentary. At most 110 words.\n\nPROMPT TO REWRITE:\n" + prompt,
+                            " Preserve any reference tokens like @img1, @image2 or 'image 1' EXACTLY as written.\n\n" + CRAFT_CORE + (dialect ? "\n\n" + dialect : "") + "\n\nOutput ONLY the rewritten prompt — no quotes, no commentary. At most 110 words.\n\nPROMPT TO REWRITE:\n" + prompt,
                     },
                 ],
             },
@@ -556,8 +558,12 @@ export async function enhancePrompt(prompt, kind = "image") {
 // Director's fusion: merge the user's scene with the compiled cinematography
 // treatment into ONE seamless generation prompt. Equipment names, lighting,
 // palette and movement directives must survive verbatim. Fails soft.
-export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartFrame = false) {
+export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartFrame = false, opts = {}) {
     if (!compiledPrompt || !getProviderKey("runware")) return compiledPrompt;
+    const instruction = fusionInstruction(mode, hasStartFrame, {
+        continuation: !!opts.continuation,
+        dialect: dialectFor(opts.modelId, mode, mode === "video" && hasStartFrame),
+    });
     try {
         const results = await runwareCall([
             {
@@ -567,7 +573,7 @@ export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartF
                 messages: [
                     {
                         role: "user",
-                        content: fusionInstruction(mode, hasStartFrame) + "\n\nMATERIAL TO FUSE:\n" + compiledPrompt,
+                        content: instruction + "\n\nMATERIAL TO FUSE:\n" + compiledPrompt,
                     },
                 ],
             },
