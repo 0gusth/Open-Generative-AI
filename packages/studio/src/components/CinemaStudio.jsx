@@ -1,1225 +1,413 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { generateImage, uploadFile } from "../muapi.js";
-import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
-import MobileGenerationActions, {
-  CopyContentIcon,
-} from "./MobileGenerationActions.jsx";
+// Cinema Studio — the flagship. Image AND video generation directed through
+// the cinematography system: Film Setup (genre/era/tempo), Camera Setup
+// (body/lens/aperture/medium), Look (palette/lighting) and Movement, all
+// compiled by cinema/compiler.js with genre-fills-Auto semantics. Every
+// catalog option shows its self-generated thumbnail.
+
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import toast from "react-hot-toast";
+import { generateImage, generateVideo } from "../muapi.js";
+import { compileCinematography } from "../cinema/compiler.js";
+import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, APERTURES, mediaForCamera } from "../cinema/gear.js";
+import { GENRES, ERAS, TEMPOS } from "../cinema/filmSetup.js";
+import { PALETTES } from "../cinema/palettes.js";
+import { LIGHTING } from "../cinema/lighting.js";
+import { MOVEMENTS } from "../cinema/movement.js";
 import {
-  PromptAspectRatioIcon,
-  PromptAction,
   PromptComposer,
-  PromptControls,
-  PromptFooter,
-  PromptMenuItem,
-  PromptMenuList,
-  PromptPopover,
-  PromptPopoverHeader,
-  PromptQualityIcon,
   PromptTextarea,
+  PromptFooter,
+  PromptControls,
+  PromptAction,
   promptControlClassName,
-  promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
+import Lightbox from "./Lightbox.jsx";
+import { formatErrorMessage } from "../utils/formatError.js";
 
-// ─── Constants (inlined from promptUtils) ───────────────────────────────────
+const SETUP_KEY = "cinema_setup_v2";
+const HISTORY_KEY = "cinema_history_v2";
 
-const CAMERA_MAP = {
-  "Modular 8K Digital": "modular 8K digital cinema camera",
-  "Full-Frame Cine Digital": "full-frame digital cinema camera",
-  "Grand Format 70mm Film": "grand format 70mm film camera",
-  "Studio Digital S35": "Super 35 studio digital camera",
-  "Classic 16mm Film": "classic 16mm film camera",
-  "Premium Large Format Digital": "premium large-format digital cinema camera",
+const MODELS = {
+  image: [
+    { id: "nano-banana-2", name: "Nano Banana 2" },
+    { id: "seedream-5.0", name: "Seedream 5.0" },
+    { id: "flux-dev", name: "Flux Dev" },
+  ],
+  video: [
+    { id: "kling-v3.0-standard-text-to-video", name: "Kling 3.0" },
+    { id: "seedance-v2.0-t2v", name: "Seedance 2.0" },
+    { id: "kling-v2.5-turbo-pro-t2v", name: "Kling 2.5 Turbo" },
+  ],
 };
 
-const LENS_MAP = {
-  "Creative Tilt Lens": "creative tilt lens effect",
-  "Compact Anamorphic": "compact anamorphic lens",
-  "Extreme Macro": "extreme macro lens",
-  "70s Cinema Prime": "1970s cinema prime lens",
-  "Classic Anamorphic": "classic anamorphic lens",
-  "Premium Modern Prime": "premium modern prime lens",
-  "Warm Cinema Prime": "warm-toned cinema prime lens",
-  "Swirl Bokeh Portrait": "swirl bokeh portrait lens",
-  "Vintage Prime": "vintage prime lens",
-  "Halation Diffusion": "halation diffusion filter",
-  "Clinical Sharp Prime": "ultra-sharp clinical prime lens",
+const ASPECTS = ["16:9", "9:16", "1:1", "21:9"];
+const DURATIONS = [5, 10];
+
+const DEFAULT_SETUP = {
+  mode: "image",
+  genre: "auto", era: "auto", tempo: "auto",
+  camera: "auto", lens: "auto", aperture: "auto", medium: "auto",
+  palette: "auto", lighting: "auto", movement: "auto",
 };
 
-async function fetchImageAsPngBlob(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Image request failed with status ${response.status}.`);
-  }
+const thumb = (category, id) => `/cinema-thumbs/${category}-${id}.webp`;
 
-  const sourceBlob = await response.blob();
-  if (sourceBlob.type === "image/png") return sourceBlob;
+// ── Option card ─────────────────────────────────────────────────────────────
 
-  const objectUrl = URL.createObjectURL(sourceBlob);
-  try {
-    const image = await new Promise((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("Could not decode the image."));
-      element.src = objectUrl;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("Could not create an image clipboard canvas.");
-    }
-
-    context.drawImage(image, 0, 0);
-    return await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (blob) =>
-          blob
-            ? resolve(blob)
-            : reject(new Error("Could not convert the image to PNG.")),
-        "image/png",
-      );
-    });
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-const FOCAL_PERSPECTIVE = {
-  8: "ultra-wide perspective",
-  14: "wide-angle perspective",
-  24: "wide-angle dynamic perspective",
-  35: "natural cinematic perspective",
-  50: "standard portrait perspective",
-  85: "classic portrait perspective",
-};
-
-const APERTURE_EFFECT = {
-  "f/1.4": "shallow depth of field, creamy bokeh",
-  "f/4": "balanced depth of field",
-  "f/11": "deep focus clarity, sharp foreground to background",
-};
-
-const ASSET_URLS = {
-  "Modular 8K Digital": "/assets/cinema/modular_8k_digital.webp",
-  "Full-Frame Cine Digital": "/assets/cinema/full_frame_cine_digital.webp",
-  "Grand Format 70mm Film": "/assets/cinema/grand_format_70mm_film.webp",
-  "Studio Digital S35": "/assets/cinema/studio_digital_s35.webp",
-  "Classic 16mm Film": "/assets/cinema/classic_16mm_film.webp",
-  "Premium Large Format Digital":
-    "/assets/cinema/premium_large_format_digital.webp",
-  "Creative Tilt Lens": "/assets/cinema/creative_tilt_lens.webp",
-  "Compact Anamorphic": "/assets/cinema/compact_anamorphic.webp",
-  "Extreme Macro": "/assets/cinema/extreme_macro.webp",
-  "70s Cinema Prime": "/assets/cinema/70s_cinema_prime.webp",
-  "Classic Anamorphic": "/assets/cinema/classic_anamorphic.webp",
-  "Premium Modern Prime": "/assets/cinema/premium_modern_prime.webp",
-  "Warm Cinema Prime": "/assets/cinema/warm_cinema_prime.webp",
-  "Swirl Bokeh Portrait": "/assets/cinema/swirl_bokeh_portrait.webp",
-  "Vintage Prime": "/assets/cinema/vintage_prime.webp",
-  "Halation Diffusion": "/assets/cinema/halation_diffusion.webp",
-  "Clinical Sharp Prime": "/assets/cinema/clinical_sharp_prime.webp",
-  "f/1.4": "/assets/cinema/f_1_4.webp",
-  "f/4": "/assets/cinema/f_4.webp",
-  "f/11": "/assets/cinema/f_11.webp",
-};
-
-const ASPECT_RATIOS = ["16:9", "21:9", "9:16", "1:1", "4:5"];
-const RESOLUTIONS = ["1K", "2K", "4K"];
-const CAMERAS = Object.keys(CAMERA_MAP);
-const LENSES = Object.keys(LENS_MAP);
-const FOCAL_LENGTHS = Object.keys(FOCAL_PERSPECTIVE).map((k) => parseInt(k));
-const APERTURES = Object.keys(APERTURE_EFFECT);
-
-function buildNanoBananaPrompt(
-  basePrompt,
-  camera,
-  lens,
-  focalLength,
-  aperture,
-) {
-  const cameraDesc = CAMERA_MAP[camera] || camera;
-  const lensDesc = LENS_MAP[lens] || lens;
-  const perspective = FOCAL_PERSPECTIVE[focalLength] || "";
-  const depthEffect = APERTURE_EFFECT[aperture] || "";
-  const qualityTags = [
-    "professional photography",
-    "ultra-detailed",
-    "8K resolution",
-  ];
-  const parts = [
-    basePrompt,
-    `shot on a ${cameraDesc}`,
-    `using a ${lensDesc} at ${focalLength}mm ${perspective ? `(${perspective})` : ""}`,
-    `aperture ${aperture}`,
-    depthEffect,
-    "cinematic lighting",
-    "natural color science",
-    "high dynamic range",
-    qualityTags.join(", "),
-  ];
-  return parts.filter((p) => p && p.trim() !== "").join(", ");
-}
-
-// ─── Dropdown ────────────────────────────────────────────────────────────────
-
-function Dropdown({ title, items, selected, onSelect, triggerRef, onClose }) {
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(e.target)
-      ) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose, triggerRef]);
-
+function OptionCard({ label, image, selected, onClick, auto }) {
   return (
-    <PromptPopover
-      ref={menuRef}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group/opt shrink-0 w-[96px] flex flex-col gap-1.5 rounded-xl p-1 text-left transition-[transform,box-shadow] duration-150 active:scale-[0.97] ${
+        selected ? "ring-2 ring-[#EF0328] bg-white/[0.04]" : "hover:bg-white/[0.05]"
+      }`}
     >
-      <PromptPopoverHeader>{title}</PromptPopoverHeader>
-      <PromptMenuList>
-      {items.map((item) => (
-        <PromptMenuItem
-          key={item}
-          selected={item === selected}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(item);
-            onClose();
-          }}
-        >
-          {item}
-        </PromptMenuItem>
-      ))}
-      </PromptMenuList>
-    </PromptPopover>
+      {auto ? (
+        <div className="w-full h-[64px] rounded-lg border border-dashed border-white/20 bg-white/[0.03] flex items-center justify-center">
+          <span className="text-[11px] font-medium text-white/50">Auto</span>
+        </div>
+      ) : (
+        <img src={image} alt="" loading="lazy" className="w-full h-[64px] rounded-lg object-cover border border-white/[0.06]" />
+      )}
+      <span className={`text-[10px] leading-tight px-0.5 line-clamp-2 ${selected ? "text-white" : "text-white/60 group-hover/opt:text-white/85"}`}>
+        {label}
+      </span>
+    </button>
   );
 }
 
-// Camera configuration controls
-
-function ScrollColumn({ title, items, columnKey, value, onChange }) {
-  const listRef = useRef(null);
-  const isDragging = useRef(false);
-  const startY = useRef(0);
-  const scrollTopStart = useRef(0);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return undefined;
-
-    const timer = setTimeout(() => {
-      const target = Array.from(list.children).find(
-        (child) => child.dataset.value === String(value),
-      );
-      if (target) target.scrollIntoView({ block: "center" });
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleScroll = useCallback(() => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const centerY = list.scrollTop + list.clientHeight / 2;
-    const children = Array.from(list.children).filter(
-      (child) => child.dataset.value,
-    );
-    let closest = null;
-    let minimumDistance = Infinity;
-
-    children.forEach((child) => {
-      const childCenter = child.offsetTop + child.offsetHeight / 2;
-      const distance = Math.abs(centerY - childCenter);
-      if (distance < minimumDistance) {
-        minimumDistance = distance;
-        closest = child;
-      }
-    });
-
-    children.forEach((child) => {
-      const selected = child === closest;
-      child.dataset.selected = String(selected);
-      child.setAttribute("aria-selected", String(selected));
-    });
-
-    if (closest) {
-      const nextValue =
-        columnKey === "focal"
-          ? parseInt(closest.dataset.value, 10)
-          : closest.dataset.value;
-      if (String(nextValue) !== String(value)) onChange(nextValue);
-    }
-  }, [columnKey, onChange, value]);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return undefined;
-
-    list.addEventListener("scroll", handleScroll);
-    const timer = setTimeout(handleScroll, 150);
-
-    return () => {
-      list.removeEventListener("scroll", handleScroll);
-      clearTimeout(timer);
-    };
-  }, [handleScroll]);
-
-  const handleMouseDown = (event) => {
-    const list = listRef.current;
-    if (!list) return;
-
-    isDragging.current = true;
-    list.classList.add("cursor-grabbing");
-    list.classList.remove("snap-y");
-    startY.current = event.pageY - list.offsetTop;
-    scrollTopStart.current = list.scrollTop;
-    event.preventDefault();
-  };
-
-  const stopDragging = () => {
-    const list = listRef.current;
-    isDragging.current = false;
-    if (!list) return;
-    list.classList.remove("cursor-grabbing");
-    list.classList.add("snap-y");
-  };
-
-  const handleMouseMove = (event) => {
-    const list = listRef.current;
-    if (!isDragging.current || !list) return;
-
-    event.preventDefault();
-    const y = event.pageY - list.offsetTop;
-    list.scrollTop = scrollTopStart.current - (y - startY.current) * 1.5;
-  };
-
-  const handleItemClick = (item) => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const target = Array.from(list.children).find(
-      (child) => child.dataset.value === String(item),
-    );
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
-
+function PickerSection({ label, category, items, value, onSelect }) {
   return (
-    <section className="flex w-[170px] shrink-0 snap-center flex-col md:w-[190px]">
-      <div className="mb-3 flex items-center justify-between px-1">
-        <h3 className="text-xs font-semibold text-white/75">{title}</h3>
-        <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-b from-white/15 to-white/10 shadow-[0_0_6px_rgba(0, 0, 0,0.5)]" />
-      </div>
-
-      <div className="relative h-[320px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0f0f10] shadow-inner">
-        <div className="pointer-events-none absolute inset-x-2 top-1/2 z-0 h-[82px] -translate-y-1/2 rounded-xl border border-white/15 bg-gradient-to-r from-white/10 to-white/5 shadow-[0_0_15px_rgba(0, 0, 0,0.1)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-gradient-to-b from-[#030303] via-[#030303]/85 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#030303] via-[#030303]/85 to-transparent" />
-
-        <div
-          ref={listRef}
-          role="listbox"
-          aria-label={title}
-          className="relative z-10 h-full cursor-grab snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          onMouseDown={handleMouseDown}
-          onMouseLeave={stopDragging}
-          onMouseUp={stopDragging}
-          onMouseMove={handleMouseMove}
-        >
-          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
-          {items.map((item) => {
-            const imageUrl = ASSET_URLS[item];
-            const selected = String(item) === String(value);
-
-            return (
-              <button
-                key={item}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                data-value={item}
-                data-selected={selected}
-                onClick={() => handleItemClick(item)}
-                className="group flex h-[82px] w-full snap-center select-none items-center justify-center gap-2.5 px-4 text-left opacity-30 transition-all duration-200 data-[selected=true]:opacity-100"
-              >
-                <span
-                  className={`flex shrink-0 items-center justify-center font-semibold transition-colors ${
-                    imageUrl
-                      ? "h-10 w-10"
-                      : "text-base text-white/55 group-data-[selected=true]:text-white/80"
-                  }`}
-                >
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt=""
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <>
-                      {item}
-                      {columnKey === "focal" ? "mm" : ""}
-                    </>
-                  )}
-                </span>
-                {columnKey !== "focal" && (
-                  <span className="line-clamp-2 min-w-0 text-[10px] font-medium leading-snug text-white/60 transition-colors group-data-[selected=true]:text-white">
-                    {item}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          <div aria-hidden="true" style={{ height: "calc(50% - 41px)" }} />
-        </div>
-      </div>
-
-    </section>
-  );
-}
-
-function CameraControlsOverlay({
-  isOpen,
-  onClose,
-  settings,
-  onSettingsChange,
-}) {
-  const backdropRef = useRef(null);
-
-  const handleBackdropClick = (e) => {
-    if (e.target === backdropRef.current) onClose();
-  };
-
-  const updateSetting = (key) => (val) => {
-    onSettingsChange((prev) => ({ ...prev, [key]: val }));
-  };
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      ref={backdropRef}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-xl animate-fade-in"
-      onClick={handleBackdropClick}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="camera-config-title"
-        aria-describedby="camera-config-description"
-        className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[#171719]/95 shadow-[0_24px_100px_rgba(0,0,0,0.75)] backdrop-blur-2xl animate-scale-up"
-      >
-        <div className="flex items-start justify-between border-b border-white/[0.05] px-5 py-5 md:px-7 md:py-6">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/80">
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M14.5 4H9.5L8 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3Z" />
-                <circle cx="12" cy="12.5" r="3.5" />
-              </svg>
-              Cinema Studio
-            </div>
-            <h2
-              id="camera-config-title"
-              className="text-xl font-semibold tracking-tight text-white md:text-2xl"
-            >
-              Camera settings
-            </h2>
-            <p
-              id="camera-config-description"
-              className="mt-1.5 max-w-2xl text-xs leading-relaxed text-white/45 md:text-sm"
-            >
-              Build a consistent cinematic look by choosing the camera, lens,
-              focal length, and depth of field.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close camera settings"
-            title="Close"
-            className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.03] text-white/40 transition-all hover:border-white/15 hover:bg-white/[0.07] hover:text-white"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="overflow-x-auto px-5 py-6 no-scrollbar md:px-7 md:py-7">
-          <div className="mx-auto flex w-max min-w-full justify-start gap-3 sm:justify-center md:gap-5">
-            <ScrollColumn
-              title="Camera"
-              items={CAMERAS}
-              columnKey="camera"
-              value={settings.camera}
-              onChange={updateSetting("camera")}
-            />
-            <ScrollColumn
-              title="Lens"
-              items={LENSES}
-              columnKey="lens"
-              value={settings.lens}
-              onChange={updateSetting("lens")}
-            />
-            <ScrollColumn
-              title="Focal length"
-              items={FOCAL_LENGTHS}
-              columnKey="focal"
-              value={settings.focal}
-              onChange={updateSetting("focal")}
-            />
-            <ScrollColumn
-              title="Aperture"
-              items={APERTURES}
-              columnKey="aperture"
-              value={settings.aperture}
-              onChange={updateSetting("aperture")}
-            />
-          </div>
-        </div>
+    <div className="mb-4 last:mb-0">
+      <div className="text-[11px] font-semibold text-white/35 uppercase tracking-wider mb-2 px-1">{label}</div>
+      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 -mx-1 px-1">
+        <OptionCard auto label="Auto" selected={value === "auto"} onClick={() => onSelect("auto")} />
+        {items.map((item) => (
+          <OptionCard
+            key={item.id}
+            label={item.name}
+            image={thumb(item.thumbCat || category, item.id)}
+            selected={value === item.id}
+            onClick={() => onSelect(item.id)}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ── Main component ──────────────────────────────────────────────────────────
 
-export default function CinemaStudio({
-  apiKey,
-  onGenerationStart,
-  onGenerationEnd,
-  onGenerationComplete,
-  onGenerationError,
-  historyItems,
-}) {
-  const LEGACY_PERSIST_KEY = "hg_cinema_studio_persistent";
-  const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
-  useEffect(() => {
-    migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
-  }, [PERSIST_KEY]);
-
-  // ── Settings state ──
-  const [settings, setSettings] = useState({
-    prompt: "",
-    aspect_ratio: "16:9",
-    camera: CAMERAS[0],
-    lens: LENSES[0],
-    focal: 35,
-    aperture: "f/1.4",
+export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEnd, onGenerationComplete, onGenerationError }) {
+  const [setup, setSetup] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_SETUP;
+    try { return { ...DEFAULT_SETUP, ...JSON.parse(localStorage.getItem(SETUP_KEY) || "{}") }; }
+    catch { return DEFAULT_SETUP; }
   });
-  const [resolution, setResolution] = useState("2K");
+  const [prompt, setPrompt] = useState("");
+  const [modelId, setModelId] = useState(MODELS.image[0].id);
+  const [aspect, setAspect] = useState("16:9");
+  const [duration, setDuration] = useState(5);
+  const [openPanel, setOpenPanel] = useState(null); // "film" | "camera" | "look" | "movement"
+  const [generating, setGenerating] = useState(false);
+  const [history, setHistory] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+  });
+  const [lightboxIdx, setLightboxIdx] = useState(null);
+  const panelRef = useRef(null);
 
-  // ── UI state ──
-  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [canvasUrl, setCanvasUrl] = useState(null); // null = prompt view
-  const [fullscreenUrl, setFullscreenUrl] = useState(null);
-  const [uploadedImage, setUploadedImage] = useState(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imageUploadProgress, setImageUploadProgress] = useState(0);
-  const imageInputRef = useRef(null);
-  const [activeHistoryIndex, setactiveHistoryIndex] = useState(null);
-  const [copiedPromptIndex, setCopiedPromptIndex] = useState(null);
-  const [copiedImageIndex, setCopiedImageIndex] = useState(null);
-
-  // ── Internal history state (used when historyItems prop is not provided) ──
-  const [internalHistory, setInternalHistory] = useState([]);
-
-  // ── Dropdown state ──
-  const [openDropdown, setOpenDropdown] = useState(null); // 'ar' | 'res' | null
-  const arBtnRef = useRef(null);
-  const resBtnRef = useRef(null);
-
-  // ── Textarea auto-grow ──
-  const textareaRef = useRef(null);
-  const resultImgRef = useRef(null);
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingImage(true);
-    setImageUploadProgress(0);
-
-    try {
-      const url = await uploadFile(apiKey, file, (progress) => {
-        setImageUploadProgress(progress);
-      });
-      if (url) setUploadedImage(url);
-    } catch (err) {
-      console.error("Image upload failed:", err);
-    } finally {
-      setIsUploadingImage(false);
-      setImageUploadProgress(0);
-      if (imageInputRef.current) imageInputRef.current.value = "";
-    }
-  };
-
-  const removeImage = () => {
-    setUploadedImage(null);
-  };
-
-  // ── Persistence: Load ────────────────────────────────────────────────────
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(PERSIST_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        if (data.settings) setSettings(data.settings);
-        if (data.resolution) setResolution(data.resolution);
-        if (data.internalHistory) setInternalHistory(data.internalHistory);
-        if (data.uploadedImage) setUploadedImage(data.uploadedImage);
-      }
-    } catch (err) {
-      console.warn("Failed to load CinemaStudio persistence:", err);
-    }
-  }, []);
-
-  // ── Adjust height on load ────────────────────────────────────────────────
-  // ── Persistence: Save ────────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const state = {
-          settings,
-          resolution,
-          internalHistory,
-          uploadedImage,
-        };
-        localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
-      } catch (err) {
-        console.warn("Failed to save CinemaStudio persistence:", err);
-      }
-    }, 500); // 500ms debounce
-    return () => clearTimeout(timer);
-  }, [settings, resolution, internalHistory, uploadedImage]);
-
-  // Derive effective history (prop wins over internal)
-  const history = historyItems != null ? historyItems : internalHistory;
+  const mode = setup.mode;
 
   useEffect(() => {
-    setCanvasUrl(history[0]?.url || null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyItems]);
+    try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch {}
+  }, [setup]);
+  useEffect(() => {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 60))); } catch {}
+  }, [history]);
 
-  const formatSummaryValue = () =>
-    `${settings.lens}, ${settings.focal}mm, ${settings.aperture}`;
+  // model list follows mode
+  useEffect(() => {
+    if (!MODELS[mode].some((m) => m.id === modelId)) setModelId(MODELS[mode][0].id);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Textarea auto-height ──
-  // ── Generate ──
-  const handleGenerate = useCallback(async () => {
-    const basePrompt = settings.prompt.trim();
-    if (!basePrompt || isGenerating) return;
+  // close panel on outside click / Esc
+  useEffect(() => {
+    if (!openPanel) return;
+    const onDown = (e) => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpenPanel(null); };
+    const onKey = (e) => { if (e.key === "Escape") setOpenPanel(null); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [openPanel]);
 
+  const set = (key) => (value) => setSetup((s) => ({ ...s, [key]: value }));
+
+  // camera pool per mode, with thumb categories attached
+  const cameraItems = useMemo(() => {
+    const cine = CINEMA_CAMERAS.map((c) => ({ ...c, thumbCat: "cine-camera" }));
+    if (mode === "video") return cine;
+    return [...cine, ...PHOTO_CAMERAS.map((c) => ({ ...c, thumbCat: "photo-camera" }))];
+  }, [mode]);
+
+  const lensItems = useMemo(() => {
+    const cine = CINE_LENSES.map((l) => ({ ...l, thumbCat: "cine-lens" }));
+    if (mode === "video") return cine;
+    return [...cine, ...PHOTO_LENSES.map((l) => ({ ...l, thumbCat: "photo-lens" }))];
+  }, [mode]);
+
+  const mediumItems = useMemo(() => {
+    const cam = cameraItems.find((c) => c.id === setup.camera) || null;
+    return mediaForCamera(cam, mode).map((s) => ({ ...s, thumbCat: "stock" }));
+  }, [cameraItems, setup.camera, mode]);
+
+  const compiled = useMemo(
+    () => compileCinematography({ ...setup, prompt }),
+    [setup, prompt],
+  );
+
+  // count of non-auto choices per panel (for button badges)
+  const activeCount = (keys) => keys.filter((k) => setup[k] && setup[k] !== "auto").length;
+
+  const handleGenerate = async () => {
+    if (generating) return;
+    if (!prompt.trim()) { toast.error("Describe your scene first."); return; }
     onGenerationStart?.();
-    setIsGenerating(true);
-
-    const finalPrompt = buildNanoBananaPrompt(
-      basePrompt,
-      settings.camera,
-      settings.lens,
-      settings.focal,
-      settings.aperture,
-    );
-
+    setGenerating(true);
     try {
-      const res = await generateImage(apiKey, {
-        model: uploadedImage ? "nano-banana-pro-edit" : "nano-banana-pro",
-        prompt: finalPrompt,
-        aspect_ratio: settings.aspect_ratio,
-        resolution: resolution.toLowerCase(),
-        negative_prompt: "blurry, low quality, distortion, bad composition",
-        images_list: uploadedImage ? [uploadedImage] : [],
-      });
-
-      if (res && res.url) {
-        const entry = {
-          url: res.url,
-          timestamp: Date.now(),
-          settings: {
-            prompt: basePrompt,
-            camera: settings.camera,
-            lens: settings.lens,
-            focal: settings.focal,
-            aperture: settings.aperture,
-            aspect_ratio: settings.aspect_ratio,
-            resolution,
-          },
-        };
-
-        // Only update internal history if not using prop-driven history
-        if (historyItems == null) {
-          setInternalHistory((prev) => [entry, ...prev].slice(0, 50));
-        }
-
-        setCanvasUrl(res.url);
-
-        if (onGenerationComplete) {
-          onGenerationComplete({
-            url: res.url,
-            model: "nano-banana-pro",
-            prompt: basePrompt,
-            type: "cinema",
-          });
-        }
+      let res;
+      if (mode === "image") {
+        res = await generateImage(apiKey, { model: modelId, prompt: compiled.prompt, aspect_ratio: aspect });
       } else {
-        throw new Error("No data returned");
+        res = await generateVideo(apiKey, { model: modelId, prompt: compiled.prompt, aspect_ratio: aspect, duration, __audio: true });
       }
+      if (!res?.url) throw new Error("No result returned");
+      const entry = {
+        id: res.id || Math.random().toString(36).slice(2),
+        url: res.url,
+        type: mode,
+        prompt: compiled.prompt,
+        model: modelId,
+        resolved: compiled.resolved,
+        aspect_ratio: aspect,
+        timestamp: new Date().toISOString(),
+      };
+      setHistory((prev) => [entry, ...prev]);
+      onGenerationComplete?.({ url: res.url, model: modelId, prompt: compiled.prompt, type: mode });
     } catch (e) {
-      console.error(e);
-      onGenerationError?.(e.message?.slice(0, 120) || "Cinema generation failed");
+      const msg = formatErrorMessage(e, "Cinema generation failed");
+      if (onGenerationError) onGenerationError(msg); else toast.error(msg);
     } finally {
-      setIsGenerating(false);
+      setGenerating(false);
       onGenerationEnd?.();
     }
-  }, [
-    settings,
-    resolution,
-    apiKey,
-    isGenerating,
-    onGenerationComplete,
-    onGenerationEnd,
-    onGenerationError,
-    onGenerationStart,
-    historyItems,
-  ]);
-
-  // ── Regenerate ──
-  const handleRegenerate = useCallback(() => {
-    setCanvasUrl(null);
-    // Small delay then generate
-    setTimeout(() => handleGenerate(), 300);
-  }, [handleGenerate]);
-
-  // ── Download ──
-  const handleDownload = useCallback(async () => {
-    if (!canvasUrl) return;
-    try {
-      const response = await fetch(canvasUrl);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `cinema-shot-${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(canvasUrl, "_blank");
-    }
-  }, [canvasUrl]);
-
-  const handleCopyPrompt = useCallback(
-    async (prompt, index) => {
-      if (!prompt) return;
-
-      try {
-        await navigator.clipboard.writeText(prompt);
-        setCopiedPromptIndex(index);
-        window.setTimeout(() => {
-          setCopiedPromptIndex((current) => (current === index ? null : current));
-        }, 1600);
-      } catch (error) {
-        console.error("Failed to copy the prompt:", error);
-        onGenerationError?.("Could not copy the prompt to the clipboard.");
-      }
-    },
-    [onGenerationError],
-  );
-
-  const handleCopyImage = useCallback(
-    async (url, index) => {
-      if (!url) return;
-
-      try {
-        if (
-          !window.isSecureContext ||
-          !navigator.clipboard?.write ||
-          typeof window.ClipboardItem === "undefined"
-        ) {
-          throw new Error("Image clipboard access requires HTTPS or localhost.");
-        }
-
-        await navigator.clipboard.write([
-          new window.ClipboardItem({
-            "image/png": fetchImageAsPngBlob(url),
-          }),
-        ]);
-        setCopiedImageIndex(index);
-        window.setTimeout(() => {
-          setCopiedImageIndex((current) => (current === index ? null : current));
-        }, 1600);
-      } catch (error) {
-        console.error("Failed to copy the image:", error);
-        onGenerationError?.(
-          "Could not copy the image. Image copy requires HTTPS or localhost.",
-        );
-      }
-    },
-    [onGenerationError],
-  );
-
-  const resetToPrompt = () => {
-    setCanvasUrl(null);
-    setSettings((prev) => ({ ...prev, prompt: "" }));
-    if (textareaRef.current) {
-      setTimeout(() => textareaRef.current?.focus(), 50);
-    }
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // resolved summary chips (what Auto decided)
+  const resolvedChips = useMemo(() => {
+    const r = compiled.resolved;
+    return [r.camera, r.lens, r.medium, r.aperture, r.palette, r.lighting, mode === "video" ? r.movement : null, mode === "video" ? r.tempo : null]
+      .filter(Boolean);
+  }, [compiled, mode]);
+
+  const panelButton = (id, label, keys) => (
+    <button
+      type="button"
+      onClick={() => setOpenPanel(openPanel === id ? null : id)}
+      className={promptControlClassName({ compact: true, active: openPanel === id })}
+    >
+      <span className="text-xs font-semibold">{label}</span>
+      {activeCount(keys) > 0 && (
+        <span className="min-w-[16px] h-4 px-1 rounded-full bg-[#EF0328] text-white text-[9px] font-bold flex items-center justify-center">
+          {activeCount(keys)}
+        </span>
+      )}
+    </button>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-black relative overflow-hidden">
-      
-      {/* ── CENTRAL GALLERY AREA ── */}
-      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
-        {history.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full pt-4 animate-fade-in-up">
+    <div className="w-full h-full flex flex-col items-center justify-center bg-app-bg relative p-4 md:p-6 overflow-hidden">
+      {/* ── GALLERY ── */}
+      <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 lg:pb-40 px-2">
+        {history.length > 0 || generating ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 w-full pt-4 animate-fade-in-up">
+            {generating && (
+              <div
+                className="relative rounded-2xl overflow-hidden border border-white/[0.07] bg-[#171719] animate-fade-in-up"
+                style={{ aspectRatio: aspect === "9:16" ? "9/16" : "16/9" }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-white/[0.02] to-white/[0.05] animate-pulse" style={{ filter: "blur(24px)" }} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="w-6 h-6 rounded-full border-2 border-white/15 border-t-white/70 animate-spin" />
+                  <span className="text-[13px] font-medium text-white/60">Directing…</span>
+                </div>
+              </div>
+            )}
             {history.map((entry, idx) => (
               <div
-                key={entry.timestamp ?? idx}
-                className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#171719] shadow-xl hover:border-white/15 transition-all duration-300 flex flex-col cursor-pointer"
-                onClick={() => setFullscreenUrl(entry.url)}
+                key={entry.id}
+                onClick={() => setLightboxIdx(idx)}
+                className="relative group rounded-2xl overflow-hidden border border-white/[0.08] bg-[#171719] shadow-[0_2px_12px_rgba(0,0,0,0.25)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:-translate-y-0.5 transition-[transform,box-shadow,border-color] duration-250 ease-apple cursor-pointer"
               >
-                <img
-                  src={entry.url}
-                  alt={`History item ${idx + 1}`}
-                  className="w-full aspect-[4/3] object-cover bg-black/40"
-                />
-                
-                {/* Overlay actions */}
-                <div className="absolute top-2 right-2 hidden md:flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    title={copiedPromptIndex === idx ? "Prompt copied" : "Copy prompt"}
-                    aria-label={copiedPromptIndex === idx ? "Prompt copied" : "Copy prompt"}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleCopyPrompt(entry.settings?.prompt, idx);
-                    }}
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 font-black backdrop-blur-md transition-all hover:bg-white/15 hover:text-black ${
-                      copiedPromptIndex === idx ? "text-white/80" : "text-white"
-                    }`}
-                  >
-                    {copiedPromptIndex === idx ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M5 12l4 4L19 6" />
-                      </svg>
-                    ) : (
-                      <CopyContentIcon kind="text" size={17} />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    title={copiedImageIndex === idx ? "Image copied" : "Copy image"}
-                    aria-label={copiedImageIndex === idx ? "Image copied" : "Copy image"}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleCopyImage(entry.url, idx);
-                    }}
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-md transition-all hover:bg-white/15 hover:text-black ${
-                      copiedImageIndex === idx ? "text-white/80" : "text-white"
-                    }`}
-                  >
-                    {copiedImageIndex === idx ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M5 12l4 4L19 6" />
-                      </svg>
-                    ) : (
-                      <CopyContentIcon kind="image" size={17} />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    title="Download"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const response = await fetch(entry.url);
-                        const blob = await response.blob();
-                        const blobUrl = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = blobUrl;
-                        a.download = `cinema-shot-${entry.id || idx}.jpg`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(blobUrl);
-                      } catch {
-                        window.open(entry.url, "_blank");
-                      }
-                    }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-white/15 hover:text-black transition-all border border-white/10"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    title="Delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm("Are you sure you want to delete this generated item?")) {
-                        setInternalHistory(prev => prev.filter((_, i) => i !== idx));
-                      }
-                    }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
-                  </button>
-                </div>
-                <MobileGenerationActions
-                  actions={[
-                    {
-                      kind: "text",
-                      label: "Copy prompt",
-                      onSelect: () =>
-                        handleCopyPrompt(entry.settings?.prompt, idx),
-                    },
-                    {
-                      kind: "image",
-                      label: "Copy image",
-                      onSelect: () => handleCopyImage(entry.url, idx),
-                    },
-                    {
-                      kind: "download",
-                      label: "Download",
-                      onSelect: async () => {
-                        try {
-                          const response = await fetch(entry.url);
-                          const blob = await response.blob();
-                          const blobUrl = URL.createObjectURL(blob);
-                          const anchor = document.createElement("a");
-                          anchor.href = blobUrl;
-                          anchor.download = `cinema-shot-${entry.id || idx}.jpg`;
-                          document.body.appendChild(anchor);
-                          anchor.click();
-                          document.body.removeChild(anchor);
-                          URL.revokeObjectURL(blobUrl);
-                        } catch {
-                          window.open(entry.url, "_blank");
-                        }
-                      },
-                    },
-                    {
-                      kind: "delete",
-                      label: "Delete",
-                      danger: true,
-                      onSelect: () => {
-                        if (confirm("Are you sure you want to delete this generated item?")) {
-                          setInternalHistory((prev) => prev.filter((_, i) => i !== idx));
-                        }
-                      },
-                    },
-                  ]}
-                />
-
-                {/* Details */}
-                <div className="p-3 bg-black/80 backdrop-blur-sm border-t border-white/5 flex-1 flex flex-col justify-between gap-2">
-                  <p
-                    className="w-full text-left text-xs line-clamp-3 leading-relaxed text-white/70"
-                    title={entry.settings?.prompt || "No prompt"}
-                  >
-                    {entry.settings?.prompt || "No prompt"}
-                  </p>
-                  <span className="sr-only" aria-live="polite">
-                    {copiedPromptIndex === idx
-                      ? "Prompt copied"
-                      : copiedImageIndex === idx
-                        ? "Image copied"
-                        : ""}
-                  </span>
-                  <div className="flex items-center mt-1 flex-wrap gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-white/80 px-2 py-0.5 bg-white/10 rounded border border-white/15">
-                        Cinema Studio
+                {entry.type === "video" ? (
+                  <video src={entry.url} muted loop playsInline
+                    onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                    onMouseLeave={(e) => e.currentTarget.pause()}
+                    className="w-full aspect-video object-cover bg-black/40" />
+                ) : (
+                  <img src={entry.url} alt="" className="w-full aspect-video object-cover bg-black/40 group-hover:scale-[1.02] transition-transform duration-350 ease-apple" />
+                )}
+                <div className="p-3.5">
+                  <p className="text-white/65 text-[12px] line-clamp-2 leading-relaxed" title={entry.prompt}>{entry.prompt}</p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {[entry.resolved?.camera, entry.resolved?.lens, entry.resolved?.palette].filter(Boolean).slice(0, 3).map((chip) => (
+                      <span key={chip} className="text-[9px] font-medium text-white/50 px-1.5 py-0.5 bg-white/[0.06] rounded-full border border-white/[0.07] truncate max-w-[140px]">
+                        {chip}
                       </span>
-                      {entry.settings?.camera && (
-                        <span className="text-[10px] text-white/40">{entry.settings.camera}</span>
-                      )}
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4 animate-fade-in-up transition-all duration-700 min-h-[50vh]">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
-              <span className="text-white/50 font-medium text-sm sm:text-base tracking-normal mb-2">Start creating with</span>
-              <span className="text-white/95 font-semibold text-3xl sm:text-5xl tracking-tight pb-1">
-                Cinema Studio
-              </span>
-            </h1>
-            <p className="text-white/40 text-xs sm:text-sm font-medium tracking-wide text-center max-w-lg leading-relaxed px-4">
-              What would you shoot with infinite budget? Control cameras, lighting, lenses, and prompt high-end cinematic scenes.
+          <div className="flex flex-col items-center justify-center h-full min-h-[50vh] animate-fade-in-up">
+            <span className="text-white/50 font-medium text-sm sm:text-base tracking-normal mb-2">Direct with</span>
+            <span className="text-white/95 font-semibold text-3xl sm:text-5xl tracking-tight pb-1">Cinema Studio</span>
+            <p className="text-white/40 text-xs sm:text-sm font-medium text-center max-w-lg leading-relaxed px-4 mt-3">
+              Genre, era, camera, glass, light and montage — every choice a real one from the working sets of cinema and advertising.
             </p>
           </div>
         )}
       </div>
 
-      {/* ── BOTTOM PROMPT BAR ── */}
-      <PromptComposer
-        positionClassName="absolute bottom-4 left-4 right-4 md:left-0 md:right-0 md:mx-auto md:max-w-[95%] lg:max-w-4xl z-30 transition-all duration-700 animate-fade-in-up"
-        style={null}
-      >
-          {/* Upper Row: Image Upload & Textarea */}
-          <div className="flex items-start gap-4 w-full px-1">
-            {/* Image Upload Button */}
-            <div className="relative pt-0.5">
-              <input
-                type="file"
-                ref={imageInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleImageUpload}
-              />
-              
-              <button
-                onClick={() =>
-                  uploadedImage
-                    ? removeImage()
-                    : imageInputRef.current?.click()
-                }
-                disabled={isUploadingImage}
-                className={promptMediaButtonClassName({
-                  active: Boolean(uploadedImage),
-                })}
-              >
-                {isUploadingImage ? (
-                  <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
-                    <svg className="w-8 h-8 -rotate-90">
-                      <circle
-                        cx="16"
-                        cy="16"
-                        r="14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        fill="transparent"
-                        className="text-white/10"
-                      />
-                      <circle
-                        cx="16"
-                        cy="16"
-                        r="14"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        fill="transparent"
-                        strokeDasharray={88}
-                        strokeDashoffset={88 - (88 * imageUploadProgress) / 100}
-                        className="text-primary transition-all duration-300"
-                      />
-                    </svg>
-                    <span className="absolute text-[8px] font-bold text-white">
-                      {imageUploadProgress}%
-                    </span>
-                  </div>
-                ) : uploadedImage ? (
-                  <div className="relative w-full h-full group">
-                    <img
-                      src={uploadedImage}
-                      alt="Reference"
-                      className="w-full h-full object-cover opacity-80 group-hover:opacity-40 transition-opacity"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-white">
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
-                    </div>
-                  </div>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-white/80 transition-colors">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <polyline points="21 15 16 10 5 21" />
-                  </svg>
-                )}
-              </button>
-            </div>
+      {lightboxIdx !== null && (
+        <Lightbox items={history} index={Math.min(lightboxIdx, history.length - 1)} onClose={() => setLightboxIdx(null)} onNavigate={setLightboxIdx} />
+      )}
 
-            <PromptTextarea
-              ref={textareaRef}
-              value={settings.prompt}
-              onChange={(e) =>
-                setSettings((prev) => ({ ...prev, prompt: e.target.value }))
-              }
-              placeholder="Describe your cinema scene..."
-            />
+      {/* ── PROMPT BAR ── */}
+      <PromptComposer>
+        <div className="flex flex-col gap-3 relative" ref={panelRef}>
+          {/* Setup panels (popover above the bar) */}
+          {openPanel && (
+            <div className="absolute bottom-[calc(100%+12px)] left-0 right-0 z-50 bg-[#1d1d1f]/[0.98] backdrop-blur-3xl rounded-2xl border border-white/[0.1] shadow-[0_16px_48px_rgba(0,0,0,0.65),inset_0_0.5px_0_rgba(255,255,255,0.08)] p-4 max-h-[46vh] overflow-y-auto custom-scrollbar">
+              {openPanel === "film" && (
+                <>
+                  <PickerSection label="Genre" category="genre" items={GENRES} value={setup.genre} onSelect={set("genre")} />
+                  <PickerSection label="Era" category="era" items={ERAS} value={setup.era} onSelect={set("era")} />
+                  {mode === "video" && (
+                    <PickerSection label="Tempo" category="tempo" items={TEMPOS} value={setup.tempo} onSelect={set("tempo")} />
+                  )}
+                </>
+              )}
+              {openPanel === "camera" && (
+                <>
+                  <PickerSection label="Camera" category="cine-camera" items={cameraItems} value={setup.camera} onSelect={set("camera")} />
+                  <PickerSection label="Lens" category="cine-lens" items={lensItems} value={setup.lens} onSelect={set("lens")} />
+                  <PickerSection label="Aperture" category="aperture" items={APERTURES} value={setup.aperture} onSelect={set("aperture")} />
+                  <PickerSection label={mediumItems[0]?.kind === "digital" ? "Color Science" : "Film Stock"} category="stock" items={mediumItems} value={setup.medium} onSelect={set("medium")} />
+                </>
+              )}
+              {openPanel === "look" && (
+                <>
+                  <PickerSection label="Color Palette" category="palette" items={PALETTES} value={setup.palette} onSelect={set("palette")} />
+                  <PickerSection label="Lighting" category="lighting" items={LIGHTING} value={setup.lighting} onSelect={set("lighting")} />
+                </>
+              )}
+              {openPanel === "movement" && (
+                <PickerSection label="Camera Movement" category="movement" items={MOVEMENTS} value={setup.movement} onSelect={set("movement")} />
+              )}
+            </div>
+          )}
+
+          {/* Top row: mode + panels */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
+              {[["image", "Image"], ["video", "Video"]].map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => set("mode")(value)}
+                  className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-colors duration-150 ${
+                    mode === value ? "bg-[#636366]/90 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="w-px h-5 bg-white/[0.08]" />
+            {panelButton("film", "Film", ["genre", "era", "tempo"])}
+            {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium"])}
+            {panelButton("look", "Look", ["palette", "lighting"])}
+            {mode === "video" && panelButton("movement", "Movement", ["movement"])}
           </div>
 
-          {/* Bottom Row: Controls & Generate */}
+          {/* Prompt */}
+          <PromptTextarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Describe your scene — the system directs the rest…"
+          />
+
+          {/* Resolved preview */}
+          {resolvedChips.length > 0 && prompt.trim() && (
+            <div className="flex items-center gap-1.5 flex-wrap -mt-1">
+              <span className="text-[10px] text-white/30">→</span>
+              {resolvedChips.slice(0, 6).map((chip) => (
+                <span key={chip} className="text-[10px] text-white/45 px-1.5 py-0.5 bg-white/[0.04] rounded-full border border-white/[0.06]">
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Footer */}
           <PromptFooter>
             <PromptControls>
-              {/* Aspect Ratio Button */}
-              <div className="relative">
-                <button
-                  ref={arBtnRef}
-                  className={promptControlClassName({
-                    active: openDropdown === "ar",
-                    className: "text-xs font-semibold",
-                  })}
-                  onClick={() =>
-                    setOpenDropdown((d) => (d === "ar" ? null : "ar"))
-                  }
-                >
-                  <PromptAspectRatioIcon />
-                  {settings.aspect_ratio}
-                </button>
-                {openDropdown === "ar" && (
-                  <Dropdown
-                    title="Aspect Ratio"
-                    items={ASPECT_RATIOS}
-                    selected={settings.aspect_ratio}
-                    onSelect={(val) =>
-                      setSettings((prev) => ({ ...prev, aspect_ratio: val }))
-                    }
-                    triggerRef={arBtnRef}
-                    onClose={() => setOpenDropdown(null)}
-                  />
-                )}
-              </div>
-
-              {/* Resolution Button */}
-              <div className="relative">
-                <button
-                  ref={resBtnRef}
-                  className={promptControlClassName({
-                    active: openDropdown === "res",
-                    className: "text-xs font-semibold",
-                  })}
-                  onClick={() =>
-                    setOpenDropdown((d) => (d === "res" ? null : "res"))
-                  }
-                >
-                  <PromptQualityIcon />
-                  {resolution}
-                </button>
-                {openDropdown === "res" && (
-                  <Dropdown
-                    title="Resolution"
-                    items={RESOLUTIONS}
-                    selected={resolution}
-                    onSelect={setResolution}
-                    triggerRef={resBtnRef}
-                    onClose={() => setOpenDropdown(null)}
-                  />
-                )}
-              </div>
-
-              {/* Summary Card (triggers overlay) */}
               <button
-                className={promptControlClassName({
-                  className: "text-left overflow-hidden text-xs font-semibold text-white/70 hover:text-white",
-                })}
-                onClick={() => setIsOverlayOpen(true)}
+                type="button"
+                onClick={() => {
+                  const list = MODELS[mode];
+                  const i = list.findIndex((m) => m.id === modelId);
+                  setModelId(list[(i + 1) % list.length].id);
+                }}
+                className={promptControlClassName({ compact: true })}
+                title="Generation model"
               >
-                <div className="w-1.5 h-1.5 bg-white/15 rounded-full shadow-lg shadow-black/20 shrink-0" />
-                <span className="max-w-[120px] truncate text-xs font-semibold text-white/70 group-hover:text-white/80 transition-colors">
-                  {settings.camera} · {formatSummaryValue()}
-                </span>
+                <span className="text-xs font-semibold">{MODELS[mode].find((m) => m.id === modelId)?.name}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setAspect(ASPECTS[(ASPECTS.indexOf(aspect) + 1) % ASPECTS.length])}
+                className={promptControlClassName({ compact: true })}
+                title="Aspect ratio"
+              >
+                <span className="text-xs font-semibold tabular-nums">{aspect}</span>
+              </button>
+              {mode === "video" && (
+                <button
+                  type="button"
+                  onClick={() => setDuration(DURATIONS[(DURATIONS.indexOf(duration) + 1) % DURATIONS.length])}
+                  className={promptControlClassName({ compact: true })}
+                  title="Duration"
+                >
+                  <span className="text-xs font-semibold tabular-nums">{duration}s</span>
+                </button>
+              )}
             </PromptControls>
-
-            {/* Generate Button */}
-            <PromptAction
-              disabled={isGenerating || !settings.prompt.trim()}
-              onClick={handleGenerate}
-            >
-              {isGenerating ? (
-                <>
-                  <span className="animate-spin inline-block text-black">◌</span>
-                  <span>Generating...</span>
-                </>
+            <PromptAction onClick={handleGenerate} disabled={generating}>
+              {generating ? (
+                <><span className="animate-spin inline-block">◌</span> Directing…</>
               ) : (
-                <>
-                  <span>Shoot ✦ 10</span>
-                </>
+                <>Direct ✦</>
               )}
             </PromptAction>
           </PromptFooter>
-      </PromptComposer>
-      {fullscreenUrl && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"
-          onClick={() => setFullscreenUrl(null)}
-        >
-          <button
-            type="button"
-            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              setFullscreenUrl(null);
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <img 
-            src={fullscreenUrl} 
-            alt="Fullscreen Preview" 
-            className="max-w-[95vw] max-h-[95vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
-            onClick={(e) => e.stopPropagation()}
-          />
         </div>
-      )}  
-      {/* ── Camera Controls Overlay ── */}
-      <CameraControlsOverlay
-        isOpen={isOverlayOpen}
-        onClose={() => setIsOverlayOpen(false)}
-        settings={settings}
-        onSettingsChange={setSettings}
-      />
+      </PromptComposer>
     </div>
   );
 }
