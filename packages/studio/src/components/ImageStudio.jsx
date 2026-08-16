@@ -44,6 +44,7 @@ import {
 } from "./prompt/PromptComposer.jsx";
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
+import Lightbox from "./Lightbox.jsx";
 
 // Guards against re-processing the same dropped/pasted batch when effects
 // re-fire (dependency identity churn + React StrictMode double-invoke).
@@ -945,6 +946,7 @@ export default function ImageStudio({
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
   const [fullscreenUrl, setFullscreenUrl] = useState(null);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
 
   // ── Canvas / history state ──────────────────────────────────────────────
@@ -953,6 +955,21 @@ export default function ImageStudio({
   const [batchSize, setBatchSize] = useState(1);
   const [localHistory, setLocalHistory] = useState([]); // [{id,url,prompt,model,aspect_ratio,timestamp}]
   const [pendingRenders, setPendingRenders] = useState([]);
+  const [activeProjectId, setActiveProjectId] = useState(null);
+  const [galleryScope, setGalleryScope] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    return window.localStorage.getItem("gallery_scope") || "all";
+  });
+
+  // Live render progress for the placeholder cards
+  const [genProgress, setGenProgress] = useState(null);
+  useEffect(() => {
+    if (!generating) { setGenProgress(null); return; }
+    const onProgress = (e) => setGenProgress(e.detail?.progress ?? null);
+    window.addEventListener("generation-progress", onProgress);
+    return () => window.removeEventListener("generation-progress", onProgress);
+  }, [generating]);
+
   const [uploadingPreviews, setUploadingPreviews] = useState([]); // local blob: URLs shown instantly while uploads run
 
   // Server ledger is the cross-browser source of truth: merge it into the
@@ -960,8 +977,13 @@ export default function ImageStudio({
   useEffect(() => {
     let alive = true;
     const sync = async () => {
-      const [ledger, pending] = await Promise.all([fetchLedger(), fetchPending()]);
+      const [ledger, pending, projectsRes] = await Promise.all([
+        fetchLedger(),
+        fetchPending(),
+        fetch("/api/projects").then((r) => r.json()).catch(() => null),
+      ]);
       if (!alive) return;
+      if (projectsRes) setActiveProjectId(projectsRes.activeId || null);
       const images = ledger.filter((e) => e.type !== "video");
       setLocalHistory((prev) => {
         const known = new Set(prev.map((e) => e.url));
@@ -982,7 +1004,15 @@ export default function ImageStudio({
   }, []);
 
   // Use prop history if provided, otherwise local
-  const history = historyItems ?? localHistory;
+  const historyUnfiltered = historyItems ?? localHistory;
+  const history =
+    galleryScope === "project" && activeProjectId
+      ? historyUnfiltered.filter((e) => e.projectId === activeProjectId)
+      : historyUnfiltered;
+  const setScope = (scope) => {
+    setGalleryScope(scope);
+    try { window.localStorage.setItem("gallery_scope", scope); } catch {}
+  };
 
   // When historyItems is server-backed (White Label / backfilled sessions),
   // localHistory isn't what's rendered — removal has to go through the
@@ -1431,6 +1461,23 @@ export default function ImageStudio({
       
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
+        {activeProjectId && (
+          <div className="w-full flex justify-end pt-4">
+            <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
+              {[["project", "Projeto"], ["all", "Geral"]].map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setScope(value)}
+                  className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 ${
+                    galleryScope === value ? "bg-[#636366]/90 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Pending render queue — heavy jobs land here until delivery */}
         {pendingRenders.length > 0 && (
           <div className="w-full pt-4 space-y-2 animate-fade-in-up">
@@ -1455,13 +1502,28 @@ export default function ImageStudio({
             ))}
           </div>
         )}
-        {history.length > 0 ? (
+        {history.length > 0 || generating ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full pt-4 animate-fade-in-up">
+            {generating && Array.from({ length: batchSize || 1 }).map((_, i) => (
+              <div
+                key={`placeholder-${i}`}
+                className="relative rounded-2xl overflow-hidden border border-white/[0.07] bg-[#171719] animate-fade-in-up"
+                style={{ aspectRatio: selectedAr === "9:16" || selectedAr === "3:4" || selectedAr === "4:5" ? "3/4" : "4/3" }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-white/[0.02] to-white/[0.05] animate-pulse" style={{ filter: "blur(24px)" }} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="w-6 h-6 rounded-full border-2 border-white/15 border-t-white/70 animate-spin" />
+                  <span className="text-[13px] font-medium text-white/60 tabular-nums">
+                    {typeof genProgress === "number" ? `${Math.round(genProgress)}%` : "Generating…"}
+                  </span>
+                </div>
+              </div>
+            ))}
             {history.map((entry, idx) => (
               <div
                 key={entry.id || idx}
                 className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#171719] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
-                onClick={() => setFullscreenUrl(entry.url)}
+                onClick={() => setLightboxIdx(idx)}
               >
                 <img
                   src={entry.url}
@@ -1871,6 +1933,15 @@ export default function ImageStudio({
       </PromptComposer>
 
       {/* ── FULLSCREEN IMAGE MODAL ── */}
+      {lightboxIdx !== null && (
+        <Lightbox
+          items={history}
+          index={Math.min(lightboxIdx, history.length - 1)}
+          onClose={() => setLightboxIdx(null)}
+          onNavigate={setLightboxIdx}
+        />
+      )}
+
       {fullscreenUrl && (
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"

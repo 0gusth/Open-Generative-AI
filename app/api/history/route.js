@@ -2,6 +2,40 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
+const PROJECTS_FILE = path.join(process.cwd(), '.data', 'projects.json');
+
+async function activeProject() {
+    try {
+        const registry = JSON.parse(await fs.readFile(PROJECTS_FILE, 'utf8'));
+        return registry.projects.find((p) => p.id === registry.activeId) || null;
+    } catch {
+        return null;
+    }
+}
+
+// Download a generated media URL into the project folder (best-effort — the
+// ledger entry is the source of truth even if the file copy fails).
+async function saveToProject(project, entry) {
+    try {
+        const res = await fetch(entry.url);
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        const contentType = res.headers.get('content-type') || '';
+        const ext = entry.type === 'video' ? 'mp4'
+            : contentType.includes('png') ? 'png'
+            : contentType.includes('webp') ? 'webp'
+            : 'jpg';
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const slug = (entry.prompt || entry.model || 'generation')
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 48).replace(/^-|-$/g, '');
+        const filename = `${stamp}-${slug || 'generation'}.${ext}`;
+        await fs.writeFile(path.join(project.path, filename), buf);
+        return filename;
+    } catch {
+        return null;
+    }
+}
+
 // Server-side generation ledger + pending render queue, stored on disk so
 // every browser pointed at this server sees the same history.
 const DATA_DIR = path.join(process.cwd(), '.data');
@@ -55,6 +89,8 @@ export async function POST(request) {
         const ledger = await readJson(LEDGER_FILE, []);
         const entry = body.entry || {};
         if (entry.url && !ledger.some((e) => e.url === entry.url)) {
+            const project = await activeProject();
+            const localFile = project ? await saveToProject(project, entry) : null;
             ledger.unshift({
                 id: entry.id || Math.random().toString(36).slice(2),
                 url: entry.url,
@@ -63,6 +99,8 @@ export async function POST(request) {
                 provider: entry.provider || 'muapi',
                 type: entry.type || 'image',
                 aspect_ratio: entry.aspect_ratio || null,
+                projectId: project?.id || null,
+                localFile,
                 timestamp: entry.timestamp || new Date().toISOString(),
             });
         }

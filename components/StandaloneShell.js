@@ -196,6 +196,46 @@ export default function StandaloneShell() {
   const [showSettings, setShowSettings] = useState(false);
   const [runwareKey, setRunwareKey] = useState('');
   const [falKey, setFalKey] = useState('');
+  // Projects
+  const [projects, setProjects] = useState([]);
+  const [activeProjectId, setActiveProjectId] = useState(null);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectPath, setNewProjectPath] = useState('');
+
+  const refreshProjects = useCallback(async () => {
+    try {
+      const r = await fetch('/api/projects');
+      const data = await r.json();
+      setProjects(data.projects || []);
+      setActiveProjectId(data.activeId || null);
+    } catch { /* server offline — projects unavailable */ }
+  }, []);
+
+  useEffect(() => { refreshProjects(); }, [refreshProjects]);
+
+  const selectProject = useCallback(async (id) => {
+    setShowProjectMenu(false);
+    setActiveProjectId(id);
+    try {
+      await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-active', id }) });
+    } catch { /* best-effort */ }
+  }, []);
+
+  const createProject = useCallback(async () => {
+    const name = newProjectName.trim();
+    if (!name) return;
+    try {
+      const r = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name, path: newProjectPath.trim() }) });
+      const data = await r.json();
+      if (!r.ok) { alert(data.error || 'Could not create project'); return; }
+      setShowNewProject(false);
+      setNewProjectName('');
+      setNewProjectPath('');
+      refreshProjects();
+    } catch { alert('Could not reach the server'); }
+  }, [newProjectName, newProjectPath, refreshProjects]);
   useEffect(() => {
     if (showSettings) {
       setRunwareKey(getProviderKey('runware') || '');
@@ -613,12 +653,45 @@ export default function StandaloneShell() {
             </div>
           </div>
 
-          {/* Active Tab Breadcrumb Badge */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs text-white/60">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
-            <span className="font-medium text-white/80">
-              {TABS.find(t => t.id === activeTab)?.label || 'Studio'}
-            </span>
+          {/* Project switcher */}
+          <div className="hidden lg:block relative">
+            <button
+              onClick={() => setShowProjectMenu((v) => !v)}
+              className="pressable flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs text-white/60 hover:bg-white/[0.08] hover:text-white"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${activeProjectId ? 'bg-[#EF0328]' : 'bg-white/40'}`} />
+              <span className="font-medium text-white/80 max-w-[160px] truncate">
+                {projects.find((p) => p.id === activeProjectId)?.name || 'Sem projeto'}
+              </span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            {showProjectMenu && (
+              <div className="absolute top-full mt-2 left-0 z-[80] min-w-[220px] bg-[#1d1d1f]/[0.98] backdrop-blur-3xl rounded-xl border border-white/[0.1] shadow-[0_16px_48px_rgba(0,0,0,0.65),inset_0_0.5px_0_rgba(255,255,255,0.08)] p-1.5">
+                <button
+                  onClick={() => selectProject(null)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[13px] transition-colors duration-100 ${!activeProjectId ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'}`}
+                >
+                  Sem projeto
+                </button>
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => selectProject(p.id)}
+                    title={p.path}
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[13px] transition-colors duration-100 ${activeProjectId === p.id ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'}`}
+                  >
+                    <span className="truncate">{p.name}</span>
+                  </button>
+                ))}
+                <div className="h-px bg-white/[0.08] my-1" />
+                <button
+                  onClick={() => { setShowProjectMenu(false); setShowNewProject(true); setNewProjectPath(''); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[13px] font-medium text-[#FF2447] hover:bg-white/[0.05] transition-colors duration-100"
+                >
+                  + Novo projeto
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right: Actions */}
@@ -1003,6 +1076,58 @@ export default function StandaloneShell() {
       `}</style>
 
       {/* Settings Modal */}
+      {showNewProject && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[90] animate-fade-in-up">
+          <div className="bg-[#171719] border border-white/10 rounded-xl p-8 w-full max-w-md shadow-2xl">
+            <h2 className="text-white font-semibold text-lg mb-1">Novo projeto</h2>
+            <p className="text-white/40 text-[13px] mb-6">
+              Toda criação feita com este projeto ativo é salva automaticamente na pasta escolhida.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-medium text-white/40 mb-1.5">Nome do projeto</label>
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && createProject()}
+                  placeholder="Campanha Verão 2027"
+                  autoFocus
+                  className="w-full bg-white/[0.06] border border-white/[0.09] rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[#EF0328]/40 focus:border-[#EF0328]/40 transition-[border-color,box-shadow] duration-150"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/40 mb-1.5">
+                  Pasta no computador <span className="text-white/25 font-normal">(vazio = ~/Documents/OpenGenerativeAI/&lt;nome&gt;)</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProjectPath}
+                  onChange={(e) => setNewProjectPath(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && createProject()}
+                  placeholder={'~/Documents/OpenGenerativeAI/' + (newProjectName.trim() || 'MeuProjeto')}
+                  className="w-full bg-white/[0.06] border border-white/[0.09] rounded-lg px-4 py-3 text-sm font-mono text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[#EF0328]/40 focus:border-[#EF0328]/40 transition-[border-color,box-shadow] duration-150"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={createProject}
+                className="pressable flex-1 h-10 rounded-lg bg-[#EF0328] text-white text-xs font-semibold hover:bg-[#FF2447]"
+              >
+                Criar projeto
+              </button>
+              <button
+                onClick={() => setShowNewProject(false)}
+                className="pressable flex-1 h-10 rounded-lg bg-white/5 text-white/80 hover:bg-white/10 text-xs font-semibold border border-white/5"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSettings && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in-up">
           <div className="bg-[#171719] border border-white/10 rounded-xl p-8 w-full max-w-sm shadow-2xl">

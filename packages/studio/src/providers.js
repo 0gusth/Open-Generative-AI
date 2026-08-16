@@ -338,6 +338,12 @@ async function pollRunwareTask(taskUUID, kind) {
         }
         const entry = results.find((t) => t.taskUUID === taskUUID || t[urlField]);
         if (!entry) continue;
+        // Surface render progress to any listening UI (placeholder cards)
+        if (typeof window !== "undefined" && typeof entry.progress === "number") {
+            window.dispatchEvent(new CustomEvent("generation-progress", {
+                detail: { taskUUID, progress: entry.progress },
+            }));
+        }
         const status = (entry.status || "").toLowerCase();
         if (entry[urlField]) return entry;
         if (status === "error" || status === "failed") {
