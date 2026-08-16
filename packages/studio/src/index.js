@@ -18,4 +18,4 @@ export { default as AiInfluencerStudio } from './components/AiInfluencerStudio';
 export { default as LayersStudio } from './components/LayersStudio';
 export * from './muapi';
 
-export { getProviderKey, setProviderKey, pickProvider, PROVIDER_ROUTES } from './providers.js';
+export { getProviderKey, setProviderKey, pickProvider, getProviderBalances, PROVIDER_ROUTES } from './providers.js';

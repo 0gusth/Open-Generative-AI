@@ -356,3 +356,46 @@ export async function tryProviderVideo(modelId, params, displayName) {
         return null;
     }
 }
+
+// ── Balances ────────────────────────────────────────────────────────────────
+
+async function getRunwareBalance() {
+    if (!getProviderKey("runware")) return null;
+    try {
+        const results = await runwareCall([
+            { taskType: "accountManagement", taskUUID: makeUUID(), operation: "getDetails" },
+        ]);
+        const entry = results.find((t) => t.taskType === "accountManagement") || results[0];
+        const balance =
+            entry?.balance ?? entry?.account?.balance ?? entry?.details?.balance ?? null;
+        return typeof balance === "number" ? balance : parseFloat(balance) || null;
+    } catch (error) {
+        console.warn("[providers] Runware balance fetch failed:", error.message);
+        return null;
+    }
+}
+
+async function getFalBalance() {
+    const key = getProviderKey("fal");
+    if (!key) return null;
+    try {
+        const response = await fetch("/api/providers/fal-billing", {
+            headers: { "x-provider-key": key },
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        const balance = data?.credits?.current_balance;
+        return typeof balance === "number" ? balance : parseFloat(balance) || null;
+    } catch (error) {
+        console.warn("[providers] fal balance fetch failed:", error.message);
+        return null;
+    }
+}
+
+// Fetch every configured provider balance in parallel.
+// Returns {runware: number|null, fal: number|null} — null = not configured
+// or the provider did not report a balance.
+export async function getProviderBalances() {
+    const [runware, fal] = await Promise.all([getRunwareBalance(), getFalBalance()]);
+    return { runware, fal };
+}

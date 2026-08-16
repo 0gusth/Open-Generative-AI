@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, AiInfluencerStudio, LayersStudio, getUserBalance, getProviderKey, setProviderKey } from 'studio';
+import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, AiInfluencerStudio, LayersStudio, getUserBalance, getProviderKey, setProviderKey, getProviderBalances } from 'studio';
 
 const DesignAgentStudio = dynamic(() => import('studio').then(mod => mod.DesignAgentStudio), {
   ssr: false,
@@ -192,6 +192,7 @@ export default function StandaloneShell() {
   const [activeTab, setActiveTab] = useState(getInitialTab());
 
   const [balance, setBalance] = useState(null);
+  const [providerBalances, setProviderBalances] = useState({ runware: null, fal: null });
   const [showSettings, setShowSettings] = useState(false);
   const [runwareKey, setRunwareKey] = useState('');
   const [falKey, setFalKey] = useState('');
@@ -413,6 +414,7 @@ export default function StandaloneShell() {
     try {
       const data = await getUserBalance(key);
       setBalance(data.balance);
+      getProviderBalances().then(setProviderBalances).catch(() => {});
     } catch (err) {
       console.error('Balance fetch failed:', err);
     }
@@ -598,12 +600,31 @@ export default function StandaloneShell() {
 
           {/* Right: Actions */}
           <div className="flex-shrink-0 flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-white/[0.06] px-3 py-1.5 rounded-full border border-white/[0.06]">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />
-              <span className="text-xs font-medium text-white/90 tabular-nums">
-                ${balance !== null ? `${balance}` : '---'}
-              </span>
-            </div>
+            {(() => {
+              const parts = [
+                { label: 'Muapi', value: typeof balance === 'number' ? balance : parseFloat(balance) || null },
+                { label: 'Runware', value: providerBalances.runware },
+                { label: 'fal', value: providerBalances.fal },
+              ].filter((p) => p.value !== null && !Number.isNaN(p.value));
+              const total = parts.reduce((sum, p) => sum + p.value, 0);
+              const breakdown = parts.map((p) => `${p.label} $${p.value.toFixed(2)}`).join(' · ');
+              return (
+                <div
+                  title={breakdown || 'No balance data'}
+                  className="flex items-center gap-2 bg-white/[0.06] px-3 py-1.5 rounded-full border border-white/[0.06] cursor-default"
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />
+                  <span className="text-xs font-medium text-white/90 tabular-nums">
+                    {parts.length > 0 ? `$${total.toFixed(2)}` : '$---'}
+                  </span>
+                  {parts.length > 1 && (
+                    <span className="text-[9px] text-white/40 font-medium">
+                      {parts.length} APIs
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
 
             <button
               onClick={() => setShowSettings(true)}
