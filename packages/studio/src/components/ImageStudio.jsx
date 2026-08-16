@@ -36,6 +36,7 @@ import {
   PromptMenuList,
   PromptPopover,
   PromptPopoverHeader,
+  PromptMentionTextarea,
   PromptQualityIcon,
   PromptTextarea,
   promptControlClassName,
@@ -1544,14 +1545,29 @@ export default function ImageStudio({
                   label="Swap Face"
                 />
               )}
+
+              {/* Model capability chips */}
+              {imageMode && (
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-[10px] text-white/35 border border-white/[0.07] rounded-full px-2 py-0.5 whitespace-nowrap">
+                    {maxImages > 1 ? `Up to ${maxImages} images` : "1 image"}
+                  </span>
+                  {maxImages > 1 && (
+                    <span className="text-[10px] text-white/35 border border-white/[0.07] rounded-full px-2 py-0.5 whitespace-nowrap">
+                      @img refs
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Input prompt text area */}
-            <PromptTextarea
+            {/* Input prompt text area — @img mentions active when images are attached */}
+            <PromptMentionTextarea
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={placeholderText}
+              mentionThumbs={imageMode ? uploadedImageUrls : []}
             />
           </div>
 

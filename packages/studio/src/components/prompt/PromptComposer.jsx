@@ -5,7 +5,9 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
+  useState,
 } from "react";
 
 const DEFAULT_POSITION_CLASS =
@@ -359,6 +361,190 @@ export const PromptTextarea = forwardRef(function PromptTextarea(
       rows={rows}
       className={joinClasses(DEFAULT_TEXTAREA_CLASS, className)}
     />
+  );
+});
+
+const MENTION_TOKEN_REGEX = /@im(?:g|age)\s?(\d{1,2})/gi;
+const MENTION_PARTIAL_REGEX = /@(?:i(?:m(?:g|age)?)?)?(\d{0,2})$/i;
+const MENTION_ACCENT = "#EF0328";
+
+// Textarea with Higgsfield-style @image mentions: typing "@" opens a picker of
+// the attached images, and valid tokens are tinted with the accent color via a
+// metrics-matched overlay behind the (transparent-text) textarea.
+export const PromptMentionTextarea = forwardRef(function PromptMentionTextarea(
+  { value, onChange, mentionThumbs = [], className = "", ...props },
+  forwardedRef,
+) {
+  const textareaRef = useRef(null);
+  const overlayRef = useRef(null);
+  const [menu, setMenu] = useState(null); // {query} | null
+  const [menuIndex, setMenuIndex] = useState(0);
+
+  useImperativeHandle(forwardedRef, () => textareaRef.current);
+
+  const mentionsActive = mentionThumbs.length > 0;
+
+  const menuItems = useMemo(() => {
+    if (!menu) return [];
+    return mentionThumbs
+      .map((thumb, i) => ({ token: `@img${i + 1}`, thumb, index: i }))
+      .filter((item) => !menu.query || item.token.includes(`img${menu.query}`) || `${item.index + 1}`.startsWith(menu.query));
+  }, [menu, mentionThumbs]);
+
+  // Split value into text/token segments for the highlight overlay
+  const segments = useMemo(() => {
+    if (!mentionsActive || !value) return null;
+    const parts = [];
+    let last = 0;
+    for (const match of value.matchAll(MENTION_TOKEN_REGEX)) {
+      const idx = parseInt(match[1], 10);
+      const valid = idx >= 1 && idx <= mentionThumbs.length;
+      if (match.index > last) parts.push({ text: value.slice(last, match.index) });
+      parts.push({ text: match[0], token: true, valid });
+      last = match.index + match[0].length;
+    }
+    if (last < value.length) parts.push({ text: value.slice(last) });
+    return parts;
+  }, [value, mentionsActive, mentionThumbs.length]);
+
+  const syncScroll = useCallback(() => {
+    if (overlayRef.current && textareaRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }, []);
+
+  const updateMenu = useCallback(
+    (element) => {
+      if (!mentionsActive || !element) return setMenu(null);
+      const caret = element.selectionStart;
+      if (caret !== element.selectionEnd) return setMenu(null);
+      const before = value.slice(0, caret);
+      const match = before.match(MENTION_PARTIAL_REGEX);
+      if (!match) return setMenu(null);
+      setMenu({ query: match[1] || "", anchor: caret - match[0].length });
+      setMenuIndex(0);
+    },
+    [mentionsActive, value],
+  );
+
+  const insertMention = useCallback(
+    (item) => {
+      const element = textareaRef.current;
+      if (!element || !menu) return;
+      const caret = element.selectionStart;
+      const next = `${value.slice(0, menu.anchor)}${item.token} ${value.slice(caret)}`;
+      const synthetic = { target: { value: next }, currentTarget: element };
+      onChange?.(synthetic);
+      setMenu(null);
+      requestAnimationFrame(() => {
+        element.focus();
+        const pos = menu.anchor + item.token.length + 1;
+        element.setSelectionRange(pos, pos);
+      });
+    },
+    [menu, onChange, value],
+  );
+
+  const handleKeyDown = (event) => {
+    if (menu && menuItems.length > 0) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        setMenuIndex((i) => (i + delta + menuItems.length) % menuItems.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        insertMention(menuItems[menuIndex]);
+        return;
+      }
+      if (event.key === "Escape") {
+        setMenu(null);
+        return;
+      }
+    }
+    props.onKeyDown?.(event);
+  };
+
+  useEffect(() => {
+    if (!mentionsActive) setMenu(null);
+  }, [mentionsActive]);
+
+  return (
+    <div className="relative flex-1 min-w-0">
+      {mentionsActive && segments && (
+        <div
+          ref={overlayRef}
+          aria-hidden
+          className={joinClasses(
+            DEFAULT_TEXTAREA_CLASS,
+            "absolute inset-0 pointer-events-none select-none whitespace-pre-wrap break-words overflow-hidden",
+          )}
+        >
+          {segments.map((seg, i) =>
+            seg.token ? (
+              <span
+                key={i}
+                className="rounded-[4px] px-0.5 -mx-0.5"
+                style={
+                  seg.valid
+                    ? { color: MENTION_ACCENT, backgroundColor: "rgba(239,3,40,0.12)", fontWeight: 500 }
+                    : { color: "rgba(255,255,255,0.35)", textDecoration: "line-through" }
+                }
+              >
+                {seg.text}
+              </span>
+            ) : (
+              <span key={i}>{seg.text}</span>
+            ),
+          )}
+        </div>
+      )}
+      <PromptTextarea
+        {...props}
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => {
+          onChange?.(e);
+          requestAnimationFrame(() => updateMenu(e.target));
+        }}
+        onKeyDown={handleKeyDown}
+        onKeyUp={(e) => updateMenu(e.currentTarget)}
+        onClick={(e) => updateMenu(e.currentTarget)}
+        onScroll={syncScroll}
+        onBlur={() => setTimeout(() => setMenu(null), 150)}
+        className={joinClasses(
+          mentionsActive && segments ? "relative bg-transparent !text-transparent caret-white" : "",
+          className,
+        )}
+      />
+      {menu && menuItems.length > 0 && (
+        <div className="absolute bottom-full left-0 mb-2 z-50 bg-[#1d1d1f]/[0.98] backdrop-blur-3xl rounded-xl border border-white/[0.1] shadow-[0_16px_48px_rgba(0,0,0,0.65),inset_0_0.5px_0_rgba(255,255,255,0.08)] p-1.5 flex flex-col gap-0.5 min-w-[180px]">
+          <span className="px-2 pt-1 pb-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wide">
+            Reference image
+          </span>
+          {menuItems.map((item, i) => (
+            <button
+              key={item.token}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                insertMention(item);
+              }}
+              className={joinClasses(
+                "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left transition-colors duration-100",
+                i === menuIndex ? "bg-white/[0.09]" : "hover:bg-white/[0.05]",
+              )}
+            >
+              <img src={item.thumb} alt="" className="w-7 h-7 rounded-md object-cover border border-white/10" />
+              <span className="text-[13px] font-medium" style={{ color: MENTION_ACCENT }}>
+                {item.token}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 });
 

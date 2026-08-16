@@ -39,6 +39,7 @@ import {
   PromptPopoverHeader,
   PromptDurationIcon,
   PromptQualityIcon,
+  PromptMentionTextarea,
   PromptTextarea,
   promptControlClassName,
   promptMediaButtonClassName,
@@ -1861,12 +1862,38 @@ export default function VideoStudio({
 
             {/* Prompt textarea */}
             <div className="flex-1 flex flex-col gap-1">
-              <PromptTextarea
+              {imageMode && (() => {
+                const capModel = i2vModels.find((m) => m.id === selectedModel);
+                const capMax = getMaxImagesForI2VModel(selectedModel);
+                if (!capModel) return null;
+                return (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {capModel.lastImageField && (
+                      <span className="text-[10px] text-white/35 border border-white/[0.07] rounded-full px-2 py-0.5 whitespace-nowrap">
+                        First + last frame
+                      </span>
+                    )}
+                    {capMax > 1 && (
+                      <span className="text-[10px] text-white/35 border border-white/[0.07] rounded-full px-2 py-0.5 whitespace-nowrap">
+                        {`Up to ${capMax} images`}
+                      </span>
+                    )}
+                    {capMax > 2 && (
+                      <span className="text-[10px] text-white/35 border border-white/[0.07] rounded-full px-2 py-0.5 whitespace-nowrap">
+                        @img refs
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <PromptMentionTextarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={handlePromptInput}
                 placeholder={promptPlaceholder}
                 disabled={promptDisabled}
+                mentionThumbs={imageMode && getMaxImagesForI2VModel(selectedModel) > 2 ? uploadedImageUrls : []}
               />
             </div>
           </div>
