@@ -21,7 +21,8 @@ MODEL DIALECT — Seedance:
 - One primary camera move + at most one texture modifier ("slow dolly in, slightly handheld"). Two stacked moves jitter.
 - Homograph check: if a verb has a second physical reading (tearing, shoot, bolt, drop, strike, snap), replace it with phrasing only ONE thing can look like.
 - Measurable language: speeds in km/h, atmosphere in % or meters ("fog density 40%"), white balance in Kelvin, left/right always from the camera.
-- The model reads observable looks, not brand names: whenever an equipment or director name appears, make sure the visible character it produces is described right beside it (framing, distortion, grain, light behavior) — the description is what actually renders.`.trim(),
+- HARD OUTPUT REQUIREMENT — ByteDance's moderation flags proper names as copyright: the final prompt must contain ZERO character names. Rename every person to a visible-marker phrase ("the man in the driver's seat", "the woman by the window") with no exception.
+- Equipment brand names (camera/lens/film marques) must NOT appear either — translate each into the optical character it produces (framing, distortion, grain, halation, color response) and drop the brand words. The look renders; the brand only trips moderation.`.trim(),
         i2v: `
 - The source frame carries the state; your text carries ONLY the delta. When frame and text would conflict, the frame wins — so never restate it.
 - In-flight motion and timing cannot live in a still: restate camera-movement phase and open motion vectors in words.`.trim(),

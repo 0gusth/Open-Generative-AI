@@ -1,6 +1,7 @@
 import { addPending, removePending } from "./ledger.js";
 import { fusionInstruction, CRAFT_CORE } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
+import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
 
 // Multi-provider router — Muapi is the LAST resort, not the default.
 //
@@ -537,6 +538,42 @@ const ENHANCE_MODEL = "deepseek:v4@flash";
 
 // Rewrite a short prompt into a rich generation prompt. Fails soft: any
 // error returns the original prompt so generation never blocks on enhance.
+// Deterministic guarantee for ByteDance-bound prompts: their moderation flags
+// proper names (and brand marques) as copyright. Asking the LLM once is
+// probabilistic — this enforces it. Chain: detect → targeted LLM scrub →
+// re-check → mechanical replacement as last resort. Returns a prompt with
+// zero detectable proper names, or the original for non-ByteDance models.
+export async function scrubForByteDance(prompt, modelId) {
+    if (!isByteDanceModel(modelId) || !prompt) return prompt;
+    let names = detectProperNames(prompt);
+    if (!names.length) return prompt;
+    // Targeted rewrite: one job only, high compliance.
+    try {
+        const results = await runwareCall([
+            {
+                taskType: "textInference",
+                taskUUID: makeUUID(),
+                model: ENHANCE_MODEL,
+                messages: [{
+                    role: "user",
+                    content:
+                        `Rewrite the prompt below changing ONE thing only: remove every proper name (people, brands, trademarks). A person's name becomes a short visible description of that person ("the man at the wheel"). A camera/lens/film brand becomes the IMAGE character that equipment produces — grain, halation, contrast, flare, color response ("anamorphic glass with gentle horizontal flares", "tungsten-balanced stock with soft halation in the highlights") — never a description of the physical object. Keep every other word, rhythm and detail identical. Output ONLY the rewritten prompt.\n\nNames found: ${names.join(", ")}\n\nPROMPT:\n${prompt}`,
+                }],
+            },
+        ]);
+        const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
+        if (text) prompt = text;
+    } catch { /* fall through to mechanical scrub */ }
+    // Verify — and mechanically neutralize anything that survived.
+    names = detectProperNames(prompt);
+    for (const name of names) {
+        prompt = prompt
+            .replace(new RegExp(`\\b${name}['’]s\\b`, "g"), "their")
+            .replace(new RegExp(`\\b${name}\\b`, "g"), "the character");
+    }
+    return prompt;
+}
+
 export async function enhancePrompt(prompt, kind = "image", modelId = "") {
     if (!prompt || !getProviderKey("runware")) return prompt;
     const motion = kind === "video"
@@ -560,7 +597,7 @@ export async function enhancePrompt(prompt, kind = "image", modelId = "") {
             },
         ]);
         const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
-        return text || prompt;
+        return await scrubForByteDance(text || prompt, modelId);
     } catch (error) {
         console.warn("[providers] enhance failed, using original prompt:", error.message);
         return prompt;
@@ -594,7 +631,7 @@ export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartF
             },
         ]);
         const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
-        return text || compiledPrompt;
+        return await scrubForByteDance(text || compiledPrompt, opts.modelId);
     } catch (error) {
         console.warn("[providers] cinema fusion failed, using compiled prompt:", error.message);
         return compiledPrompt;
