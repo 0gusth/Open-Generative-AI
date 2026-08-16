@@ -654,7 +654,7 @@ export default function StandaloneShell() {
           </div>
 
           {/* Project switcher */}
-          <div className="hidden lg:block relative">
+          <div className="relative">
             <button
               onClick={() => setShowProjectMenu((v) => !v)}
               className="pressable flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs text-white/60 hover:bg-white/[0.08] hover:text-white"

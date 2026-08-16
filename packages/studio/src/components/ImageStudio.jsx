@@ -50,6 +50,34 @@ import { enhancePrompt } from "../providers.js";
 // Guards against re-processing the same dropped/pasted batch when effects
 // re-fire (dependency identity churn + React StrictMode double-invoke).
 const processedDropBatches = new WeakSet();
+
+// Labeled reference field: click to pick, or drag an image straight onto it.
+function RefField({ label, color, onFiles, onClick }) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+        if (files.length) onFiles(files);
+      }}
+      className="h-11 px-3.5 flex items-center gap-2 rounded-xl border border-dashed cursor-pointer select-none transition-[background-color,border-color,transform] duration-150 active:scale-[0.97]"
+      style={{
+        borderColor: over ? color : `${color}55`,
+        background: over ? `${color}26` : `${color}0d`,
+        color,
+      }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+      <span className="text-[12px] font-medium whitespace-nowrap">{label}</span>
+    </div>
+  );
+}
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 async function downloadImage(url, filename) {
@@ -1003,6 +1031,10 @@ export default function ImageStudio({
     });
   }, []);
 
+  const styleInputRef = useRef(null);
+  const characterInputRef = useRef(null);
+  const genericInputRef = useRef(null);
+
   // Server ledger is the cross-browser source of truth: merge it into the
   // local grid and keep a live view of the pending render queue.
   useEffect(() => {
@@ -1268,6 +1300,29 @@ export default function ImageStudio({
     },
     [imageMode, selectedModelId],
   );
+
+  // Upload files into a specific reference role with instant local previews
+  const uploadWithRole = useCallback(async (files, role) => {
+    const usable = files.filter((f) => f.size <= 10 * 1024 * 1024);
+    if (usable.length === 0) return;
+    const slots = Math.max(0, maxImages - uploadedImageUrls.length);
+    const batch = usable.slice(0, role === "generic" ? slots : 1);
+    if (batch.length === 0) return;
+    const locals = batch.map((f) => URL.createObjectURL(f));
+    setUploadingPreviews((prev) => [...prev, ...locals]);
+    try {
+      const urls = await Promise.all(batch.map((f) => uploadFile(apiKey, f)));
+      tagRole(urls, role);
+      handleUploadSelect({ urls: [...uploadedImageUrls, ...urls] });
+    } catch (err) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      locals.forEach((u) => URL.revokeObjectURL(u));
+      setUploadingPreviews((prev) => prev.filter((u) => !locals.includes(u)));
+    }
+  }, [apiKey, maxImages, uploadedImageUrls, tagRole, handleUploadSelect]);
+
+
 
   const handleUploadClear = useCallback(() => {
     setUploadedImageUrls([]);
@@ -1706,49 +1761,19 @@ export default function ImageStudio({
                 </div>
               ))}
 
-              {/* Main Upload Trigger (generic reference — red) */}
+              {/* Reference fields — click or drag an image straight onto them */}
               {uploadedImageUrls.length < maxImages && (
-                <UploadButton
-                  apiKey={apiKey}
-                  maxImages={maxImages}
-                  onSelect={handleUploadSelect}
-                  onClear={handleUploadClear}
-                  initialUrls={uploadedImageUrls}
-                  persistedHistory={uploadHistory}
-                  onHistoryChange={setUploadHistory}
-                />
-              )}
-
-              {/* Style reference (yellow) */}
-              {uploadedImageUrls.length < maxImages && (
-                <UploadButton
-                  apiKey={apiKey}
-                  maxImages={1}
-                  label="Style"
-                  onSelect={({ url, urls }) => {
-                    const newOnes = urls || [url];
-                    tagRole(newOnes, "style");
-                    handleUploadSelect({ urls: [...uploadedImageUrls, ...newOnes] });
-                  }}
-                  onClear={() => {}}
-                  initialUrls={[]}
-                />
-              )}
-
-              {/* Character reference (green) */}
-              {uploadedImageUrls.length < maxImages && (
-                <UploadButton
-                  apiKey={apiKey}
-                  maxImages={1}
-                  label="Character"
-                  onSelect={({ url, urls }) => {
-                    const newOnes = urls || [url];
-                    tagRole(newOnes, "character");
-                    handleUploadSelect({ urls: [...uploadedImageUrls, ...newOnes] });
-                  }}
-                  onClear={() => {}}
-                  initialUrls={[]}
-                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input ref={genericInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={(e) => { const f = [...e.target.files]; e.target.value = ""; uploadWithRole(f, "generic"); }} />
+                  <input ref={styleInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => { const f = [...e.target.files]; e.target.value = ""; uploadWithRole(f, "style"); }} />
+                  <input ref={characterInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => { const f = [...e.target.files]; e.target.value = ""; uploadWithRole(f, "character"); }} />
+                  <RefField label="Ref" color="#EF0328" onClick={() => genericInputRef.current?.click()} onFiles={(f) => uploadWithRole(f, "generic")} />
+                  <RefField label="Style" color="#FFD60A" onClick={() => styleInputRef.current?.click()} onFiles={(f) => uploadWithRole(f, "style")} />
+                  <RefField label="Character" color="#30D158" onClick={() => characterInputRef.current?.click()} onFiles={(f) => uploadWithRole(f, "character")} />
+                </div>
               )}
 
               {/* Swap Image Upload Trigger */}
@@ -1792,18 +1817,19 @@ export default function ImageStudio({
           <PromptFooter>
             {/* Left controls */}
             <PromptControls ref={dropdownRef}>
-              {/* Enhance toggle — sticky on/off */}
+              {/* Enhance — discreet icon toggle (sticky) */}
               <button
                 type="button"
                 onClick={toggleEnhance}
-                title={enhanceOn ? "Enhance ativado — o prompt é enriquecido por IA antes de gerar" : "Ativar enhance de prompt"}
-                className={`pressable h-[38px] px-3 flex items-center gap-1.5 rounded-lg border text-[13px] font-medium ${
+                title={enhanceOn ? "Enhance ativado" : "Enhance de prompt"}
+                aria-pressed={enhanceOn}
+                className={`pressable h-[38px] w-[38px] flex items-center justify-center rounded-lg border text-[15px] ${
                   enhanceOn
                     ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
-                    : "text-white/60 bg-white/[0.06] border-white/[0.06] hover:bg-white/[0.1] hover:text-white/85"
+                    : "text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
                 }`}
               >
-                ✦ Enhance
+                ✦
               </button>
               {/* Model button */}
               <div className="relative">

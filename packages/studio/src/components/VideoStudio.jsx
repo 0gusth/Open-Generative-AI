@@ -2124,32 +2124,36 @@ export default function VideoStudio({
           {/* Bottom row: controls + generate */}
           <PromptFooter>
             <PromptControls ref={dropdownRef}>
-              {/* Audio on/off */}
+              {/* Audio — discreet icon + mini switch */}
               <button
                 type="button"
                 onClick={toggleAudio}
-                title={audioOn ? "Gerar com som (nos modelos que suportam)" : "Gerar sem som"}
-                className={`pressable h-[38px] px-3 flex items-center gap-1.5 rounded-lg border text-[13px] font-medium ${
-                  audioOn
-                    ? "text-white/85 bg-white/[0.1] border-white/[0.12]"
-                    : "text-white/45 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
-                }`}
+                title={audioOn ? "Som ativado" : "Sem som"}
+                aria-pressed={audioOn}
+                className="pressable h-[38px] px-2.5 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.04] hover:bg-white/[0.07]"
               >
-                {audioOn ? "🔊 Som" : "🔇 Sem som"}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={audioOn ? "text-white/80" : "text-white/35"}>
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                  {audioOn ? <path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13" /> : <path d="M22 9l-6 6M16 9l6 6" />}
+                </svg>
+                <span className={`relative w-7 h-[16px] rounded-full transition-colors duration-150 ${audioOn ? "bg-[#30D158]" : "bg-white/15"}`}>
+                  <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${audioOn ? "left-[14px]" : "left-[2px]"}`} />
+                </span>
               </button>
 
-              {/* Enhance toggle — sticky on/off */}
+              {/* Enhance — discreet icon toggle (sticky) */}
               <button
                 type="button"
                 onClick={toggleEnhance}
-                title={enhanceOn ? "Enhance ativado — o prompt é enriquecido por IA antes de gerar" : "Ativar enhance de prompt"}
-                className={`pressable h-[38px] px-3 flex items-center gap-1.5 rounded-lg border text-[13px] font-medium ${
+                title={enhanceOn ? "Enhance ativado" : "Enhance de prompt"}
+                aria-pressed={enhanceOn}
+                className={`pressable h-[38px] w-[38px] flex items-center justify-center rounded-lg border text-[15px] ${
                   enhanceOn
                     ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
-                    : "text-white/60 bg-white/[0.06] border-white/[0.06] hover:bg-white/[0.1] hover:text-white/85"
+                    : "text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
                 }`}
               >
-                ✦ Enhance
+                ✦
               </button>
               {/* Model btn */}
               <div className="relative">

@@ -3,7 +3,15 @@
 import { useState } from "react";
 
 async function getClipboardPngBlob(url) {
-  const response = await fetch(url);
+  // Provider CDNs often send no CORS headers — fall back to the app's
+  // same-origin media proxy when the direct fetch is blocked.
+  let response;
+  try {
+    response = await fetch(url);
+    if (!response.ok) throw new Error(`status ${response.status}`);
+  } catch {
+    response = await fetch(`/api/proxy-media?url=${encodeURIComponent(url)}`);
+  }
   if (!response.ok) {
     throw new Error(`Image request failed with status ${response.status}.`);
   }
@@ -158,7 +166,7 @@ export function GenerationCopyButtons({
       onCopyError?.(
         kind === "text"
           ? "Could not copy the prompt to the clipboard."
-          : "Could not copy the image. Image copy requires HTTPS or localhost.",
+          : "Could not copy the image — the source did not respond. Try again.",
       );
     }
   };
@@ -297,7 +305,7 @@ export default function MobileGenerationActions({
             } catch (error) {
               console.error("Failed to copy the image:", error);
               onCopyError?.(
-                "Could not copy the image. Image copy requires HTTPS or localhost.",
+                "Could not copy the image — the source did not respond. Try again.",
               );
             }
           },
