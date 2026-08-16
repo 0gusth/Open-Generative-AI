@@ -42,6 +42,7 @@ import {
   promptControlClassName,
   promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
+import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -829,8 +830,19 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
                     </div>
                   )}
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-xs font-bold text-white tracking-tight truncate">
+                    <span className="text-xs font-bold text-white tracking-tight truncate flex items-center gap-1.5">
                       {m.name}
+                      {(() => {
+                        const badge = SPEED_BADGES[modelSpeedTier(m)];
+                        return badge ? (
+                          <span
+                            title={badge.title}
+                            className="text-[8px] font-medium text-white/45 border border-white/[0.09] rounded-full px-1.5 py-px whitespace-nowrap shrink-0"
+                          >
+                            {badge.label}
+                          </span>
+                        ) : null;
+                      })()}
                     </span>
                     {selectedProvider === "all" && m.provider_name && (
                       <span className="text-[9px] text-white/40">
