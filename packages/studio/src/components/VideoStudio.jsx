@@ -47,6 +47,7 @@ import {
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 import Lightbox from "./Lightbox.jsx";
+import { enhancePrompt } from "../providers.js";
 
 // Guards against re-processing the same dropped/pasted batch when effects
 // re-fire (dependency identity churn + React StrictMode double-invoke).
@@ -551,6 +552,40 @@ export default function VideoStudio({
     if (typeof window === "undefined") return "all";
     return window.localStorage.getItem("gallery_scope") || "all";
   });
+  // Audio on/off for models that can generate sound (Veo, Kling 3, Seedance 2.x…)
+  const [audioOn, setAudioOn] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("video_audio_on") !== "0";
+  });
+  const toggleAudio = () => {
+    setAudioOn((v) => {
+      const next = !v;
+      try { window.localStorage.setItem("video_audio_on", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
+  // Elements: categorized reference images (character/location/prop)
+  const [elementRoles, setElementRoles] = useState({});
+  const ELEMENT_COLORS = {
+    character: { ring: "border-[#30D158]/70", chip: "bg-[#30D158] !text-black", label: "char" },
+    location: { ring: "border-[#64D2FF]/70", chip: "bg-[#64D2FF] !text-black", label: "loc" },
+    prop: { ring: "border-[#FF9F0A]/70", chip: "bg-[#FF9F0A] !text-black", label: "prop" },
+    generic: { ring: "border-[#EF0328]/70", chip: "bg-[#EF0328]", label: null },
+  };
+
+  // Enhance toggle — persistent until the user turns it off
+  const [enhanceOn, setEnhanceOn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("enhance_prompt_on") === "1";
+  });
+  const toggleEnhance = () => {
+    setEnhanceOn((v) => {
+      const next = !v;
+      try { window.localStorage.setItem("enhance_prompt_on", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
+
 
   // Live render progress for the placeholder cards
   const [genProgress, setGenProgress] = useState(null);
@@ -913,6 +948,7 @@ export default function VideoStudio({
     [applyImageReferenceUrl],
   );
 
+  const pendingElementRole = useRef(null);
   const uploadImageReference = useCallback(
     async (file) => {
       if (file.size > 10 * 1024 * 1024) {
@@ -924,6 +960,11 @@ export default function VideoStudio({
       setImageProgress(0);
       try {
         const url = await uploadFile(apiKey, file, setImageProgress);
+        if (pendingElementRole.current) {
+          const role = pendingElementRole.current;
+          setElementRoles((prev) => ({ ...prev, [url]: role }));
+          pendingElementRole.current = null;
+        }
         applyImageReferenceUrl(url);
       } catch (err) {
         console.error("[VideoStudio] Image upload failed:", err);
@@ -1203,7 +1244,11 @@ export default function VideoStudio({
   const handleGenerate = useCallback(async () => {
     const currentModel = getCurrentModel();
     const isExtendMode = currentModel?.requiresRequestId;
-    const trimmedPrompt = prompt.trim();
+    let trimmedPrompt = prompt.trim();
+    if (enhanceOn && trimmedPrompt) {
+      setGenerating(true); // placeholder appears while the prompt is enriched
+      trimmedPrompt = await enhancePrompt(trimmedPrompt, "video");
+    }
 
     if (v2vMode) {
       if (!uploadedVideoUrl) {
@@ -1298,7 +1343,21 @@ export default function VideoStudio({
           i2vParams.image_url = uploadedImageUrl;
         }
         // Normalize @img1 → @image1 (native multi-reference syntax on Seedance-class models)
-        if (trimmedPrompt) i2vParams.prompt = trimmedPrompt.replace(/@im(?:g|age)\s?(\d{1,2})/gi, "@image$1");
+        if (trimmedPrompt) {
+          let vPrompt = trimmedPrompt.replace(/@im(?:g|age)\s?(\d{1,2})/gi, "@image$1");
+          const elementNotes = uploadedImageUrls
+            .map((u, i) => {
+              const role = elementRoles[u];
+              if (role === "character") return `Character element: @image${i + 1}.`;
+              if (role === "location") return `Location element: @image${i + 1}.`;
+              if (role === "prop") return `Prop element: @image${i + 1}.`;
+              return null;
+            })
+            .filter(Boolean);
+          if (elementNotes.length) vPrompt = `${vPrompt} ${elementNotes.join(" ")}`;
+          i2vParams.prompt = vPrompt;
+        }
+        i2vParams.__audio = audioOn;
         i2vParams.aspect_ratio = selectedAr;
         const i2vModel = i2vModels.find((m) => m.id === selectedModel);
         if (uploadedEndImageUrl && i2vModel?.lastImageField) {
@@ -1345,6 +1404,7 @@ export default function VideoStudio({
         // T2V (including extend mode)
         const params = { model: selectedModel };
         if (trimmedPrompt) params.prompt = trimmedPrompt;
+        params.__audio = audioOn;
 
         if (isExtendMode) {
           params.request_id = lastGenerationId;
@@ -1559,7 +1619,7 @@ export default function VideoStudio({
               return (
                 <div
                   key={entry.id || idx}
-                  className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#171719] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
+                  className="relative group rounded-2xl overflow-hidden border border-white/[0.08] bg-[#171719] shadow-[0_2px_12px_rgba(0,0,0,0.25)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:-translate-y-0.5 transition-[transform,box-shadow,border-color] duration-250 ease-apple flex flex-col cursor-pointer"
                   onClick={() => setLightboxIdx(idx)}
                 >
                   <video
@@ -1764,7 +1824,7 @@ export default function VideoStudio({
               {imageMode && getMaxImagesForI2VModel(selectedModel) > 2 && (
                 <>
                   {uploadedImageUrls.map((url, idx) => (
-                    <div key={url} className={PROMPT_MEDIA_PREVIEW_CLASS}>
+                    <div key={url} className={`${PROMPT_MEDIA_PREVIEW_CLASS} border-2 ${(ELEMENT_COLORS[elementRoles[url] || "generic"]).ring}`}>
                       <img src={url} alt="" className="w-full h-full object-cover" />
                       <button
                         type="button"
@@ -1773,8 +1833,8 @@ export default function VideoStudio({
                       >
                         ×
                       </button>
-                      <span className="absolute bottom-0.5 right-0.5 px-1 h-3.5 bg-black/60 rounded-full text-[8px] font-black text-white/80 leading-none flex items-center justify-center pointer-events-none">
-                        {idx + 1}
+                      <span className={`absolute bottom-0.5 right-0.5 px-1 h-3.5 rounded-full text-[8px] font-black leading-none flex items-center justify-center pointer-events-none ${elementRoles[url] ? (ELEMENT_COLORS[elementRoles[url]]).chip : "bg-black/60 text-white/80"}`}>
+                        {elementRoles[url] ? (ELEMENT_COLORS[elementRoles[url]]).label : idx + 1}
                       </span>
                     </div>
                   ))}
@@ -1877,6 +1937,32 @@ export default function VideoStudio({
                     </div>
                   )
                 )
+              )}
+
+              {/* Elements: categorized references (multi-image models) */}
+              {imageMode && getMaxImagesForI2VModel(selectedModel) > 2 &&
+                uploadedImageUrls.length < getMaxImagesForI2VModel(selectedModel) && (
+                <div className="flex items-center gap-1.5">
+                  {[
+                    ["character", "Char", "#30D158"],
+                    ["location", "Loc", "#64D2FF"],
+                    ["prop", "Prop", "#FF9F0A"],
+                  ].map(([role, label, color]) => (
+                    <button
+                      key={role}
+                      type="button"
+                      title={`Adicionar elemento: ${label}`}
+                      onClick={() => {
+                        pendingElementRole.current = role;
+                        imageFileInputRef.current?.click();
+                      }}
+                      className="pressable h-[38px] px-2.5 rounded-lg border text-[11px] font-semibold"
+                      style={{ color, borderColor: `${color}44`, background: `${color}14` }}
+                    >
+                      + {label}
+                    </button>
+                  ))}
+                </div>
               )}
 
               {/* End frame image button */}
@@ -2038,6 +2124,33 @@ export default function VideoStudio({
           {/* Bottom row: controls + generate */}
           <PromptFooter>
             <PromptControls ref={dropdownRef}>
+              {/* Audio on/off */}
+              <button
+                type="button"
+                onClick={toggleAudio}
+                title={audioOn ? "Gerar com som (nos modelos que suportam)" : "Gerar sem som"}
+                className={`pressable h-[38px] px-3 flex items-center gap-1.5 rounded-lg border text-[13px] font-medium ${
+                  audioOn
+                    ? "text-white/85 bg-white/[0.1] border-white/[0.12]"
+                    : "text-white/45 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
+                }`}
+              >
+                {audioOn ? "🔊 Som" : "🔇 Sem som"}
+              </button>
+
+              {/* Enhance toggle — sticky on/off */}
+              <button
+                type="button"
+                onClick={toggleEnhance}
+                title={enhanceOn ? "Enhance ativado — o prompt é enriquecido por IA antes de gerar" : "Ativar enhance de prompt"}
+                className={`pressable h-[38px] px-3 flex items-center gap-1.5 rounded-lg border text-[13px] font-medium ${
+                  enhanceOn
+                    ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
+                    : "text-white/60 bg-white/[0.06] border-white/[0.06] hover:bg-white/[0.1] hover:text-white/85"
+                }`}
+              >
+                ✦ Enhance
+              </button>
               {/* Model btn */}
               <div className="relative">
                 <button

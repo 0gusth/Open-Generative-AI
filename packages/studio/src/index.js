@@ -20,3 +20,4 @@ export * from './muapi';
 
 export { getProviderKey, setProviderKey, pickProvider, getProviderBalances, PROVIDER_ROUTES } from './providers.js';
 export { fetchLedger, fetchPending, reconcilePending, recordGeneration } from './ledger.js';
+export { enhancePrompt } from './providers.js';

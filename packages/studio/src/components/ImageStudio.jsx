@@ -45,6 +45,7 @@ import {
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 import Lightbox from "./Lightbox.jsx";
+import { enhancePrompt } from "../providers.js";
 
 // Guards against re-processing the same dropped/pasted batch when effects
 // re-fire (dependency identity churn + React StrictMode double-invoke).
@@ -961,6 +962,20 @@ export default function ImageStudio({
     return window.localStorage.getItem("gallery_scope") || "all";
   });
 
+  // Enhance toggle — persistent until the user turns it off
+  const [enhanceOn, setEnhanceOn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("enhance_prompt_on") === "1";
+  });
+  const toggleEnhance = () => {
+    setEnhanceOn((v) => {
+      const next = !v;
+      try { window.localStorage.setItem("enhance_prompt_on", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
+
+
   // Live render progress for the placeholder cards
   const [genProgress, setGenProgress] = useState(null);
   useEffect(() => {
@@ -971,6 +986,22 @@ export default function ImageStudio({
   }, [generating]);
 
   const [uploadingPreviews, setUploadingPreviews] = useState([]); // local blob: URLs shown instantly while uploads run
+  // Reference roles: which slot each attachment was added through.
+  // generic = red (default) · style = yellow · character = green
+  const [refRoles, setRefRoles] = useState({});
+  const REF_ROLE_COLORS = {
+    generic: { ring: "border-[#EF0328]/70", chip: "bg-[#EF0328]" },
+    style: { ring: "border-[#FFD60A]/70", chip: "bg-[#FFD60A] !text-black" },
+    character: { ring: "border-[#30D158]/70", chip: "bg-[#30D158] !text-black" },
+  };
+  const tagRole = useCallback((urls, role) => {
+    if (role === "generic") return;
+    setRefRoles((prev) => {
+      const next = { ...prev };
+      urls.forEach((u) => { next[u] = role; });
+      return next;
+    });
+  }, []);
 
   // Server ledger is the cross-browser source of truth: merge it into the
   // local grid and keep a live view of the pending render queue.
@@ -1384,6 +1415,11 @@ export default function ImageStudio({
     }
 
     onGenerationStart?.();
+    let finalPrompt = prompt.trim();
+    if (enhanceOn && finalPrompt) {
+      setGenerating(true); // placeholder appears while the prompt is enriched
+      finalPrompt = await enhancePrompt(finalPrompt, "image");
+    }
     setGenerating(true);
     setGenerateError(null);
 
@@ -1398,7 +1434,7 @@ export default function ImageStudio({
               aspect_ratio: selectedAr,
             };
             if (swapImageUrl) genParams.swap_url = swapImageUrl;
-            if (prompt.trim()) genParams.prompt = resolveImageRefs(prompt.trim(), uploadedImageUrls.length).resolved;
+            if (prompt.trim()) genParams.prompt = resolveImageRefs(finalPrompt, uploadedImageUrls.length).resolved;
             if (currentQualityField && selectedQuality) {
               genParams[currentQualityField] = selectedQuality;
             }
@@ -1407,7 +1443,7 @@ export default function ImageStudio({
           } else {
             const genParams = {
               model: selectedModelId,
-              prompt: prompt.trim(),
+              prompt: finalPrompt,
               aspect_ratio: selectedAr,
             };
             if (currentQualityField && selectedQuality) {
@@ -1423,7 +1459,7 @@ export default function ImageStudio({
           const entry = {
             id: res.id || Math.random().toString(36).substring(7),
             url: res.url,
-            prompt: prompt.trim(),
+            prompt: finalPrompt,
             model: selectedModelId,
             aspect_ratio: selectedAr,
             timestamp: new Date().toISOString(),
@@ -1432,7 +1468,7 @@ export default function ImageStudio({
           onGenerationComplete?.({
             url: res.url,
             model: selectedModelId,
-            prompt: prompt.trim(),
+            prompt: finalPrompt,
             type: "image",
           });
         }
@@ -1522,13 +1558,13 @@ export default function ImageStudio({
             {history.map((entry, idx) => (
               <div
                 key={entry.id || idx}
-                className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#171719] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
+                className="relative group rounded-2xl overflow-hidden border border-white/[0.08] bg-[#171719] shadow-[0_2px_12px_rgba(0,0,0,0.25)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:-translate-y-0.5 transition-[transform,box-shadow,border-color] duration-250 ease-apple flex flex-col cursor-pointer"
                 onClick={() => setLightboxIdx(idx)}
               >
                 <img
                   src={entry.url}
                   alt={entry.prompt?.substring(0, 30) || "Generated image"}
-                  className="w-full aspect-square object-cover bg-black/40 hover:opacity-80 transition-opacity"
+                  className="w-full aspect-square object-cover bg-black/40 group-hover:scale-[1.02] transition-transform duration-350 ease-apple"
                 />
                 
                 {/* Overlay actions */}
@@ -1599,17 +1635,18 @@ export default function ImageStudio({
                 />
 
                 {/* Prompt & Details */}
-                <div className="p-3 bg-black/80 backdrop-blur-sm border-t border-white/5 flex-1 flex flex-col justify-between gap-2">
-                  <p className="text-white/70 text-xs line-clamp-3 leading-relaxed" title={entry.prompt}>
+                <div className="p-3.5 bg-[#171719] flex-1 flex flex-col justify-between gap-2">
+                  <p className="text-white/65 text-[12px] line-clamp-2 leading-relaxed" title={entry.prompt}>
                     {entry.prompt || "No prompt provided"}
                   </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded border border-primary/20 capitalize">
-                        {entry.model?.replace("-", " ") || "Image Studio"}
-                      </span>
-                      <span className="text-[10px] text-white/40">{entry.aspect_ratio}</span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-medium text-white/60 px-2 py-0.5 bg-white/[0.06] rounded-full border border-white/[0.07] capitalize truncate">
+                      {entry.model?.replace(/-/g, " ") || "Image Studio"}
+                    </span>
+                    {entry.aspect_ratio && <span className="text-[10px] text-white/30 tabular-nums">{entry.aspect_ratio}</span>}
+                    {entry.provider && entry.provider !== "muapi" && (
+                      <span className="text-[9px] text-white/25 capitalize ml-auto">{entry.provider}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1637,11 +1674,11 @@ export default function ImageStudio({
             {/* Inline list of uploaded files */}
             <div className="flex items-center gap-2.5 flex-wrap">
               {uploadedImageUrls && uploadedImageUrls.length > 0 && uploadedImageUrls.map((url, idx) => (
-                <div key={url} className={PROMPT_MEDIA_PREVIEW_CLASS}>
+                <div key={url} className={`${PROMPT_MEDIA_PREVIEW_CLASS} border-2 ${(REF_ROLE_COLORS[refRoles[url] || "generic"]).ring}`}>
                   <img src={url} alt="" className="w-full h-full object-cover" />
-                  {uploadedImageUrls.length > 1 && (
-                    <span className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-sm text-white/90 text-[8px] font-medium text-center leading-3 pointer-events-none">
-                      @img{idx + 1}
+                  {(uploadedImageUrls.length > 1 || refRoles[url]) && (
+                    <span className={`absolute bottom-0 inset-x-0 backdrop-blur-sm text-white text-[8px] font-semibold text-center leading-3 pointer-events-none ${(REF_ROLE_COLORS[refRoles[url] || "generic"]).chip}`}>
+                      {refRoles[url] === "style" ? "style" : refRoles[url] === "character" ? "char" : `@img${idx + 1}`}
                     </span>
                   )}
                   <button
@@ -1649,6 +1686,7 @@ export default function ImageStudio({
                     onClick={() => {
                       const next = uploadedImageUrls.filter((_, i) => i !== idx);
                       setUploadedImageUrls(next);
+                      setRefRoles((prev) => { const n = { ...prev }; delete n[url]; return n; });
                       if (next.length === 0) handleUploadClear();
                     }}
                     className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 hover:text-white text-[8px] border border-white/5"
@@ -1668,7 +1706,7 @@ export default function ImageStudio({
                 </div>
               ))}
 
-              {/* Main Upload Trigger */}
+              {/* Main Upload Trigger (generic reference — red) */}
               {uploadedImageUrls.length < maxImages && (
                 <UploadButton
                   apiKey={apiKey}
@@ -1678,6 +1716,38 @@ export default function ImageStudio({
                   initialUrls={uploadedImageUrls}
                   persistedHistory={uploadHistory}
                   onHistoryChange={setUploadHistory}
+                />
+              )}
+
+              {/* Style reference (yellow) */}
+              {uploadedImageUrls.length < maxImages && (
+                <UploadButton
+                  apiKey={apiKey}
+                  maxImages={1}
+                  label="Style"
+                  onSelect={({ url, urls }) => {
+                    const newOnes = urls || [url];
+                    tagRole(newOnes, "style");
+                    handleUploadSelect({ urls: [...uploadedImageUrls, ...newOnes] });
+                  }}
+                  onClear={() => {}}
+                  initialUrls={[]}
+                />
+              )}
+
+              {/* Character reference (green) */}
+              {uploadedImageUrls.length < maxImages && (
+                <UploadButton
+                  apiKey={apiKey}
+                  maxImages={1}
+                  label="Character"
+                  onSelect={({ url, urls }) => {
+                    const newOnes = urls || [url];
+                    tagRole(newOnes, "character");
+                    handleUploadSelect({ urls: [...uploadedImageUrls, ...newOnes] });
+                  }}
+                  onClear={() => {}}
+                  initialUrls={[]}
                 />
               )}
 
@@ -1722,6 +1792,19 @@ export default function ImageStudio({
           <PromptFooter>
             {/* Left controls */}
             <PromptControls ref={dropdownRef}>
+              {/* Enhance toggle — sticky on/off */}
+              <button
+                type="button"
+                onClick={toggleEnhance}
+                title={enhanceOn ? "Enhance ativado — o prompt é enriquecido por IA antes de gerar" : "Ativar enhance de prompt"}
+                className={`pressable h-[38px] px-3 flex items-center gap-1.5 rounded-lg border text-[13px] font-medium ${
+                  enhanceOn
+                    ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
+                    : "text-white/60 bg-white/[0.06] border-white/[0.06] hover:bg-white/[0.1] hover:text-white/85"
+                }`}
+              >
+                ✦ Enhance
+              </button>
               {/* Model button */}
               <div className="relative">
                 <button

@@ -393,6 +393,16 @@ async function submitRunwareTask(task) {
             const [w, h] = closestAllowedSize(dimError.allowedValues, task.width, task.height);
             return await runwareCall([{ ...task, taskUUID: makeUUID(), width: w, height: h }]);
         }
+        // Unsupported optional parameter (e.g. generateAudio on a silent model):
+        // drop it and retry once.
+        const paramError = (error.runwareErrors || []).find(
+            (e) => e.code === "unsupportedParameter" && e.parameter && e.parameter in task,
+        );
+        if (paramError) {
+            const retry = { ...task, taskUUID: makeUUID() };
+            delete retry[paramError.parameter];
+            return await runwareCall([retry]);
+        }
         throw error;
     }
 }
@@ -410,6 +420,10 @@ async function generateVideoRunware(air, params) {
         outputType: "URL",
         numberResults: 1,
     };
+    // Sound on/off for audio-capable families; self-heal strips it elsewhere
+    if (typeof params.__audio === "boolean" && /veo|kling|seedance|hailuo|minimax|wan/i.test(air)) {
+        task.generateAudio = params.__audio;
+    }
     if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;
     // Image-to-video: first (and optionally last) frame
     const frames = [];
@@ -501,4 +515,40 @@ async function getFalBalance() {
 export async function getProviderBalances() {
     const [runware, fal] = await Promise.all([getRunwareBalance(), getFalBalance()]);
     return { runware, fal };
+}
+
+// ── Prompt enhancement (Runware textInference, DeepSeek V4 Flash) ───────────
+
+const ENHANCE_MODEL = "deepseek:v4@flash";
+
+// Rewrite a short prompt into a rich generation prompt. Fails soft: any
+// error returns the original prompt so generation never blocks on enhance.
+export async function enhancePrompt(prompt, kind = "image") {
+    if (!prompt || !getProviderKey("runware")) return prompt;
+    const motion = kind === "video"
+        ? " Describe motion explicitly: camera movement, subject action, pacing."
+        : "";
+    try {
+        const results = await runwareCall([
+            {
+                taskType: "textInference",
+                taskUUID: makeUUID(),
+                model: ENHANCE_MODEL,
+                messages: [
+                    {
+                        role: "system",
+                        content:
+                            "You are a prompt engineer for AI " + kind + " generation. Rewrite the user's prompt into a vivid, specific generation prompt in English: subject details, lighting, composition, lens/camera language, mood, materials." + motion +
+                            " Preserve any reference tokens like @img1, @image2 or 'image 1' EXACTLY as written. Output ONLY the rewritten prompt — no quotes, no commentary. At most 110 words.",
+                    },
+                    { role: "user", content: prompt },
+                ],
+            },
+        ]);
+        const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
+        return text || prompt;
+    } catch (error) {
+        console.warn("[providers] enhance failed, using original prompt:", error.message);
+        return prompt;
+    }
 }
