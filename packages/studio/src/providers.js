@@ -563,6 +563,8 @@ export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartF
     const instruction = fusionInstruction(mode, hasStartFrame, {
         continuation: !!opts.continuation,
         dialect: dialectFor(opts.modelId, mode, mode === "video" && hasStartFrame),
+        hasCharacterRefs: !!opts.hasCharacterRefs,
+        characters: opts.characters || [],
     });
     try {
         const results = await runwareCall([

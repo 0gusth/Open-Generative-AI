@@ -405,13 +405,29 @@ export const PromptMentionTextarea = forwardRef(function PromptMentionTextarea(
       if (k === "@loc") return "@location";
       return k.replace("@image", "@img");
     };
+    // Collect hits from the role regex AND from literal custom tokens (saved
+    // characters etc.) so any token in mentionList highlights, not just the
+    // predefined roles.
+    const hits = [];
+    for (const match of value.matchAll(MENTION_TOKEN_REGEX)) {
+      hits.push({ index: match.index, text: match[0], item: known.get(alias(match[0])) });
+    }
+    for (const m of mentionList) {
+      if (MENTION_TOKEN_REGEX.test(m.token)) { MENTION_TOKEN_REGEX.lastIndex = 0; continue; }
+      MENTION_TOKEN_REGEX.lastIndex = 0;
+      const escaped = m.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (const match of value.matchAll(new RegExp(`${escaped}(?![\\p{L}\\p{N}_-])`, "giu"))) {
+        hits.push({ index: match.index, text: match[0], item: m });
+      }
+    }
+    hits.sort((a, b) => a.index - b.index || b.text.length - a.text.length);
     const parts = [];
     let last = 0;
-    for (const match of value.matchAll(MENTION_TOKEN_REGEX)) {
-      const hit = known.get(alias(match[0]));
-      if (match.index > last) parts.push({ text: value.slice(last, match.index) });
-      parts.push({ text: match[0], token: true, valid: !!hit, color: hit?.color || MENTION_ACCENT });
-      last = match.index + match[0].length;
+    for (const hit of hits) {
+      if (hit.index < last) continue; // overlap — first (longer) match wins
+      if (hit.index > last) parts.push({ text: value.slice(last, hit.index) });
+      parts.push({ text: hit.text, token: true, valid: !!hit.item, color: hit.item?.color || MENTION_ACCENT });
+      last = hit.index + hit.text.length;
     }
     if (last < value.length) parts.push({ text: value.slice(last) });
     return parts;

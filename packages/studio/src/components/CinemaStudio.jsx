@@ -22,6 +22,7 @@ import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import {
   PromptComposer,
   PromptTextarea,
+  PromptMentionTextarea,
   PromptFooter,
   PromptControls,
   PromptAction,
@@ -192,6 +193,108 @@ function PickerSection({ label, category, items, value, onSelect }) {
   );
 }
 
+// ── Cast panel — saved characters (@name) ───────────────────────────────────
+
+function CastPanel({ cast, apiKey, onChanged }) {
+  const [name, setName] = useState("");
+  const [identity, setIdentity] = useState("");
+  const [refUrl, setRefUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+
+  const pickImage = async (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setUploading(true);
+    try { setRefUrl(await uploadFile(apiKey, file)); }
+    catch (e) { toast.error(`Upload falhou: ${e.message}`); }
+    finally { setUploading(false); }
+  };
+
+  const save = async () => {
+    if (!name.trim()) { toast.error("Dá um nome ao personagem."); return; }
+    if (!refUrl) { toast.error("Personagem precisa de uma imagem de referência."); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/characters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", name, identity, refUrl }),
+      }).then((r) => r.json());
+      if (res.error) throw new Error(res.error);
+      setName(""); setIdentity(""); setRefUrl(null);
+      onChanged();
+      toast.success(`@${res.character.name} entrou no elenco.`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (c) => {
+    await fetch("/api/characters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", id: c.id }),
+    }).catch(() => {});
+    onChanged();
+  };
+
+  return (
+    <div className="mb-1">
+      <div className="text-[11px] font-semibold text-white/35 uppercase tracking-wider mb-2 px-1">
+        Cast — escreva @nome no prompt para escalar
+      </div>
+      {cast.length > 0 && (
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2 mb-3">
+          {cast.map((c) => (
+            <div key={c.id} className="group/cast relative flex flex-col gap-1.5 rounded-xl p-1" title={c.identity || c.name}>
+              <img src={c.refUrl} alt="" className="w-full h-[64px] rounded-lg object-cover border-2 border-[#30D158]/50" />
+              <button type="button" onClick={() => remove(c)}
+                className="absolute top-0 right-0 w-4 h-4 bg-black/70 hover:bg-black rounded-full items-center justify-center text-white/85 text-[8px] border border-white/10 hidden group-hover/cast:flex">×</button>
+              <span className="text-[10px] leading-tight px-0.5 text-[#30D158] font-medium truncate">@{c.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-start gap-2.5 flex-wrap rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5">
+        <input ref={fileRef} type="file" accept="image/*" className="hidden"
+          onChange={(e) => { const f = e.target.files[0]; e.target.value = ""; pickImage(f); }} />
+        <button type="button" onClick={() => fileRef.current?.click()}
+          className="pressable w-[64px] h-[64px] shrink-0 rounded-lg border border-dashed border-white/20 bg-white/[0.03] flex items-center justify-center overflow-hidden">
+          {uploading ? (
+            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
+          ) : refUrl ? (
+            <img src={refUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-white/40"><path d="M12 5v14M5 12h14" /></svg>
+          )}
+        </button>
+        <div className="flex-1 min-w-[220px] flex flex-col gap-1.5">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value.replace(/\s+/g, ""))}
+            placeholder="Nome (vira o @tag — sem espaços)"
+            className="h-8 px-2.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[12px] text-white/90 placeholder:text-white/30 outline-none focus:border-[#EF0328]/60"
+          />
+          <textarea
+            value={identity}
+            onChange={(e) => setIdentity(e.target.value)}
+            rows={2}
+            placeholder="Marcadores visíveis: porte, cabelo, roupa, postura — nunca idade nem nome próprio"
+            className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[12px] text-white/90 placeholder:text-white/30 outline-none focus:border-[#EF0328]/60 resize-none"
+          />
+        </div>
+        <button type="button" onClick={save} disabled={saving || uploading}
+          className="pressable self-end h-8 px-3.5 rounded-lg bg-[#EF0328] text-white text-[12px] font-semibold disabled:opacity-40">
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onGenerationStart, onGenerationEnd, onGenerationComplete, onGenerationError }) {
@@ -243,6 +346,41 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // Open list popovers: "model" | "aspect" | "duration" | "quality" | null
   const [openList, setOpenList] = useState(null);
   const [modelSearch, setModelSearch] = useState("");
+
+  // ── Cast: saved characters (@name) — cross-browser via /api/characters ──
+  const [cast, setCast] = useState([]);
+  const loadCast = useCallback(async () => {
+    try {
+      const data = await fetch("/api/characters").then((r) => r.json());
+      setCast(data.characters || []);
+    } catch { /* offline — cast just stays empty */ }
+  }, []);
+  useEffect(() => { loadCast(); }, [loadCast]);
+
+  // Characters actually mentioned in the prompt right now
+  const mentionedCast = useMemo(() => {
+    if (!prompt) return [];
+    return cast.filter((c) => new RegExp(`@${c.name}(?![\\p{L}\\p{N}_-])`, "iu").test(prompt));
+  }, [prompt, cast]);
+
+  // Mention list for the textarea: saved characters (green) + attached refs
+  const promptMentions = useMemo(() => [
+    ...cast.map((c) => ({ token: `@${c.name}`, thumb: c.refUrl, color: "#30D158" })),
+    ...refs.map((url, i) => ({ token: `@img${i + 1}`, thumb: url, color: "#EF0328" })),
+  ], [cast, refs]);
+
+  // Replace @name tokens with the character's visible markers — the raw-path
+  // resolution used when Director's enhance is off (the model never sees tags).
+  const inlineCast = useCallback((text) => {
+    let out = text;
+    for (const c of mentionedCast) {
+      out = out.replace(
+        new RegExp(`@${c.name}(?![\\p{L}\\p{N}_-])`, "giu"),
+        c.identity ? `the character (${c.identity})` : "the character from the reference",
+      );
+    }
+    return out;
+  }, [mentionedCast]);
 
   const uploadRefs = useCallback(async (files) => {
     const usable = files.filter((f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024).slice(0, 9 - refs.length);
@@ -353,23 +491,32 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     onGenerationStart?.();
     setGenerating(true);
     try {
-      let finalPrompt = compiled.prompt;
+      // Saved characters: attach their reference images and resolve @tags to
+      // visible markers (the reference owns identity, the text owns action).
+      const castRefs = mentionedCast
+        .map((c) => c.refUrl)
+        .filter((u) => u && u !== startFrame && !refs.includes(u));
+      const effRefs = [...refs, ...castRefs].slice(0, 9);
+      const material = inlineCast(compiled.prompt);
+      let finalPrompt = material;
       if (enhanceOn) {
         const cont = continuationRef.current;
         const isContinuation = !!cont && (startFrame === cont.url || endFrame === cont.url);
-        finalPrompt = await cinemaFusePrompt(compiled.prompt, mode, !!(startFrame || refs.length), {
+        finalPrompt = await cinemaFusePrompt(material, mode, !!(startFrame || effRefs.length), {
           modelId,
           continuation: isContinuation,
+          hasCharacterRefs: castRefs.length > 0,
+          characters: mentionedCast.map((c) => ({ name: c.name, identity: c.identity })),
         });
       }
       let res;
       if (mode === "image") {
         const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect };
-        if (refs.length) params.images_list = refs;
+        if (effRefs.length) params.images_list = effRefs;
         res = await generateImage(apiKey, params);
-      } else if (startFrame || refs.length || endFrame) {
-        const allImages = [startFrame, ...refs].filter(Boolean);
-        const useOmni = refs.length > 0 && caps.omni;
+      } else if (startFrame || effRefs.length || endFrame) {
+        const allImages = [startFrame, ...effRefs].filter(Boolean);
+        const useOmni = effRefs.length > 0 && caps.omni;
         const params = {
           model: useOmni ? caps.omni.id : i2vSibling(modelId),
           image_url: allImages[0] || endFrame,
@@ -595,6 +742,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
               {openPanel === "movement" && (
                 <PickerSection label="Camera Movement" category="movement" items={MOVEMENTS} value={setup.movement} onSelect={set("movement")} />
               )}
+              {openPanel === "cast" && (
+                <CastPanel cast={cast} apiKey={apiKey} onChanged={loadCast} />
+              )}
             </div>
           )}
 
@@ -695,6 +845,18 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
             {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium", "shotSize", "angle"])}
             {panelButton("look", "Look", ["palette", "lighting"])}
             {mode === "video" && panelButton("movement", "Movement", ["movement"])}
+            <button
+              type="button"
+              onClick={() => setOpenPanel(openPanel === "cast" ? null : "cast")}
+              className={promptControlClassName({ compact: true, active: openPanel === "cast" })}
+            >
+              <span className="text-xs font-semibold">Cast</span>
+              {mentionedCast.length > 0 && (
+                <span className="min-w-[16px] h-4 px-1 rounded-full bg-[#30D158] text-black text-[9px] font-bold flex items-center justify-center">
+                  {mentionedCast.length}
+                </span>
+              )}
+            </button>
             <div className="w-px h-5 bg-white/[0.08]" />
             <button
               type="button"
@@ -709,10 +871,11 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
             >✦</button>
           </div>
 
-          {/* Prompt */}
-          <PromptTextarea
+          {/* Prompt — @Name mentions resolve to saved cast, @imgN to refs */}
+          <PromptMentionTextarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            mentions={promptMentions}
             placeholder="Describe your scene — the system directs the rest…"
           />
 

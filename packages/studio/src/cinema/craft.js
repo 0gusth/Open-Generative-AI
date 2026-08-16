@@ -48,6 +48,31 @@ IMAGE-TO-VIDEO (a start frame is provided):
 - Give the frame life: one primary subject motion + camera move + one atmospheric motion.
 `.trim();
 
+// Performance direction — distilled acting craft applied whenever people are
+// in the scene. Truthful behavior over depicted emotion.
+export const CRAFT_ACTING = `
+PERFORMANCE (when characters are present):
+- Characters pursue an OBJECTIVE, never display an emotion: "she pushes the contract across the table, holding his gaze" beats "she looks determined". The emotion arises from the pursuit.
+- States, not transitions: describe the character already IN the action (mid-throw, mid-stride, mid-argument) — models nail states and fail processes.
+- Eye life is mandatory: gaze targets something specific, blinks are real (a lazy blink, a quick double-blink, a hard reset-blink), catchlights read wet and alive. Eyes reach the target a beat before the head turns. Dead frozen eyes are the #1 AI tell.
+- The body before psychology: center of gravity (high chest = confidence, low slouch = fatigue/fear), tempo (the most dangerous people move least), breath (high and rapid = panic, low and slow = control).
+- Give hands a BUSINESS: characters fix, pour, count, wipe — and talk over the top of it. Stopping the business at a key beat is the strongest accent.
+- The strong are still and quiet; the weak fidget and shout. The most frightening line is the quietest. Threat arrives without wind-up — no menacing pauses or slow turns.
+- Group reactions travel in a wave, never in sync: one person reacts first, the next 0.4s later, the third not at all.
+- Emotion recipes in visible muscle (pick 2-4 tells, never stack all): anger = masseter pulsing at the jaw, nostrils flaring, no blink at the climax; anxiety = one visible swallow, tongue wetting a dry lip, shallow nasal inhale; sadness = eyes wet with catchlight but NEVER spilling, faint lip tremble, head sinking; shock = body frozen 0.3-0.5s, pupils dilating, one delayed sharp inhale; control = even breathing, slow deliberate blinks, slight chin lift; suppressed emotion = muscles visibly fighting it, one effortful swallow, a single jaw tremor instantly re-clenched.
+- No tears unless asked — wet-with-catchlight is the sadness default. No cartoon grimaces. Nobody just stands there talking: there is always a micro-movement.
+`.trim();
+
+// Identity/motion separation — hard rule when character references are
+// attached: the reference owns the face, the text owns the action. Mixing
+// them re-describes identity during motion and causes face drift.
+export const CRAFT_IDENTITY_SEPARATION = `
+CHARACTER REFERENCES ATTACHED:
+- The reference image OWNS the character's identity. Do NOT re-describe face, hair, build or clothing in the prompt — re-description makes the face drift mid-clip.
+- The text owns ACTION only: what the character does, where they move, how the camera behaves.
+- If the scene must change something the reference shows (a different outfit, an injury), state the change explicitly as a delta; otherwise stay silent about appearance.
+`.trim();
+
 // Continuation discipline (sequel/prequel from an extracted frame). Distilled
 // from the five-rule continuation formula: extend, never loop.
 export const CRAFT_CONTINUATION = `
@@ -67,9 +92,14 @@ export const LENGTH_TARGETS = {
 
 // Build the fusion system instruction for a given generation context.
 // opts: { modelId — dialect of the selected model gets appended;
-//         continuation — sequel/prequel discipline (extend, never loop) }
+//         continuation — sequel/prequel discipline (extend, never loop);
+//         hasCharacterRefs — identity/motion separation (refs own the face);
+//         characters — resolved saved characters [{name, identity}] in scene }
 export function fusionInstruction(mode /* "image" | "video" */, hasStartFrame, opts = {}) {
   const i2v = mode === "video" && hasStartFrame;
+  const characterLines = (opts.characters || [])
+    .map((c) => `Character @${c.name}: ${c.identity}`)
+    .join("\n");
   const parts = [
     `You are a film director's assistant fusing a scene description with cinematography directives into one seamless ${mode} generation prompt.`,
     i2v
@@ -78,8 +108,13 @@ export function fusionInstruction(mode /* "image" | "video" */, hasStartFrame, o
     "PRESERVE EXACTLY every equipment name (cameras, lenses, film stocks), lighting scheme, color grade and camera movement directive — do not drop, weaken or paraphrase them. Do not invent new equipment.",
     "If the scene text and the treatment disagree on camera movement, the treatment's directive wins. If the scene text stacks multiple camera moves, keep only ONE primary move (plus at most a texture modifier) — resolve to the treatment's move when present.",
     CRAFT_CORE,
+    CRAFT_ACTING,
     mode === "video" ? CRAFT_VIDEO_EXTRA : "",
     i2v ? CRAFT_I2V_EXTRA : "",
+    opts.hasCharacterRefs ? CRAFT_IDENTITY_SEPARATION : "",
+    characterLines
+      ? "SAVED CHARACTERS IN THIS SCENE (their reference images are attached — keep their @tags OUT of the final prompt, refer to each by their visible markers below, and never re-describe beyond these markers):\n" + characterLines
+      : "",
     opts.continuation ? CRAFT_CONTINUATION : "",
     opts.dialect || "",
     `Output ONLY the final prompt, no commentary. Target ${LENGTH_TARGETS[i2v ? "i2v" : mode]}.`,
