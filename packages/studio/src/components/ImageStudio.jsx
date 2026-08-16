@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateImage, generateI2I, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
@@ -1023,6 +1023,13 @@ export default function ImageStudio({
     style: { ring: "border-[#FFD60A]/70", chip: "bg-[#FFD60A] !text-black" },
     character: { ring: "border-[#30D158]/70", chip: "bg-[#30D158] !text-black" },
   };
+  const promptMentions = useMemo(() => uploadedImageUrls.map((u, i) => {
+    const role = refRoles[u];
+    if (role === "style") return { token: "@style", thumb: u, color: "#FFD60A" };
+    if (role === "character") return { token: "@character", thumb: u, color: "#30D158" };
+    return { token: `@img${i + 1}`, thumb: u, color: "#EF0328" };
+  }), [uploadedImageUrls, refRoles]);
+
   const tagRole = useCallback((urls, role) => {
     if (role === "generic") return;
     setRefRoles((prev) => {
@@ -1429,15 +1436,26 @@ export default function ImageStudio({
   };
 
   // ── Generation ───────────────────────────────────────────────────────────
-  // Resolve @img1/@image1 prompt references against the attached images.
-  // Models without native @image support get plain-English "image N" phrasing.
+  // Resolve @img1/@style/@character prompt references against the attached
+  // images (role tokens map to the attachment carrying that role). Models
+  // without native @image support get plain-English "image N" phrasing.
   const resolveImageRefs = (text, imageCount) => {
-    if (!text) return text;
+    if (!text) return { resolved: text, missing: null };
     let missing = null;
-    const resolved = text.replace(/@im(?:g|age)\s?(\d{1,2})/gi, (match, n) => {
+    const styleIdx = uploadedImageUrls.findIndex((u) => refRoles[u] === "style");
+    const charIdx = uploadedImageUrls.findIndex((u) => refRoles[u] === "character");
+    let resolved = text.replace(/@style\b/gi, (m) => {
+      if (styleIdx < 0) { missing = missing || m; return m; }
+      return `image ${styleIdx + 1}`;
+    });
+    resolved = resolved.replace(/@char(?:acter)?\b/gi, (m) => {
+      if (charIdx < 0) { missing = missing || m; return m; }
+      return `image ${charIdx + 1}`;
+    });
+    resolved = resolved.replace(/@im(?:g|age)\s?(\d{1,2})/gi, (match, n) => {
       const idx = parseInt(n, 10);
       if (idx < 1 || idx > imageCount) {
-        missing = match;
+        missing = missing || match;
         return match;
       }
       return `image ${idx}`;
@@ -1472,6 +1490,7 @@ export default function ImageStudio({
 
     onGenerationStart?.();
     let finalPrompt = prompt.trim();
+    let sentPrompt = finalPrompt;
     if (enhanceOn && finalPrompt) {
       setGenerating(true); // placeholder appears while the prompt is enriched
       finalPrompt = await enhancePrompt(finalPrompt, "image");
@@ -1515,7 +1534,7 @@ export default function ImageStudio({
           const entry = {
             id: res.id || Math.random().toString(36).substring(7),
             url: res.url,
-            prompt: finalPrompt,
+            prompt: sentPrompt || finalPrompt,
             model: selectedModelId,
             aspect_ratio: selectedAr,
             timestamp: new Date().toISOString(),
@@ -1524,7 +1543,7 @@ export default function ImageStudio({
           onGenerationComplete?.({
             url: res.url,
             model: selectedModelId,
-            prompt: finalPrompt,
+            prompt: sentPrompt || finalPrompt,
             type: "image",
           });
         }
@@ -1804,13 +1823,13 @@ export default function ImageStudio({
               )}
             </div>
 
-            {/* Input prompt text area — @img mentions active when images are attached */}
+            {/* Input prompt text area — role-aware @ mentions when images are attached */}
             <PromptMentionTextarea
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={placeholderText}
-              mentionThumbs={imageMode ? uploadedImageUrls : []}
+              mentions={imageMode ? promptMentions : []}
             />
           </div>
 

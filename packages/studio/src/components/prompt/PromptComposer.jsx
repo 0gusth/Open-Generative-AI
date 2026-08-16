@@ -364,15 +364,15 @@ export const PromptTextarea = forwardRef(function PromptTextarea(
   );
 });
 
-const MENTION_TOKEN_REGEX = /@im(?:g|age)\s?(\d{1,2})/gi;
-const MENTION_PARTIAL_REGEX = /@(?:i(?:m(?:g|age)?)?)?(\d{0,2})$/i;
+const MENTION_TOKEN_REGEX = /@(?:im(?:g|age)\s?\d{1,2}|style|character|char\b|loc(?:ation)?\b|prop\b)/gi;
+const MENTION_PARTIAL_REGEX = /@([a-z]{0,9}\d{0,2})$/i;
 const MENTION_ACCENT = "#EF0328";
 
 // Textarea with Higgsfield-style @image mentions: typing "@" opens a picker of
 // the attached images, and valid tokens are tinted with the accent color via a
 // metrics-matched overlay behind the (transparent-text) textarea.
 export const PromptMentionTextarea = forwardRef(function PromptMentionTextarea(
-  { value, onChange, mentionThumbs = [], className = "", ...props },
+  { value, onChange, mentionThumbs = [], mentions = null, className = "", ...props },
   forwardedRef,
 ) {
   const textareaRef = useRef(null);
@@ -382,30 +382,40 @@ export const PromptMentionTextarea = forwardRef(function PromptMentionTextarea(
 
   useImperativeHandle(forwardedRef, () => textareaRef.current);
 
-  const mentionsActive = mentionThumbs.length > 0;
+  const mentionList = useMemo(() => {
+    if (mentions) return mentions;
+    return mentionThumbs.map((thumb, i) => ({ token: `@img${i + 1}`, thumb, color: MENTION_ACCENT }));
+  }, [mentions, mentionThumbs]);
+
+  const mentionsActive = mentionList.length > 0;
 
   const menuItems = useMemo(() => {
     if (!menu) return [];
-    return mentionThumbs
-      .map((thumb, i) => ({ token: `@img${i + 1}`, thumb, index: i }))
-      .filter((item) => !menu.query || item.token.includes(`img${menu.query}`) || `${item.index + 1}`.startsWith(menu.query));
-  }, [menu, mentionThumbs]);
+    const q = (menu.query || "").toLowerCase();
+    return mentionList.filter((item) => !q || item.token.toLowerCase().includes(q));
+  }, [menu, mentionList]);
 
   // Split value into text/token segments for the highlight overlay
   const segments = useMemo(() => {
     if (!mentionsActive || !value) return null;
+    const known = new Map(mentionList.map((m) => [m.token.toLowerCase(), m]));
+    const alias = (t) => {
+      const k = t.toLowerCase().replace(/\s+/, "");
+      if (k === "@char") return "@character";
+      if (k === "@loc") return "@location";
+      return k.replace("@image", "@img");
+    };
     const parts = [];
     let last = 0;
     for (const match of value.matchAll(MENTION_TOKEN_REGEX)) {
-      const idx = parseInt(match[1], 10);
-      const valid = idx >= 1 && idx <= mentionThumbs.length;
+      const hit = known.get(alias(match[0]));
       if (match.index > last) parts.push({ text: value.slice(last, match.index) });
-      parts.push({ text: match[0], token: true, valid });
+      parts.push({ text: match[0], token: true, valid: !!hit, color: hit?.color || MENTION_ACCENT });
       last = match.index + match[0].length;
     }
     if (last < value.length) parts.push({ text: value.slice(last) });
     return parts;
-  }, [value, mentionsActive, mentionThumbs.length]);
+  }, [value, mentionsActive, mentionList]);
 
   const syncScroll = useCallback(() => {
     if (overlayRef.current && textareaRef.current) {
@@ -488,7 +498,7 @@ export const PromptMentionTextarea = forwardRef(function PromptMentionTextarea(
                 className="rounded-[4px] px-0.5 -mx-0.5"
                 style={
                   seg.valid
-                    ? { color: MENTION_ACCENT, backgroundColor: "rgba(239,3,40,0.12)", fontWeight: 500 }
+                    ? { color: seg.color, backgroundColor: `${seg.color}1f`, fontWeight: 500 }
                     : { color: "rgba(255,255,255,0.35)", textDecoration: "line-through" }
                 }
               >
@@ -536,8 +546,8 @@ export const PromptMentionTextarea = forwardRef(function PromptMentionTextarea(
                 i === menuIndex ? "bg-white/[0.09]" : "hover:bg-white/[0.05]",
               )}
             >
-              <img src={item.thumb} alt="" className="w-7 h-7 rounded-md object-cover border border-white/10" />
-              <span className="text-[13px] font-medium" style={{ color: MENTION_ACCENT }}>
+              <img src={item.thumb} alt="" className="w-7 h-7 rounded-md object-cover border border-white/10" style={{ borderColor: `${item.color || MENTION_ACCENT}66` }} />
+              <span className="text-[13px] font-medium" style={{ color: item.color || MENTION_ACCENT }}>
                 {item.token}
               </span>
             </button>

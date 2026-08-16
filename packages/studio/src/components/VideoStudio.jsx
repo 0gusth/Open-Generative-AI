@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateVideo, generateI2V, processV2V, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
@@ -948,6 +948,14 @@ export default function VideoStudio({
     [applyImageReferenceUrl],
   );
 
+  const elementMentions = useMemo(() => uploadedImageUrls.map((u, i) => {
+    const role = elementRoles[u];
+    if (role === "character") return { token: "@char", thumb: u, color: "#30D158" };
+    if (role === "location") return { token: "@location", thumb: u, color: "#64D2FF" };
+    if (role === "prop") return { token: "@prop", thumb: u, color: "#FF9F0A" };
+    return { token: `@img${i + 1}`, thumb: u, color: "#EF0328" };
+  }), [uploadedImageUrls, elementRoles]);
+
   const pendingElementRole = useRef(null);
   const uploadImageReference = useCallback(
     async (file) => {
@@ -1344,7 +1352,12 @@ export default function VideoStudio({
         }
         // Normalize @img1 → @image1 (native multi-reference syntax on Seedance-class models)
         if (trimmedPrompt) {
-          let vPrompt = trimmedPrompt.replace(/@im(?:g|age)\s?(\d{1,2})/gi, "@image$1");
+          const roleIdx = (role) => uploadedImageUrls.findIndex((u) => elementRoles[u] === role);
+          let vPrompt = trimmedPrompt
+            .replace(/@char(?:acter)?\b/gi, () => { const i = roleIdx("character"); return i >= 0 ? `@image${i + 1}` : "@character"; })
+            .replace(/@loc(?:ation)?\b/gi, () => { const i = roleIdx("location"); return i >= 0 ? `@image${i + 1}` : "@location"; })
+            .replace(/@prop\b/gi, () => { const i = roleIdx("prop"); return i >= 0 ? `@image${i + 1}` : "@prop"; })
+            .replace(/@im(?:g|age)\s?(\d{1,2})/gi, "@image$1");
           const elementNotes = uploadedImageUrls
             .map((u, i) => {
               const role = elementRoles[u];
@@ -2099,7 +2112,7 @@ export default function VideoStudio({
                 onChange={handlePromptInput}
                 placeholder={promptPlaceholder}
                 disabled={promptDisabled}
-                mentionThumbs={imageMode && getMaxImagesForI2VModel(selectedModel) > 2 ? uploadedImageUrls : []}
+                mentions={imageMode && getMaxImagesForI2VModel(selectedModel) > 2 ? elementMentions : []}
               />
             </div>
           </div>
