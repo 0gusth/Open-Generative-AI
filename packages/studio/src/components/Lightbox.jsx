@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 // Robust media download: direct fetch first, same-origin proxy fallback
 // (provider CDNs without CORS), then a blob-powered save.
-async function downloadMedia(url, filename) {
+export async function downloadMedia(url, filename) {
   let res;
   try {
     res = await fetch(url);

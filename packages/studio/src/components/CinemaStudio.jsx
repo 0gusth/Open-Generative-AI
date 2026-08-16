@@ -31,7 +31,7 @@ import {
   promptControlClassName,
   PROMPT_MEDIA_PREVIEW_CLASS,
 } from "./prompt/PromptComposer.jsx";
-import Lightbox from "./Lightbox.jsx";
+import Lightbox, { downloadMedia } from "./Lightbox.jsx";
 import { formatErrorMessage } from "../utils/formatError.js";
 
 const SETUP_KEY = "cinema_setup_v2";
@@ -481,6 +481,20 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 onClick={() => setLightboxIdx(idx)}
                 className="relative group rounded-2xl overflow-hidden border border-white/[0.08] bg-[#171719] shadow-[0_2px_12px_rgba(0,0,0,0.25)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:-translate-y-0.5 transition-[transform,box-shadow,border-color] duration-250 ease-apple cursor-pointer"
               >
+                {/* Hover download — no lightbox needed */}
+                <button
+                  type="button"
+                  title="Baixar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const isVideo = entry.type === "video";
+                    downloadMedia(entry.url, `${(entry.model || "cinema").replace(/[^a-z0-9-]/gi, "-")}-${entry.id}.${isVideo ? "mp4" : "png"}`)
+                      .catch(() => toast.error("Download falhou — tenta de novo."));
+                  }}
+                  className="pressable absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/70 backdrop-blur-md border border-white/[0.12] hidden md:flex items-center justify-center text-white/85 hover:text-white hover:bg-black/90 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+                </button>
                 {entry.type === "video" ? (
                   <div className="relative">
                     <video src={entry.url} muted loop playsInline
