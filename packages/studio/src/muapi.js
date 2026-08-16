@@ -1,4 +1,5 @@
 import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById } from './models.js';
+import { tryProviderGenerate } from './providers.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -83,6 +84,9 @@ async function submitAndPoll(endpoint, payload, key, onRequestId, maxAttempts = 
 }
 
 export async function generateImage(apiKey, params) {
+    // Cost-benefit router: fal/Runware first when configured, Muapi fallback
+    const routed = await tryProviderGenerate(params.model, 't2i', params);
+    if (routed) return routed;
     const modelInfo = getModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = { prompt: params.prompt };
@@ -102,6 +106,9 @@ export async function generateImage(apiKey, params) {
 }
 
 export async function generateI2I(apiKey, params) {
+    // Cost-benefit router: fal/Runware first when configured, Muapi fallback
+    const routed = await tryProviderGenerate(params.model, 'i2i', params);
+    if (routed) return routed;
     const modelInfo = getI2IModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};

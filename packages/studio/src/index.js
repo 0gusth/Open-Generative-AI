@@ -17,3 +17,5 @@ export { default as McpCliStudio } from './components/McpCliStudio';
 export { default as AiInfluencerStudio } from './components/AiInfluencerStudio';
 export { default as LayersStudio } from './components/LayersStudio';
 export * from './muapi';
+
+export { getProviderKey, setProviderKey, pickProvider, PROVIDER_ROUTES } from './providers.js';

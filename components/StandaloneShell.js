@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, AiInfluencerStudio, LayersStudio, getUserBalance } from 'studio';
+import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, AiInfluencerStudio, LayersStudio, getUserBalance, getProviderKey, setProviderKey } from 'studio';
 
 const DesignAgentStudio = dynamic(() => import('studio').then(mod => mod.DesignAgentStudio), {
   ssr: false,
@@ -193,6 +193,14 @@ export default function StandaloneShell() {
 
   const [balance, setBalance] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [runwareKey, setRunwareKey] = useState('');
+  const [falKey, setFalKey] = useState('');
+  useEffect(() => {
+    if (showSettings) {
+      setRunwareKey(getProviderKey('runware') || '');
+      setFalKey(getProviderKey('fal') || '');
+    }
+  }, [showSettings]);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
   // Sidebar Collapsed & Mobile Drawer State
@@ -959,12 +967,55 @@ export default function StandaloneShell() {
             <div className="space-y-4 mb-8">
               <div className="bg-white/5 border border-white/[0.03] rounded-md p-4">
                 <label className="block text-xs font-bold text-white/30 mb-2">
-                   Active API Key
+                   Muapi Key (default + fallback)
                 </label>
                 <div className="text-[13px] font-mono text-white/80">
                   {apiKey.slice(0, 8)}••••••••••••••••
                 </div>
               </div>
+
+              <div className="bg-white/5 border border-white/[0.03] rounded-md p-4">
+                <label className="block text-xs font-bold text-white/30 mb-2">
+                  Runware Key <span className="font-normal text-white/25">(optional — cheapest routing)</span>
+                </label>
+                <input
+                  type="password"
+                  value={runwareKey}
+                  onChange={(e) => setRunwareKey(e.target.value)}
+                  placeholder="Paste your Runware key..."
+                  className="w-full bg-white/[0.06] border border-white/[0.09] rounded-lg px-3 py-2 text-[13px] font-mono text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[#EF0328]/40 focus:border-[#EF0328]/40 transition-[border-color,box-shadow] duration-150"
+                />
+              </div>
+
+              <div className="bg-white/5 border border-white/[0.03] rounded-md p-4">
+                <label className="block text-xs font-bold text-white/30 mb-2">
+                  fal.ai Key <span className="font-normal text-white/25">(optional — fastest routing)</span>
+                </label>
+                <input
+                  type="password"
+                  value={falKey}
+                  onChange={(e) => setFalKey(e.target.value)}
+                  placeholder="Paste your fal.ai key..."
+                  className="w-full bg-white/[0.06] border border-white/[0.09] rounded-lg px-3 py-2 text-[13px] font-mono text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[#EF0328]/40 focus:border-[#EF0328]/40 transition-[border-color,box-shadow] duration-150"
+                />
+              </div>
+
+              <p className="text-[11px] text-white/30 leading-relaxed px-1">
+                With extra providers set, generations route to the cheapest one that
+                hosts the model — or the fastest when prices are similar. Muapi
+                remains the fallback for everything else.
+              </p>
+
+              <button
+                onClick={() => {
+                  setProviderKey('runware', runwareKey.trim());
+                  setProviderKey('fal', falKey.trim());
+                  setShowSettings(false);
+                }}
+                className="pressable w-full h-10 rounded-lg bg-[#EF0328] text-white text-xs font-semibold hover:bg-[#FF2447]"
+              >
+                Save provider keys
+              </button>
             </div>
 
             <div className="flex gap-3">
