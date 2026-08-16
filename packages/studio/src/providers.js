@@ -552,3 +552,32 @@ export async function enhancePrompt(prompt, kind = "image") {
         return prompt;
     }
 }
+
+// Director's fusion: merge the user's scene with the compiled cinematography
+// treatment into ONE seamless generation prompt. Equipment names, lighting,
+// palette and movement directives must survive verbatim. Fails soft.
+export async function cinemaFusePrompt(compiledPrompt, mode = "image") {
+    if (!compiledPrompt || !getProviderKey("runware")) return compiledPrompt;
+    try {
+        const results = await runwareCall([
+            {
+                taskType: "textInference",
+                taskUUID: makeUUID(),
+                model: "deepseek:v4@flash",
+                messages: [
+                    {
+                        role: "system",
+                        content:
+                            "You are a film director's assistant fusing a scene description with cinematography directives into one seamless " + mode + " generation prompt. Rewrite as flowing, vivid prose that a generation model parses well: subject and action first, then integrate the visual treatment naturally. PRESERVE EXACTLY every equipment name (cameras, lenses, film stocks), lighting scheme, color grade and camera movement directive — do not drop, weaken or paraphrase them. Do not invent new equipment. Output ONLY the final prompt, no commentary, at most 170 words.",
+                    },
+                    { role: "user", content: compiledPrompt },
+                ],
+            },
+        ]);
+        const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
+        return text || compiledPrompt;
+    } catch (error) {
+        console.warn("[providers] cinema fusion failed, using compiled prompt:", error.message);
+        return compiledPrompt;
+    }
+}

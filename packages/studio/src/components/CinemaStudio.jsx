@@ -8,7 +8,8 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
-import { generateImage, generateVideo } from "../muapi.js";
+import { generateImage, generateVideo, generateI2V, uploadFile } from "../muapi.js";
+import { cinemaFusePrompt } from "../providers.js";
 import { compileCinematography } from "../cinema/compiler.js";
 import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, APERTURES, mediaForCamera } from "../cinema/gear.js";
 import { GENRES, ERAS, TEMPOS } from "../cinema/filmSetup.js";
@@ -21,7 +22,12 @@ import {
   PromptFooter,
   PromptControls,
   PromptAction,
+  PromptPopover,
+  PromptMenuList,
+  PromptMenuItem,
+  PromptChevronIcon,
   promptControlClassName,
+  PROMPT_MEDIA_PREVIEW_CLASS,
 } from "./prompt/PromptComposer.jsx";
 import Lightbox from "./Lightbox.jsx";
 import { formatErrorMessage } from "../utils/formatError.js";
@@ -32,13 +38,16 @@ const HISTORY_KEY = "cinema_history_v2";
 const MODELS = {
   image: [
     { id: "nano-banana-2", name: "Nano Banana 2" },
+    { id: "nano-banana", name: "Nano Banana" },
     { id: "seedream-5.0", name: "Seedream 5.0" },
     { id: "flux-dev", name: "Flux Dev" },
+    { id: "flux-schnell", name: "Flux Schnell" },
+    { id: "gpt-image-2", name: "GPT Image 2" },
   ],
   video: [
-    { id: "kling-v3.0-standard-text-to-video", name: "Kling 3.0" },
-    { id: "seedance-v2.0-t2v", name: "Seedance 2.0" },
-    { id: "kling-v2.5-turbo-pro-t2v", name: "Kling 2.5 Turbo" },
+    { id: "kling-v3.0-standard-text-to-video", name: "Kling 3.0", i2vId: "kling-v3.0-standard-image-to-video" },
+    { id: "kling-v3.0-pro-text-to-video", name: "Kling 3.0 Pro", i2vId: "kling-v3.0-pro-image-to-video" },
+    { id: "seedance-v2.0-t2v", name: "Seedance 2", i2vId: "seedance-2.1-image-to-video" },
   ],
 };
 
@@ -61,7 +70,7 @@ function OptionCard({ label, image, selected, onClick, auto }) {
     <button
       type="button"
       onClick={onClick}
-      className={`group/opt shrink-0 w-[96px] flex flex-col gap-1.5 rounded-xl p-1 text-left transition-[transform,box-shadow] duration-150 active:scale-[0.97] ${
+      className={`group/opt w-full flex flex-col gap-1.5 rounded-xl p-1 text-left transition-[transform,box-shadow] duration-150 active:scale-[0.97] ${
         selected ? "ring-2 ring-[#EF0328] bg-white/[0.04]" : "hover:bg-white/[0.05]"
       }`}
     >
@@ -83,7 +92,7 @@ function PickerSection({ label, category, items, value, onSelect }) {
   return (
     <div className="mb-4 last:mb-0">
       <div className="text-[11px] font-semibold text-white/35 uppercase tracking-wider mb-2 px-1">{label}</div>
-      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 -mx-1 px-1">
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2">
         <OptionCard auto label="Auto" selected={value === "auto"} onClick={() => onSelect("auto")} />
         {items.map((item) => (
           <OptionCard
@@ -101,7 +110,7 @@ function PickerSection({ label, category, items, value, onSelect }) {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEnd, onGenerationComplete, onGenerationError }) {
+export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onGenerationStart, onGenerationEnd, onGenerationComplete, onGenerationError }) {
   const [setup, setSetup] = useState(() => {
     if (typeof window === "undefined") return DEFAULT_SETUP;
     try { return { ...DEFAULT_SETUP, ...JSON.parse(localStorage.getItem(SETUP_KEY) || "{}") }; }
@@ -119,6 +128,49 @@ export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEn
   });
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const panelRef = useRef(null);
+  // References (up to 9 — Seedance-class ceiling)
+  const [refs, setRefs] = useState([]);
+  const [refUploading, setRefUploading] = useState([]);
+  const refInputRef = useRef(null);
+  // Director's enhance — fuses scene + treatment via LLM (sticky)
+  const [enhanceOn, setEnhanceOn] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("cinema_enhance_on") !== "0";
+  });
+  const toggleEnhance = () => setEnhanceOn((v) => {
+    const next = !v;
+    try { window.localStorage.setItem("cinema_enhance_on", next ? "1" : "0"); } catch {}
+    return next;
+  });
+  // Open list popovers: "model" | "aspect" | "duration" | null
+  const [openList, setOpenList] = useState(null);
+
+  const uploadRefs = useCallback(async (files) => {
+    const usable = files.filter((f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024).slice(0, 9 - refs.length);
+    if (!usable.length) return;
+    const locals = usable.map((f) => URL.createObjectURL(f));
+    setRefUploading((prev) => [...prev, ...locals]);
+    try {
+      const urls = await Promise.all(usable.map((f) => uploadFile(apiKey, f)));
+      setRefs((prev) => [...prev, ...urls].slice(0, 9));
+    } catch (e) {
+      toast.error(`Reference upload failed: ${e.message}`);
+    } finally {
+      locals.forEach((u) => URL.revokeObjectURL(u));
+      setRefUploading((prev) => prev.filter((u) => !locals.includes(u)));
+    }
+  }, [apiKey, refs.length]);
+
+  // shell drag-and-drop / paste pipeline
+  const processedDrops = useRef(new WeakSet());
+  useEffect(() => {
+    if (droppedFiles && droppedFiles.length > 0) {
+      if (processedDrops.current.has(droppedFiles)) return;
+      processedDrops.current.add(droppedFiles);
+      uploadRefs(droppedFiles.filter((f) => f.type.startsWith("image/")));
+      onFilesHandled?.();
+    }
+  }, [droppedFiles, onFilesHandled, uploadRefs]);
 
   const mode = setup.mode;
 
@@ -136,13 +188,13 @@ export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEn
 
   // close panel on outside click / Esc
   useEffect(() => {
-    if (!openPanel) return;
-    const onDown = (e) => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpenPanel(null); };
-    const onKey = (e) => { if (e.key === "Escape") setOpenPanel(null); };
+    if (!openPanel && !openList) return;
+    const onDown = (e) => { if (panelRef.current && !panelRef.current.contains(e.target)) { setOpenPanel(null); setOpenList(null); } };
+    const onKey = (e) => { if (e.key === "Escape") { setOpenPanel(null); setOpenList(null); } };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [openPanel]);
+  }, [openPanel, openList]);
 
   const set = (key) => (value) => setSetup((s) => ({ ...s, [key]: value }));
 
@@ -178,25 +230,42 @@ export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEn
     onGenerationStart?.();
     setGenerating(true);
     try {
+      let finalPrompt = compiled.prompt;
+      if (enhanceOn) {
+        finalPrompt = await cinemaFusePrompt(compiled.prompt, mode);
+      }
       let res;
       if (mode === "image") {
-        res = await generateImage(apiKey, { model: modelId, prompt: compiled.prompt, aspect_ratio: aspect });
+        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect };
+        if (refs.length) params.images_list = refs;
+        res = await generateImage(apiKey, params);
+      } else if (refs.length) {
+        const m = MODELS.video.find((x) => x.id === modelId);
+        res = await generateI2V(apiKey, {
+          model: m?.i2vId || modelId,
+          image_url: refs[0],
+          images_list: refs,
+          prompt: finalPrompt,
+          aspect_ratio: aspect,
+          duration,
+          __audio: true,
+        });
       } else {
-        res = await generateVideo(apiKey, { model: modelId, prompt: compiled.prompt, aspect_ratio: aspect, duration, __audio: true });
+        res = await generateVideo(apiKey, { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: true });
       }
       if (!res?.url) throw new Error("No result returned");
       const entry = {
         id: res.id || Math.random().toString(36).slice(2),
         url: res.url,
         type: mode,
-        prompt: compiled.prompt,
+        prompt: finalPrompt,
         model: modelId,
         resolved: compiled.resolved,
         aspect_ratio: aspect,
         timestamp: new Date().toISOString(),
       };
       setHistory((prev) => [entry, ...prev]);
-      onGenerationComplete?.({ url: res.url, model: modelId, prompt: compiled.prompt, type: mode });
+      onGenerationComplete?.({ url: res.url, model: modelId, prompt: finalPrompt, type: mode });
     } catch (e) {
       const msg = formatErrorMessage(e, "Cinema generation failed");
       if (onGenerationError) onGenerationError(msg); else toast.error(msg);
@@ -323,6 +392,36 @@ export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEn
             </div>
           )}
 
+          {/* References row */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <input ref={refInputRef} type="file" accept="image/*" multiple className="hidden"
+              onChange={(e) => { const f = [...e.target.files]; e.target.value = ""; uploadRefs(f); }} />
+            {refs.map((url, i) => (
+              <div key={url} className={`${PROMPT_MEDIA_PREVIEW_CLASS} border-2 border-[#EF0328]/70`}>
+                <img src={url} alt="" className="w-full h-full object-cover" />
+                <button type="button"
+                  onClick={() => setRefs((prev) => prev.filter((_, x) => x !== i))}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 text-[8px] border border-white/5">×</button>
+              </div>
+            ))}
+            {refUploading.map((u) => (
+              <div key={u} className={PROMPT_MEDIA_PREVIEW_CLASS}>
+                <img src={u} alt="" className="w-full h-full object-cover opacity-60" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
+                </div>
+              </div>
+            ))}
+            {refs.length < 9 && (
+              <button type="button" onClick={() => refInputRef.current?.click()}
+                className="group/ref h-9 px-3 flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.07] cursor-pointer transition-colors duration-150 active:scale-[0.97]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#EF0328]" />
+                <span className="text-[12px] font-medium text-white/60 group-hover/ref:text-white/85">Reference</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-white/30"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+            )}
+          </div>
+
           {/* Top row: mode + panels */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
@@ -343,6 +442,18 @@ export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEn
             {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium"])}
             {panelButton("look", "Look", ["palette", "lighting"])}
             {mode === "video" && panelButton("movement", "Movement", ["movement"])}
+            <div className="w-px h-5 bg-white/[0.08]" />
+            <button
+              type="button"
+              onClick={toggleEnhance}
+              title={enhanceOn ? "Director's enhance ativo — cena + tratamento fundidos por IA" : "Ativar director's enhance"}
+              aria-pressed={enhanceOn}
+              className={`pressable h-[34px] w-[34px] flex items-center justify-center rounded-lg border text-[14px] ${
+                enhanceOn
+                  ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
+                  : "text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
+              }`}
+            >✦</button>
           </div>
 
           {/* Prompt */}
@@ -367,35 +478,73 @@ export default function CinemaStudio({ apiKey, onGenerationStart, onGenerationEn
           {/* Footer */}
           <PromptFooter>
             <PromptControls>
-              <button
-                type="button"
-                onClick={() => {
-                  const list = MODELS[mode];
-                  const i = list.findIndex((m) => m.id === modelId);
-                  setModelId(list[(i + 1) % list.length].id);
-                }}
-                className={promptControlClassName({ compact: true })}
-                title="Generation model"
-              >
-                <span className="text-xs font-semibold">{MODELS[mode].find((m) => m.id === modelId)?.name}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAspect(ASPECTS[(ASPECTS.indexOf(aspect) + 1) % ASPECTS.length])}
-                className={promptControlClassName({ compact: true })}
-                title="Aspect ratio"
-              >
-                <span className="text-xs font-semibold tabular-nums">{aspect}</span>
-              </button>
-              {mode === "video" && (
-                <button
-                  type="button"
-                  onClick={() => setDuration(DURATIONS[(DURATIONS.indexOf(duration) + 1) % DURATIONS.length])}
-                  className={promptControlClassName({ compact: true })}
-                  title="Duration"
-                >
-                  <span className="text-xs font-semibold tabular-nums">{duration}s</span>
+              {/* Model — list */}
+              <div className="relative">
+                <button type="button"
+                  onClick={() => setOpenList(openList === "model" ? null : "model")}
+                  className={promptControlClassName({ compact: true, active: openList === "model" })}
+                  title="Generation model">
+                  <span className="text-xs font-semibold">{MODELS[mode].find((m) => m.id === modelId)?.name}</span>
+                  <PromptChevronIcon />
                 </button>
+                {openList === "model" && (
+                  <PromptPopover>
+                    <PromptMenuList>
+                      {MODELS[mode].map((m) => (
+                        <PromptMenuItem key={m.id} selected={modelId === m.id}
+                          onClick={() => { setModelId(m.id); setOpenList(null); }}>
+                          {m.name}
+                        </PromptMenuItem>
+                      ))}
+                    </PromptMenuList>
+                  </PromptPopover>
+                )}
+              </div>
+              {/* Aspect — list */}
+              <div className="relative">
+                <button type="button"
+                  onClick={() => setOpenList(openList === "aspect" ? null : "aspect")}
+                  className={promptControlClassName({ compact: true, active: openList === "aspect" })}
+                  title="Aspect ratio">
+                  <span className="text-xs font-semibold tabular-nums">{aspect}</span>
+                  <PromptChevronIcon />
+                </button>
+                {openList === "aspect" && (
+                  <PromptPopover>
+                    <PromptMenuList>
+                      {ASPECTS.map((a) => (
+                        <PromptMenuItem key={a} selected={aspect === a}
+                          onClick={() => { setAspect(a); setOpenList(null); }}>
+                          {a}
+                        </PromptMenuItem>
+                      ))}
+                    </PromptMenuList>
+                  </PromptPopover>
+                )}
+              </div>
+              {/* Duration — list (video) */}
+              {mode === "video" && (
+                <div className="relative">
+                  <button type="button"
+                    onClick={() => setOpenList(openList === "duration" ? null : "duration")}
+                    className={promptControlClassName({ compact: true, active: openList === "duration" })}
+                    title="Duration">
+                    <span className="text-xs font-semibold tabular-nums">{duration}s</span>
+                    <PromptChevronIcon />
+                  </button>
+                  {openList === "duration" && (
+                    <PromptPopover>
+                      <PromptMenuList>
+                        {DURATIONS.map((d) => (
+                          <PromptMenuItem key={d} selected={duration === d}
+                            onClick={() => { setDuration(d); setOpenList(null); }}>
+                            {d}s
+                          </PromptMenuItem>
+                        ))}
+                      </PromptMenuList>
+                    </PromptPopover>
+                  )}
+                </div>
               )}
             </PromptControls>
             <PromptAction onClick={handleGenerate} disabled={generating}>

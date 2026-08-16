@@ -95,8 +95,14 @@ const NAVIGATION_CATEGORIES = [
   {
     id: 'images',
     label: 'Images',
-    tabIds: ['image', 'layers', 'cinema', 'design-agent', 'ai-influencer'],
+    tabIds: ['image', 'layers', 'design-agent', 'ai-influencer'],
     icon: <ImageIcon size={18} strokeWidth={1.75} />
+  },
+  {
+    id: 'cinema-cat',
+    label: 'Cinema',
+    tabIds: ['cinema'],
+    icon: <Film size={18} strokeWidth={1.75} />
   },
   {
     id: 'video',
@@ -913,7 +919,7 @@ export default function StandaloneShell() {
           <RecastStudio apiKey={apiKey} droppedFiles={activeTab === 'body-swap' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('body-swap')} onGenerationEnd={makeGenerationEndCallback('body-swap')} onGenerationComplete={makeSuccessCallback('body-swap')} onGenerationError={makeErrorCallback('body-swap')} />
         </div>
         <div className={activeTab === 'cinema' ? "h-full w-full" : "hidden"}>
-          <CinemaStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
+          <CinemaStudio apiKey={apiKey} droppedFiles={activeTab === 'cinema' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
         </div>
         <div className={activeTab === 'audio' ? "h-full w-full" : "hidden"}>
           <AudioStudio apiKey={apiKey} droppedFiles={activeTab === 'audio' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('audio')} onGenerationEnd={makeGenerationEndCallback('audio')} onGenerationComplete={makeSuccessCallback('audio')} onGenerationError={makeErrorCallback('audio')} />

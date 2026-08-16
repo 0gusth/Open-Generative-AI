@@ -548,6 +548,7 @@ export default function VideoStudio({
   const [localHistory, setLocalHistory] = useState([]);
   const [pendingRenders, setPendingRenders] = useState([]);
   const [activeProjectId, setActiveProjectId] = useState(null);
+  const [projectsCount, setProjectsCount] = useState(0);
   const [galleryScope, setGalleryScope] = useState(() => {
     if (typeof window === "undefined") return "all";
     return window.localStorage.getItem("gallery_scope") || "all";
@@ -607,7 +608,10 @@ export default function VideoStudio({
         fetch("/api/projects").then((r) => r.json()).catch(() => null),
       ]);
       if (!alive) return;
-      if (projectsRes) setActiveProjectId(projectsRes.activeId || null);
+      if (projectsRes) {
+        setActiveProjectId(projectsRes.activeId || null);
+        setProjectsCount((projectsRes.projects || []).length);
+      }
       const videos = ledger.filter((e) => e.type === "video");
       setLocalHistory((prev) => {
         const known = new Set(prev.map((e) => e.url));
@@ -1579,7 +1583,7 @@ export default function VideoStudio({
     >
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
-        {activeProjectId && (
+        {projectsCount > 0 && (
           <div className="w-full flex justify-end pt-4">
             <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
               {[["project", "Projeto"], ["all", "Geral"]].map(([value, label]) => (
