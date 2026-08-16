@@ -84,10 +84,11 @@ async function runwareCall(tasks) {
         body: JSON.stringify(tasks),
     });
     const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data?.errors?.[0]?.message || data?.error || `Runware error ${response.status}`);
+    if (!response.ok || data?.errors?.length) {
+        const err = new Error(data?.errors?.[0]?.message || data?.error || `Runware error ${response.status}`);
+        err.runwareErrors = data?.errors || [];
+        throw err;
     }
-    if (data?.errors?.length) throw new Error(data.errors[0].message || "Runware task error");
     return data.data || [];
 }
 
@@ -232,7 +233,7 @@ async function generateImageRunware(air, params) {
             : null;
     if (refs) task.referenceImages = refs;
 
-    const submitted = await runwareCall([task]);
+    const submitted = await submitRunwareTask(task);
     const accepted = submitted.find((t) => t.taskType === "imageInference");
     // Fast models may return the URL straight from the submit call
     if (accepted?.imageURL) {
@@ -346,12 +347,59 @@ async function pollRunwareTask(taskUUID, kind) {
     throw new Error(`Runware ${kind} generation timed out`);
 }
 
+// Video dimensions by aspect ratio, per resolution tier (multiples of 16).
+const VIDEO_DIMENSIONS = {
+    "480p": { "16:9": [848, 480], "9:16": [480, 848], "1:1": [640, 640], "4:3": [640, 480], "3:4": [480, 640], "21:9": [1120, 480] },
+    "720p": { "16:9": [1280, 720], "9:16": [720, 1280], "1:1": [960, 960], "4:3": [960, 720], "3:4": [720, 960], "21:9": [1680, 720] },
+    "1080p": { "16:9": [1920, 1088], "9:16": [1088, 1920], "1:1": [1440, 1440], "4:3": [1440, 1088], "3:4": [1088, 1440], "21:9": [2560, 1088] },
+};
+
+function videoDimensions(params) {
+    const tierKey = /1080/.test(params.resolution || "") ? "1080p" : /480/.test(params.resolution || "") ? "480p" : "720p";
+    const tier = VIDEO_DIMENSIONS[tierKey];
+    return tier[params.aspect_ratio] || tier["16:9"];
+}
+
+// Pick from a model's allowedValues ("864x496", ...) the size closest to the
+// requested aspect ratio (ties broken toward the requested area).
+function closestAllowedSize(allowed, width, height) {
+    const targetRatio = width / height;
+    const targetArea = width * height;
+    let best = null;
+    for (const s of allowed) {
+        const [w, h] = String(s).split("x").map(Number);
+        if (!w || !h) continue;
+        const score = Math.abs(w / h - targetRatio) * 1e6 + Math.abs(w * h - targetArea) / 1e3;
+        if (!best || score < best.score) best = { w, h, score };
+    }
+    return best ? [best.w, best.h] : [width, height];
+}
+
+async function submitRunwareTask(task) {
+    try {
+        return await runwareCall([task]);
+    } catch (error) {
+        // Self-heal: the API tells us which sizes this architecture accepts.
+        const dimError = (error.runwareErrors || []).find(
+            (e) => e.code === "unsupportedModelResolution" && Array.isArray(e.allowedValues),
+        );
+        if (dimError && task.width && task.height) {
+            const [w, h] = closestAllowedSize(dimError.allowedValues, task.width, task.height);
+            return await runwareCall([{ ...task, taskUUID: makeUUID(), width: w, height: h }]);
+        }
+        throw error;
+    }
+}
+
 async function generateVideoRunware(air, params) {
+    const [width, height] = videoDimensions(params);
     const task = {
         taskType: "videoInference",
         taskUUID: makeUUID(),
         model: air,
         positivePrompt: params.prompt || "",
+        width,
+        height,
         deliveryMethod: "async",
         outputType: "URL",
         numberResults: 1,
@@ -366,7 +414,7 @@ async function generateVideoRunware(air, params) {
         task.referenceImages = params.images_list;
     }
 
-    const submitted = await runwareCall([task]);
+    const submitted = await submitRunwareTask(task);
     const accepted = submitted.find((t) => t.taskType === "videoInference");
     const taskUUID = accepted?.taskUUID || task.taskUUID;
     addPending({ id: taskUUID, provider: "runware", type: "video", model: params.__modelId || "", prompt: params.prompt || "" });
