@@ -953,6 +953,7 @@ export default function ImageStudio({
   const [batchSize, setBatchSize] = useState(1);
   const [localHistory, setLocalHistory] = useState([]); // [{id,url,prompt,model,aspect_ratio,timestamp}]
   const [pendingRenders, setPendingRenders] = useState([]);
+  const [uploadingPreviews, setUploadingPreviews] = useState([]); // local blob: URLs shown instantly while uploads run
 
   // Server ledger is the cross-browser source of truth: merge it into the
   // local grid and keep a live view of the pending render queue.
@@ -1088,9 +1089,12 @@ export default function ImageStudio({
     }
 
     setGenerating(true); // Show as generating/busy
+    const toUpload =
+      maxImages === 1 ? files.slice(0, 1) : files.slice(0, maxImages);
+    // Instant local previews while the real upload happens in the background
+    const localPreviews = toUpload.map((f) => URL.createObjectURL(f));
+    setUploadingPreviews(localPreviews);
     try {
-      const toUpload =
-        maxImages === 1 ? files.slice(0, 1) : files.slice(0, maxImages);
       const urls = await Promise.all(
         toUpload.map(async (file) => {
           try {
@@ -1110,6 +1114,8 @@ export default function ImageStudio({
     } catch (err) {
       alert(`Image upload failed: ${err.message}`);
     } finally {
+      localPreviews.forEach((u) => URL.revokeObjectURL(u));
+      setUploadingPreviews([]);
       setGenerating(false);
     }
   };
@@ -1590,6 +1596,16 @@ export default function ImageStudio({
                 </div>
               ))}
               
+              {/* Uploading previews — instant local thumbs with a spinner */}
+              {uploadingPreviews.map((u) => (
+                <div key={u} className={PROMPT_MEDIA_PREVIEW_CLASS}>
+                  <img src={u} alt="" className="w-full h-full object-cover opacity-60" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
+                  </div>
+                </div>
+              ))}
+
               {/* Main Upload Trigger */}
               {uploadedImageUrls.length < maxImages && (
                 <UploadButton
