@@ -180,6 +180,7 @@ export async function generateVideo(apiKey, params) {
     if (params.resolution) payload.resolution = params.resolution;
     if (params.quality) payload.quality = params.quality;
     if (params.mode) payload.mode = params.mode;
+    if (typeof params.generate_audio === 'boolean' && modelInfo?.inputs?.generate_audio) payload.generate_audio = params.generate_audio;
     if (params.image_url) payload.image_url = params.image_url;
     if (params.images_list?.length > 0) payload.images_list = params.images_list;
     if (params.videos_list?.length > 0) payload.videos_list = params.videos_list;
@@ -210,6 +211,7 @@ export async function generateI2V(apiKey, params) {
             payload[imageField] = imageUrls[0];
         }
     }
+    if (typeof params.generate_audio === 'boolean' && modelInfo?.inputs?.generate_audio) payload.generate_audio = params.generate_audio;
     const lastImageField = modelInfo?.lastImageField;
     if (lastImageField && params.last_image) {
         if (lastImageField === 'images_list') {

@@ -12,6 +12,7 @@ import { generateImage, generateVideo, generateI2V, uploadFile } from "../muapi.
 import { cinemaFusePrompt } from "../providers.js";
 import { compileCinematography } from "../cinema/compiler.js";
 import { t2iModels, t2vModels, i2vModels } from "../models.js";
+import { PROVIDER_LOGOS, INVERT_LOGOS } from "../providerLogos.js";
 import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, APERTURES, mediaForCamera } from "../cinema/gear.js";
 import { GENRES, ERAS, TEMPOS } from "../cinema/filmSetup.js";
 import { PALETTES } from "../cinema/palettes.js";
@@ -37,10 +38,7 @@ const SETUP_KEY = "cinema_setup_v2";
 const HISTORY_KEY = "cinema_history_v2";
 
 // Full model catalogs — same choice as Image and Video Studios.
-const MODELS = {
-  image: t2iModels.map((m) => ({ id: m.id, name: m.name })),
-  video: t2vModels.map((m) => ({ id: m.id, name: m.name })),
-};
+const MODELS = { image: t2iModels, video: t2vModels };
 const DEFAULT_MODEL = { image: "nano-banana-2", video: "kling-v3.0-standard-text-to-video" };
 
 // Heuristic i2v sibling for reference-driven video, verified fallback last.
@@ -56,9 +54,41 @@ function i2vSibling(t2vId) {
   return "kling-v3.0-standard-image-to-video";
 }
 
-const ASPECTS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"];
-const RESOLUTIONS = ["480p", "720p", "1080p"];
-const DURATIONS = [5, 10];
+const FALLBACK_ASPECTS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"];
+
+// Capability readers — everything the selected model declares, nothing more.
+function modelAspects(m) {
+  return m?.inputs?.aspect_ratio?.enum?.length ? m.inputs.aspect_ratio.enum.filter((a) => a !== "auto") : FALLBACK_ASPECTS;
+}
+function modelDurations(m) {
+  const d = m?.inputs?.duration;
+  if (!d) return [5, 10];
+  if (Array.isArray(d.enum) && d.enum.length) return d.enum.map(Number).filter(Boolean);
+  if (typeof d.minValue === "number" && typeof d.maxValue === "number") {
+    const list = [];
+    for (let v = d.minValue; v <= d.maxValue; v += d.step || 1) list.push(v);
+    return list.length > 10 ? list.filter((v, i) => i % 2 === 0 || v === d.maxValue) : list;
+  }
+  return [5, 10];
+}
+function modelResolutions(m) {
+  const r = m?.inputs?.resolution;
+  return Array.isArray(r?.enum) && r.enum.length ? r.enum : null;
+}
+function modelSupportsAudio(m) {
+  return !!(m?.inputs?.generate_audio || m?.inputs?.audio);
+}
+
+// Group a model list by provider for the picker.
+function groupByProvider(models) {
+  const groups = new Map();
+  for (const m of models) {
+    const key = m.provider_name || "Other";
+    if (!groups.has(key)) groups.set(key, { name: key, logo: PROVIDER_LOGOS[m.provider], invert: INVERT_LOGOS.includes(m.provider), items: [] });
+    groups.get(key).items.push(m);
+  }
+  return [...groups.values()];
+}
 
 const DEFAULT_SETUP = {
   mode: "image",
@@ -127,6 +157,17 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const [aspect, setAspect] = useState("16:9");
   const [duration, setDuration] = useState(5);
   const [resolution, setResolution] = useState("720p");
+  const [audioOn, setAudioOn] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("cinema_audio_on") !== "0";
+  });
+  const toggleAudio = () => setAudioOn((v) => {
+    const next = !v;
+    try { window.localStorage.setItem("cinema_audio_on", next ? "1" : "0"); } catch {}
+    return next;
+  });
+  const [endFrame, setEndFrame] = useState(null);
+  const endFrameInputRef = useRef(null);
   const [openPanel, setOpenPanel] = useState(null); // "film" | "camera" | "look" | "movement"
   const [generating, setGenerating] = useState(false);
   const [history, setHistory] = useState(() => {
@@ -224,6 +265,26 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     return mediaForCamera(cam, mode).map((s) => ({ ...s, thumbCat: "stock" }));
   }, [cameraItems, setup.camera, mode]);
 
+  const modelObj = useMemo(() => MODELS[mode].find((m) => m.id === modelId) || null, [mode, modelId]);
+  const caps = useMemo(() => {
+    const sib = mode === "video" ? i2vModels.find((m) => m.id === i2vSibling(modelId)) : null;
+    return {
+      aspects: modelAspects(modelObj),
+      durations: modelDurations(modelObj),
+      resolutions: mode === "video" ? modelResolutions(modelObj) : null,
+      audio: mode === "video" && modelSupportsAudio(modelObj),
+      endFrame: mode === "video" && !!sib?.lastImageField,
+    };
+  }, [modelObj, mode, modelId]);
+
+  // keep selections valid when the model changes
+  useEffect(() => {
+    if (!caps.aspects.includes(aspect)) setAspect(caps.aspects[0]);
+    if (mode === "video" && !caps.durations.includes(duration)) setDuration(caps.durations[0]);
+    if (caps.resolutions && !caps.resolutions.includes(resolution)) setResolution(caps.resolutions.includes("720p") ? "720p" : caps.resolutions[0]);
+    if (!caps.endFrame) setEndFrame(null);
+  }, [caps]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const compiled = useMemo(
     () => compileCinematography({ ...setup, prompt }),
     [setup, prompt],
@@ -248,18 +309,23 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         if (refs.length) params.images_list = refs;
         res = await generateImage(apiKey, params);
       } else if (refs.length) {
-        res = await generateI2V(apiKey, {
+        const params = {
           model: i2vSibling(modelId),
           image_url: refs[0],
           images_list: refs,
           prompt: finalPrompt,
           aspect_ratio: aspect,
           duration,
-          resolution,
-          __audio: true,
-        });
+          __audio: audioOn,
+          generate_audio: audioOn,
+        };
+        if (caps.resolutions) params.resolution = resolution;
+        if (endFrame) params.last_image = endFrame;
+        res = await generateI2V(apiKey, params);
       } else {
-        res = await generateVideo(apiKey, { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, resolution, __audio: true });
+        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn };
+        if (caps.resolutions) params.resolution = resolution;
+        res = await generateVideo(apiKey, params);
       }
       if (!res?.url) throw new Error("No result returned");
       const entry = {
@@ -420,6 +486,29 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 </div>
               </div>
             ))}
+            {caps.endFrame && endFrame && (
+              <div className={`${PROMPT_MEDIA_PREVIEW_CLASS} border-2 border-[#64D2FF]/70`}>
+                <img src={endFrame} alt="" className="w-full h-full object-cover" />
+                <button type="button" onClick={() => setEndFrame(null)}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 hover:bg-black rounded-full flex items-center justify-center text-white/85 text-[8px] border border-white/5">×</button>
+                <span className="absolute bottom-0 inset-x-0 bg-[#64D2FF] text-black text-[7px] font-bold text-center leading-3 pointer-events-none">END</span>
+              </div>
+            )}
+            {caps.endFrame && !endFrame && refs.length > 0 && (
+              <>
+                <input ref={endFrameInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files[0]; e.target.value = "";
+                    if (!f) return;
+                    try { setEndFrame(await uploadFile(apiKey, f)); } catch (err) { toast.error(err.message); }
+                  }} />
+                <button type="button" onClick={() => endFrameInputRef.current?.click()}
+                  className="group/ref h-9 px-3 flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.07] transition-colors duration-150 active:scale-[0.97]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#64D2FF]" />
+                  <span className="text-[12px] font-medium text-white/60 group-hover/ref:text-white/85">End frame</span>
+                </button>
+              </>
+            )}
             {refs.length < 9 && (
               <button type="button" onClick={() => refInputRef.current?.click()}
                 className="group/ref h-9 px-3 flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.07] cursor-pointer transition-colors duration-150 active:scale-[0.97]">
@@ -496,7 +585,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   <PromptChevronIcon />
                 </button>
                 {openList === "model" && (
-                  <PromptPopover className="min-w-[260px]">
+                  <PromptPopover className="min-w-[300px] max-h-[52vh]">
                     <input
                       type="text"
                       value={modelSearch}
@@ -505,17 +594,28 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                       autoFocus
                       className="w-full mb-2 bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-[#EF0328]/40"
                     />
-                    <PromptMenuList>
-                      {MODELS[mode]
-                        .filter((m) => !modelSearch || m.name.toLowerCase().includes(modelSearch.toLowerCase()))
-                        .slice(0, 40)
-                        .map((m) => (
-                          <PromptMenuItem key={m.id} selected={modelId === m.id}
-                            onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
-                            {m.name}
-                          </PromptMenuItem>
-                        ))}
-                    </PromptMenuList>
+                    {groupByProvider(
+                      MODELS[mode].filter((m) => !modelSearch ||
+                        m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
+                        (m.provider_name || "").toLowerCase().includes(modelSearch.toLowerCase())),
+                    ).map((group) => (
+                      <div key={group.name} className="mb-2 last:mb-0">
+                        <div className="flex items-center gap-2 px-1 pb-1.5 pt-1 border-b border-white/[0.05] mb-1">
+                          {group.logo && (
+                            <img src={group.logo} alt="" className={`w-4 h-4 object-contain ${group.invert ? "invert" : ""}`} />
+                          )}
+                          <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">{group.name}</span>
+                        </div>
+                        <PromptMenuList>
+                          {group.items.map((m) => (
+                            <PromptMenuItem key={m.id} selected={modelId === m.id}
+                              onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
+                              {m.name}
+                            </PromptMenuItem>
+                          ))}
+                        </PromptMenuList>
+                      </div>
+                    ))}
                   </PromptPopover>
                 )}
               </div>
@@ -531,7 +631,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 {openList === "aspect" && (
                   <PromptPopover>
                     <PromptMenuList>
-                      {ASPECTS.map((a) => (
+                      {caps.aspects.map((a) => (
                         <PromptMenuItem key={a} selected={aspect === a}
                           onClick={() => { setAspect(a); setOpenList(null); }}>
                           {a}
@@ -541,8 +641,22 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </PromptPopover>
                 )}
               </div>
+              {/* Audio — discreet switch (only when the model generates sound) */}
+              {caps.audio && (
+                <button type="button" onClick={toggleAudio}
+                  title={audioOn ? "Som ativado" : "Sem som"} aria-pressed={audioOn}
+                  className="pressable h-[38px] px-2.5 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.04] hover:bg-white/[0.07]">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={audioOn ? "text-white/80" : "text-white/35"}>
+                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                    {audioOn ? <path d="M15.5 8.5a5 5 0 010 7" /> : <path d="M22 9l-6 6M16 9l6 6" />}
+                  </svg>
+                  <span className={`relative w-7 h-[16px] rounded-full transition-colors duration-150 ${audioOn ? "bg-[#30D158]" : "bg-white/15"}`}>
+                    <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${audioOn ? "left-[14px]" : "left-[2px]"}`} />
+                  </span>
+                </button>
+              )}
               {/* Quality — list (video) */}
-              {mode === "video" && (
+              {caps.resolutions && (
                 <div className="relative">
                   <button type="button"
                     onClick={() => setOpenList(openList === "quality" ? null : "quality")}
@@ -554,7 +668,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   {openList === "quality" && (
                     <PromptPopover>
                       <PromptMenuList>
-                        {RESOLUTIONS.map((r) => (
+                        {caps.resolutions.map((r) => (
                           <PromptMenuItem key={r} selected={resolution === r}
                             onClick={() => { setResolution(r); setOpenList(null); }}>
                             {r}
@@ -578,7 +692,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   {openList === "duration" && (
                     <PromptPopover>
                       <PromptMenuList>
-                        {DURATIONS.map((d) => (
+                        {caps.durations.map((d) => (
                           <PromptMenuItem key={d} selected={duration === d}
                             onClick={() => { setDuration(d); setOpenList(null); }}>
                             {d}s
