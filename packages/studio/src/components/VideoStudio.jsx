@@ -655,10 +655,11 @@ export default function VideoStudio({
     galleryScope === "project" && activeProjectId
       ? historyUnfiltered.filter((e) => e.projectId === activeProjectId)
       : historyUnfiltered;
-  const setScope = (scope) => {
-    setGalleryScope(scope);
-    try { window.localStorage.setItem("gallery_scope", scope); } catch {}
-  };
+  useEffect(() => {
+    const onScope = (e) => setGalleryScope(e.detail || "all");
+    window.addEventListener("gallery-scope-changed", onScope);
+    return () => window.removeEventListener("gallery-scope-changed", onScope);
+  }, []);
 
   // See ImageStudio's handleDeleteEntry: when historyItems is server-backed
   // (White Label / backfilled sessions), localHistory isn't what's rendered,
@@ -1583,23 +1584,6 @@ export default function VideoStudio({
     >
       {/* ── CENTRAL GALLERY AREA ── */}
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-40 lg:pb-32 px-2">
-        {projectsCount > 0 && (
-          <div className="w-full flex justify-end pt-4">
-            <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
-              {[["project", "Projeto"], ["all", "Geral"]].map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => setScope(value)}
-                  className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 ${
-                    galleryScope === value ? "bg-[#636366]/90 text-white shadow-sm" : "text-white/50 hover:text-white/80"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         {pendingRenders.length > 0 && (
           <div className="w-full pt-4 space-y-2 animate-fade-in-up">
             {pendingRenders.map((p) => (

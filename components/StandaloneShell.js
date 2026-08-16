@@ -206,6 +206,15 @@ export default function StandaloneShell() {
   const [projects, setProjects] = useState([]);
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [galleryScope, setGalleryScopeState] = useState(() => {
+    if (typeof window === 'undefined') return 'all';
+    return localStorage.getItem('gallery_scope') || 'all';
+  });
+  const setGalleryScope = useCallback((scope) => {
+    setGalleryScopeState(scope);
+    try { localStorage.setItem('gallery_scope', scope); } catch {}
+    window.dispatchEvent(new CustomEvent('gallery-scope-changed', { detail: scope }));
+  }, []);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
@@ -707,6 +716,23 @@ export default function StandaloneShell() {
               </div>
             )}
           </div>
+
+          {/* Projeto/Geral — app-wide gallery scope */}
+          {projects.length > 0 && (
+            <div className="hidden sm:flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
+              {[['project', 'Projeto'], ['all', 'Geral']].map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setGalleryScope(value)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 ${
+                    galleryScope === value ? 'bg-[#636366]/90 text-white shadow-sm' : 'text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Right: Actions */}
           <div className="flex-shrink-0 flex items-center gap-3">

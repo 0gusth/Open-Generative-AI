@@ -11,6 +11,7 @@ import toast from "react-hot-toast";
 import { generateImage, generateVideo, generateI2V, uploadFile } from "../muapi.js";
 import { cinemaFusePrompt } from "../providers.js";
 import { compileCinematography } from "../cinema/compiler.js";
+import { t2iModels, t2vModels, i2vModels } from "../models.js";
 import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, APERTURES, mediaForCamera } from "../cinema/gear.js";
 import { GENRES, ERAS, TEMPOS } from "../cinema/filmSetup.js";
 import { PALETTES } from "../cinema/palettes.js";
@@ -35,23 +36,28 @@ import { formatErrorMessage } from "../utils/formatError.js";
 const SETUP_KEY = "cinema_setup_v2";
 const HISTORY_KEY = "cinema_history_v2";
 
+// Full model catalogs — same choice as Image and Video Studios.
 const MODELS = {
-  image: [
-    { id: "nano-banana-2", name: "Nano Banana 2" },
-    { id: "nano-banana", name: "Nano Banana" },
-    { id: "seedream-5.0", name: "Seedream 5.0" },
-    { id: "flux-dev", name: "Flux Dev" },
-    { id: "flux-schnell", name: "Flux Schnell" },
-    { id: "gpt-image-2", name: "GPT Image 2" },
-  ],
-  video: [
-    { id: "kling-v3.0-standard-text-to-video", name: "Kling 3.0", i2vId: "kling-v3.0-standard-image-to-video" },
-    { id: "kling-v3.0-pro-text-to-video", name: "Kling 3.0 Pro", i2vId: "kling-v3.0-pro-image-to-video" },
-    { id: "seedance-v2.0-t2v", name: "Seedance 2", i2vId: "seedance-2.1-image-to-video" },
-  ],
+  image: t2iModels.map((m) => ({ id: m.id, name: m.name })),
+  video: t2vModels.map((m) => ({ id: m.id, name: m.name })),
 };
+const DEFAULT_MODEL = { image: "nano-banana-2", video: "kling-v3.0-standard-text-to-video" };
 
-const ASPECTS = ["16:9", "9:16", "1:1", "21:9"];
+// Heuristic i2v sibling for reference-driven video, verified fallback last.
+function i2vSibling(t2vId) {
+  const candidates = [
+    t2vId.replace("-t2v", "-i2v"),
+    t2vId.replace("text-to-video", "image-to-video"),
+    t2vId.replace("-t2v", "-image-to-video"),
+  ];
+  for (const c of candidates) {
+    if (c !== t2vId && i2vModels.some((m) => m.id === c)) return c;
+  }
+  return "kling-v3.0-standard-image-to-video";
+}
+
+const ASPECTS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"];
+const RESOLUTIONS = ["480p", "720p", "1080p"];
 const DURATIONS = [5, 10];
 
 const DEFAULT_SETUP = {
@@ -117,9 +123,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     catch { return DEFAULT_SETUP; }
   });
   const [prompt, setPrompt] = useState("");
-  const [modelId, setModelId] = useState(MODELS.image[0].id);
+  const [modelId, setModelId] = useState(DEFAULT_MODEL.image);
   const [aspect, setAspect] = useState("16:9");
   const [duration, setDuration] = useState(5);
+  const [resolution, setResolution] = useState("720p");
   const [openPanel, setOpenPanel] = useState(null); // "film" | "camera" | "look" | "movement"
   const [generating, setGenerating] = useState(false);
   const [history, setHistory] = useState(() => {
@@ -142,8 +149,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try { window.localStorage.setItem("cinema_enhance_on", next ? "1" : "0"); } catch {}
     return next;
   });
-  // Open list popovers: "model" | "aspect" | "duration" | null
+  // Open list popovers: "model" | "aspect" | "duration" | "quality" | null
   const [openList, setOpenList] = useState(null);
+  const [modelSearch, setModelSearch] = useState("");
 
   const uploadRefs = useCallback(async (files) => {
     const usable = files.filter((f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024).slice(0, 9 - refs.length);
@@ -183,7 +191,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
 
   // model list follows mode
   useEffect(() => {
-    if (!MODELS[mode].some((m) => m.id === modelId)) setModelId(MODELS[mode][0].id);
+    if (!MODELS[mode].some((m) => m.id === modelId)) setModelId(DEFAULT_MODEL[mode]);
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // close panel on outside click / Esc
@@ -240,18 +248,18 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         if (refs.length) params.images_list = refs;
         res = await generateImage(apiKey, params);
       } else if (refs.length) {
-        const m = MODELS.video.find((x) => x.id === modelId);
         res = await generateI2V(apiKey, {
-          model: m?.i2vId || modelId,
+          model: i2vSibling(modelId),
           image_url: refs[0],
           images_list: refs,
           prompt: finalPrompt,
           aspect_ratio: aspect,
           duration,
+          resolution,
           __audio: true,
         });
       } else {
-        res = await generateVideo(apiKey, { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: true });
+        res = await generateVideo(apiKey, { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, resolution, __audio: true });
       }
       if (!res?.url) throw new Error("No result returned");
       const entry = {
@@ -488,14 +496,25 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   <PromptChevronIcon />
                 </button>
                 {openList === "model" && (
-                  <PromptPopover>
+                  <PromptPopover className="min-w-[260px]">
+                    <input
+                      type="text"
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="Search models…"
+                      autoFocus
+                      className="w-full mb-2 bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-[#EF0328]/40"
+                    />
                     <PromptMenuList>
-                      {MODELS[mode].map((m) => (
-                        <PromptMenuItem key={m.id} selected={modelId === m.id}
-                          onClick={() => { setModelId(m.id); setOpenList(null); }}>
-                          {m.name}
-                        </PromptMenuItem>
-                      ))}
+                      {MODELS[mode]
+                        .filter((m) => !modelSearch || m.name.toLowerCase().includes(modelSearch.toLowerCase()))
+                        .slice(0, 40)
+                        .map((m) => (
+                          <PromptMenuItem key={m.id} selected={modelId === m.id}
+                            onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
+                            {m.name}
+                          </PromptMenuItem>
+                        ))}
                     </PromptMenuList>
                   </PromptPopover>
                 )}
@@ -522,6 +541,30 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </PromptPopover>
                 )}
               </div>
+              {/* Quality — list (video) */}
+              {mode === "video" && (
+                <div className="relative">
+                  <button type="button"
+                    onClick={() => setOpenList(openList === "quality" ? null : "quality")}
+                    className={promptControlClassName({ compact: true, active: openList === "quality" })}
+                    title="Video quality">
+                    <span className="text-xs font-semibold tabular-nums">{resolution}</span>
+                    <PromptChevronIcon />
+                  </button>
+                  {openList === "quality" && (
+                    <PromptPopover>
+                      <PromptMenuList>
+                        {RESOLUTIONS.map((r) => (
+                          <PromptMenuItem key={r} selected={resolution === r}
+                            onClick={() => { setResolution(r); setOpenList(null); }}>
+                            {r}
+                          </PromptMenuItem>
+                        ))}
+                      </PromptMenuList>
+                    </PromptPopover>
+                  )}
+                </div>
+              )}
               {/* Duration — list (video) */}
               {mode === "video" && (
                 <div className="relative">
