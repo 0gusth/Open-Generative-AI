@@ -607,7 +607,10 @@ export default function StandaloneShell() {
                 { label: 'fal', value: providerBalances.fal },
               ].filter((p) => p.value !== null && !Number.isNaN(p.value));
               const total = parts.reduce((sum, p) => sum + p.value, 0);
-              const breakdown = parts.map((p) => `${p.label} $${p.value.toFixed(2)}`).join(' · ');
+              let breakdown = parts.map((p) => `${p.label} $${p.value.toFixed(2)}`).join(' · ');
+              if (getProviderKey('fal') && providerBalances.fal === null) {
+                breakdown += breakdown ? ' · fal: active (balance needs an admin-scope key)' : 'fal: active (balance needs an admin-scope key)';
+              }
               return (
                 <div
                   title={breakdown || 'No balance data'}
