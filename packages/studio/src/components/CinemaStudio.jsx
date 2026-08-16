@@ -36,6 +36,7 @@ import {
 } from "./prompt/PromptComposer.jsx";
 import Lightbox, { downloadMedia } from "./Lightbox.jsx";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { detectProperNames, isByteDanceModel } from "../utils/preflight.js";
 
 const SETUP_KEY = "cinema_setup_v2";
 const HISTORY_KEY = "cinema_history_v2";
@@ -499,6 +500,17 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         .filter((u) => u && u !== startFrame && !refs.includes(u));
       const effRefs = [...refs, ...castRefs].slice(0, 9);
       const material = inlineCast(compiled.prompt);
+      // Pre-flight: proper names on ByteDance models trip copyright moderation.
+      // The fusion strips names when enhance is on; warn when it's off.
+      if (isByteDanceModel(modelId) && !enhanceOn) {
+        const names = detectProperNames(prompt).filter((n) => !mentionedCast.some((c) => c.name.toLowerCase() === n.toLowerCase()));
+        if (names.length) {
+          toast(
+            `⚠ Nomes próprios no prompt (${names.slice(0, 4).join(", ")}) — a moderação da ByteDance costuma bloquear por copyright. Ative o Director's enhance ✦ para convertê-los em descrições visuais.`,
+            { duration: 9000, id: "preflight-names" },
+          );
+        }
+      }
       let finalPrompt = material;
       if (enhanceOn) {
         const cont = continuationRef.current;

@@ -3,6 +3,9 @@
 // browser pointed at this app; all calls are fire-safe (errors never break a
 // generation).
 
+import toast from "react-hot-toast";
+import { formatErrorMessage } from "./utils/formatError.js";
+
 async function post(body) {
     try {
         await fetch("/api/history", {
@@ -64,6 +67,18 @@ export async function reconcilePending() {
                 body: JSON.stringify([{ taskType: "getResponse", taskUUID: item.id }]),
             });
             const data = await r.json();
+            // Definitive verdicts (content moderation, invalid input) come back
+            // through errors[] — the render will never finish. Remove it from
+            // the queue and tell the user WHY, or it polls forever in silence.
+            const fatal = (data.errors || []).find((e) => e.taskUUID === item.id);
+            if (fatal) {
+                await removePending(item.id);
+                toast.error(
+                    `Render "${(item.prompt || item.model || "").slice(0, 40)}…" falhou: ${formatErrorMessage(fatal.message, "provider rejected the render")}`,
+                    { duration: 12000, id: `pending-fail-${item.id}` },
+                );
+                continue;
+            }
             const entry = (data.data || []).find((t) => t.taskUUID === item.id);
             if (!entry) continue;
             const url = entry.videoURL || entry.imageURL;

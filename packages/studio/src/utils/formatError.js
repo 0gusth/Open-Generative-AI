@@ -25,6 +25,15 @@ export function formatErrorMessage(err, fallback = "Generation failed") {
     }
   }
 
+  // Provider content moderation — translate the verdict into what to DO.
+  // ByteDance's filter reads the whole prompt; proper names, brands and
+  // celebrity/IP references are the usual triggers.
+  if (/content moderation|invalid content|flagged/i.test(message)) {
+    return /copyright/i.test(message)
+      ? "A moderação do provedor bloqueou por possível conteúdo protegido (copyright). Gatilho comum: nomes próprios de personagens, marcas ou obras no prompt. Troque nomes por descrições visuais — o Enhance ✦ faz isso — e gere de novo."
+      : "A moderação do provedor bloqueou este prompt. Reescreva como uma cena de filme — sem nomes reais, marcas ou termos sensíveis — e tente de novo.";
+  }
+
   // Handle common HTTP error codes
   if (message.includes('402') || message.includes('INSUFFICIENT_CREDITS') || message.toLowerCase().includes('insufficient credits')) {
     return "Insufficient credits. Please top up your wallet.";

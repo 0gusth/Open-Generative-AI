@@ -336,6 +336,18 @@ async function pollRunwareTask(taskUUID, kind) {
                 { taskType: "getResponse", taskUUID },
             ]);
         } catch (error) {
+            // A getResponse error addressed to OUR task is the provider's final
+            // verdict (content moderation, invalid input) — the render will
+            // never finish, so stop now with the real cause instead of looping
+            // to a useless timeout. Anything else is transient: keep waiting.
+            const fatal = (error.runwareErrors || []).find((e) => e.taskUUID === taskUUID);
+            if (fatal) {
+                const err = new Error(fatal.message || `Runware ${kind} generation failed`);
+                err.definitive = true;
+                err.noFallback = true; // task was accepted — never re-generate elsewhere
+                err.runwareErrors = [fatal];
+                throw err;
+            }
             continue; // transient poll failure — keep waiting
         }
         const entry = results.find((t) => t.taskUUID === taskUUID || t[urlField]);

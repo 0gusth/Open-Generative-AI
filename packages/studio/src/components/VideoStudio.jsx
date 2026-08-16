@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateVideo, generateI2V, processV2V, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { detectProperNames, isByteDanceModel } from "../utils/preflight.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import DrawModal from "./DrawModal.jsx";
 import MobileGenerationActions, {
@@ -1258,6 +1259,17 @@ export default function VideoStudio({
     const currentModel = getCurrentModel();
     const isExtendMode = currentModel?.requiresRequestId;
     let trimmedPrompt = prompt.trim();
+    // Pre-flight: proper names on ByteDance models get flagged as copyright by
+    // their moderation — warn before burning the render (Enhance rewrites them).
+    if (isByteDanceModel(currentModel?.id) && !enhanceOn && trimmedPrompt) {
+      const names = detectProperNames(trimmedPrompt);
+      if (names.length) {
+        toast(
+          `⚠ Nomes próprios no prompt (${names.slice(0, 4).join(", ")}) — a moderação da ByteDance costuma bloquear por copyright. Ative o Enhance ✦ para convertê-los em descrições visuais.`,
+          { duration: 9000, id: "preflight-names" },
+        );
+      }
+    }
     if (enhanceOn && trimmedPrompt) {
       setGenerating(true); // placeholder appears while the prompt is enriched
       trimmedPrompt = await enhancePrompt(trimmedPrompt, "video", currentModel?.id);
