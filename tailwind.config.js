@@ -13,28 +13,51 @@ module.exports = {
     theme: {
         extend: {
             colors: {
+                // Apple HIG dark palette — system blue accent, layered elevated grays
+                // Monochrome accent — near-white; the single blue lives only on
+                // primary actions and selection, applied explicitly as #0A84FF
                 primary: {
-                    DEFAULT: '#22d3ee',
-                    hover: '#06b6d4',
+                    DEFAULT: '#F5F5F7',
+                    hover: '#FFFFFF',
                 },
-                'app-bg': '#050505',
-                'panel-bg': '#0a0a0a',
-                'card-bg': '#141414',
-                secondary: '#a1a1aa',
-                muted: '#52525b',
+                'app-bg': '#0f0f10',
+                'panel-bg': '#171719',
+                'card-bg': '#212123',
+                secondary: '#98989d',
+                muted: '#636366',
+                // Semantic colors remapped to Apple system palette (dark variants)
+                red: { 300: '#FF8A80', 400: '#FF6961', 500: '#FF453A', 600: '#E03B31' },
+                rose: { 300: '#FF8A80', 400: '#FF6961', 500: '#FF453A', 600: '#E03B31' },
+                green: { 300: '#7CE495', 400: '#30DB5B', 500: '#30D158', 600: '#28B34B' },
+                emerald: { 300: '#7CE495', 400: '#30DB5B', 500: '#30D158', 600: '#28B34B' },
+                yellow: { 300: '#FFE04B', 400: '#FFD60A', 500: '#FFD60A', 600: '#D9B609' },
+                amber: { 300: '#FFE04B', 400: '#FFD60A', 500: '#FFD60A', 600: '#D9B609' },
+                orange: { 300: '#FFB340', 400: '#FF9F0A', 500: '#FF9F0A', 600: '#D98708' },
             },
             fontFamily: {
-                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                // SF Pro on Apple devices via the system stack
+                sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'system-ui', 'sans-serif'],
             },
             borderRadius: {
-                'xl': '1rem',
-                '2xl': '1.5rem',
-                '3xl': '2rem',
+                'xl': '0.75rem',
+                '2xl': '1rem',
+                '3xl': '1.25rem',
             },
             boxShadow: {
-                'glow': '0 0 20px rgba(34, 211, 238, 0.4)',
-                'glow-accent': '0 0 20px rgba(168, 85, 247, 0.4)',
-                '3xl': '0 35px 60px -15px rgba(0, 0, 0, 0.8)',
+                // Soft elevation instead of neon glow
+                'glow': '0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.08)',
+                'glow-accent': '0 8px 24px rgba(10, 132, 255, 0.25)',
+                '3xl': '0 20px 50px -12px rgba(0, 0, 0, 0.55)',
+            },
+            transitionTimingFunction: {
+                // Apple sheet/navigation curve — fast start, long soft landing
+                'apple': 'cubic-bezier(0.32, 0.72, 0, 1)',
+                // Ease-out-quint for entrances
+                'out-quint': 'cubic-bezier(0.22, 1, 0.36, 1)',
+            },
+            transitionDuration: {
+                '250': '250ms',
+                '350': '350ms',
             }
         },
     },

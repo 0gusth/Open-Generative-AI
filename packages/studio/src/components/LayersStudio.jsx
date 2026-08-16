@@ -53,7 +53,7 @@ const PRESET_COLORS = [
   "#eab308", // Yellow
   "#ef4444", // Red
   "#14b8a6", // Turquoise
-  "#38bdf8", // Sky Blue
+  "#EF0328", // Sky Blue
   "#ec4899", // Pink
   "#000000", // Black
 ];
@@ -1264,7 +1264,7 @@ export default function LayersStudio({
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Upload or Change Image"
-          className="group relative w-12 h-14 rounded-2xl overflow-hidden bg-[#1a1c23] border border-white/10 flex items-center justify-center transition-all duration-200 hover:scale-105 shadow-[0_0_20px_rgba(0,0,0,0.5)] ring-2 ring-[#84cc16]/80"
+          className="group relative w-12 h-14 rounded-2xl overflow-hidden bg-[#1a1c23] border border-white/10 flex items-center justify-center transition-all duration-200 hover:scale-105 shadow-[0_0_20px_rgba(0,0,0,0.5)] ring-2 ring-[#EF0328]/80"
         >
           {currentImageUrl ? (
             <img
@@ -1312,7 +1312,7 @@ export default function LayersStudio({
           activeTool === "hand" ? "cursor-grab active:cursor-grabbing" : ""
         }`}
       >
-        <div className="absolute w-[700px] h-[700px] bg-[#84cc16]/5 rounded-full blur-[160px] pointer-events-none" />
+        <div className="absolute w-[700px] h-[700px] bg-[#EF0328]/5 rounded-full blur-[160px] pointer-events-none" />
 
         {/* Central Display Viewport Container */}
         <div
@@ -1324,7 +1324,7 @@ export default function LayersStudio({
         >
           {uploading ? (
             <div className="flex flex-col items-center justify-center p-12 bg-[#1a1c23]/80 backdrop-blur-md rounded-3xl border border-white/10">
-              <div className="w-12 h-12 border-4 border-[#84cc16]/20 border-t-[#84cc16] rounded-full animate-spin mb-4" />
+              <div className="w-12 h-12 border-4 border-[#EF0328]/20 border-t-[#EF0328] rounded-full animate-spin mb-4" />
               <p className="text-sm font-semibold text-white/80">
                 Uploading image... {uploadProgress}%
               </p>
@@ -1403,7 +1403,7 @@ export default function LayersStudio({
                   <path
                     d={getLassoPathString()}
                     fill="rgba(56, 189, 248, 0.18)"
-                    stroke="#38bdf8"
+                    stroke="#EF0328"
                     strokeWidth="4"
                     strokeDasharray="8 8"
                     className="drop-shadow-[0_0_15px_rgba(56,189,248,0.8)]"
@@ -1416,7 +1416,7 @@ export default function LayersStudio({
                 regionalBox.width > 0 &&
                 regionalBox.height > 0 && (
                   <div
-                    className="absolute border-2 border-dashed border-[#38bdf8] bg-[#38bdf8]/10 rounded-lg pointer-events-auto shadow-[0_0_25px_rgba(56,189,248,0.5)] z-30"
+                    className="absolute border-2 border-dashed border-[#EF0328] bg-white/[0.07] rounded-lg pointer-events-auto shadow-[0_0_25px_rgba(56,189,248,0.5)] z-30"
                     style={{
                       left: `${regionalBox.x}%`,
                       top: `${regionalBox.y}%`,
@@ -1424,10 +1424,10 @@ export default function LayersStudio({
                       height: `${regionalBox.height}%`,
                     }}
                   >
-                    <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-[#38bdf8] border border-white rounded-full" />
-                    <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-[#38bdf8] border border-white rounded-full" />
-                    <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-[#38bdf8] border border-white rounded-full" />
-                    <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-[#38bdf8] border border-white rounded-full" />
+                    <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-[#EF0328] border border-white rounded-full" />
+                    <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-[#EF0328] border border-white rounded-full" />
+                    <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-[#EF0328] border border-white rounded-full" />
+                    <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-[#EF0328] border border-white rounded-full" />
                   </div>
                 )}
 
@@ -1458,7 +1458,7 @@ export default function LayersStudio({
                   <button
                     onClick={handleRunRegionalEdit}
                     disabled={isProcessing}
-                    className="w-7 h-7 rounded-full bg-[#84cc16] hover:bg-[#a3e635] text-black flex items-center justify-center shadow-[0_0_12px_rgba(132,204,22,0.6)] transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    className="w-7 h-7 rounded-full bg-[#EF0328] hover:bg-[#a3e635] text-black flex items-center justify-center shadow-[0_0_12px_rgba(132,204,22,0.6)] transition-all hover:scale-105 active:scale-95 flex-shrink-0"
                     title="Run Selection Edit"
                   >
                     <svg
@@ -1512,7 +1512,7 @@ export default function LayersStudio({
                         }}
                         className={`absolute inset-0 w-full h-full object-contain transition-all duration-200 cursor-pointer pointer-events-auto ${
                           isSelected
-                            ? "ring-2 ring-[#84cc16] drop-shadow-[0_0_20px_rgba(132,204,22,0.6)]"
+                            ? "ring-2 ring-[#EF0328] drop-shadow-[0_0_20px_rgba(132,204,22,0.6)]"
                             : "hover:opacity-90"
                         }`}
                       />
@@ -1525,8 +1525,8 @@ export default function LayersStudio({
               {isProcessing && (
                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-40">
                   <div className="relative w-16 h-16 mb-4">
-                    <div className="absolute inset-0 border-4 border-[#84cc16]/20 rounded-full" />
-                    <div className="absolute inset-0 border-4 border-[#84cc16] border-t-transparent rounded-full animate-spin" />
+                    <div className="absolute inset-0 border-4 border-[#EF0328]/20 rounded-full" />
+                    <div className="absolute inset-0 border-4 border-[#EF0328] border-t-transparent rounded-full animate-spin" />
                   </div>
                   <p className="text-sm font-bold tracking-wide text-white">
                     Processing Image...
@@ -1537,7 +1537,7 @@ export default function LayersStudio({
 
                   <div className="w-48 bg-white/10 h-1.5 rounded-full overflow-hidden mt-4">
                     <div
-                      className="bg-gradient-to-r from-[#84cc16] to-[#a3e635] h-full transition-all duration-300"
+                      className="bg-gradient-to-r from-[#EF0328] to-[#a3e635] h-full transition-all duration-300"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -1547,9 +1547,9 @@ export default function LayersStudio({
           ) : (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center p-16 border-2 border-dashed border-white/20 hover:border-[#84cc16]/60 rounded-3xl cursor-pointer transition-all duration-200 bg-[#16181f]/50 hover:bg-[#16181f]/80"
+              className="flex flex-col items-center justify-center p-16 border-2 border-dashed border-white/20 hover:border-[#EF0328]/60 rounded-3xl cursor-pointer transition-all duration-200 bg-[#16181f]/50 hover:bg-[#16181f]/80"
             >
-              <div className="w-16 h-16 rounded-2xl bg-[#84cc16]/10 text-[#84cc16] flex items-center justify-center mb-4">
+              <div className="w-16 h-16 rounded-2xl bg-white/[0.07] text-[#EF0328] flex items-center justify-center mb-4">
                 <svg
                   width="32"
                   height="32"
@@ -1577,13 +1577,13 @@ export default function LayersStudio({
         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2.5 w-full max-w-xl px-4">
           {/* SHAPES (R) POPOVER TOOLBAR */}
           {activeTool === "shapes" && (
-            <div className="flex items-center gap-3 px-4 py-2 bg-[#1b1e26]/95 backdrop-blur-xl border border-[#84cc16]/40 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] animate-fade-in">
+            <div className="flex items-center gap-3 px-4 py-2 bg-[#1b1e26]/95 backdrop-blur-xl border border-[#EF0328]/40 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] animate-fade-in">
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setActiveShape("line")}
                   className={`p-1.5 rounded-lg border transition-all ${
                     activeShape === "line"
-                      ? "bg-[#84cc16] text-black border-[#84cc16]"
+                      ? "bg-[#EF0328] text-white border-[#EF0328]"
                       : "text-white/70 hover:text-white border-transparent"
                   }`}
                   title="Line"
@@ -1604,7 +1604,7 @@ export default function LayersStudio({
                   onClick={() => setActiveShape("arrow")}
                   className={`p-1.5 rounded-lg border transition-all ${
                     activeShape === "arrow"
-                      ? "bg-[#84cc16] text-black border-[#84cc16]"
+                      ? "bg-[#EF0328] text-white border-[#EF0328]"
                       : "text-white/70 hover:text-white border-transparent"
                   }`}
                   title="Arrow"
@@ -1626,7 +1626,7 @@ export default function LayersStudio({
                   onClick={() => setActiveShape("rect")}
                   className={`p-1.5 rounded-lg border transition-all ${
                     activeShape === "rect"
-                      ? "bg-[#84cc16] text-black border-[#84cc16]"
+                      ? "bg-[#EF0328] text-white border-[#EF0328]"
                       : "text-white/70 hover:text-white border-transparent"
                   }`}
                   title="Rectangle"
@@ -1647,7 +1647,7 @@ export default function LayersStudio({
                   onClick={() => setActiveShape("circle")}
                   className={`p-1.5 rounded-lg border transition-all ${
                     activeShape === "circle"
-                      ? "bg-[#84cc16] text-black border-[#84cc16]"
+                      ? "bg-[#EF0328] text-white border-[#EF0328]"
                       : "text-white/70 hover:text-white border-transparent"
                   }`}
                   title="Circle"
@@ -1686,7 +1686,7 @@ export default function LayersStudio({
 
           {/* Active Drawing Tool Popover Options Bar */}
           {(activeTool === "draw" || activeTool === "eraser") && (
-            <div className="flex items-center gap-3 px-4 py-2 bg-[#1b1e26]/95 backdrop-blur-xl border border-[#84cc16]/40 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] animate-fade-in">
+            <div className="flex items-center gap-3 px-4 py-2 bg-[#1b1e26]/95 backdrop-blur-xl border border-[#EF0328]/40 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] animate-fade-in">
               <span className="text-xs font-extrabold uppercase text-[#a3e635] tracking-wider">
                 {activeTool === "draw" ? "Marker Pen" : "Eraser"}
               </span>
@@ -1725,7 +1725,7 @@ export default function LayersStudio({
                   max="40"
                   value={brushSize}
                   onChange={(e) => setBrushSize(Number(e.target.value))}
-                  className="w-20 accent-[#84cc16] cursor-pointer"
+                  className="w-20 accent-[#EF0328] cursor-pointer"
                 />
                 <span className="text-xs font-bold text-white min-w-[20px]">
                   {brushSize}px
@@ -1766,7 +1766,7 @@ export default function LayersStudio({
               onClick={() => setActiveTool("pointer")}
               className={`p-2 rounded-xl transition-all ${
                 activeTool === "pointer"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Select Pointer Tool"
@@ -1785,7 +1785,7 @@ export default function LayersStudio({
               onClick={() => setActiveTool("hand")}
               className={`p-2 rounded-xl transition-all ${
                 activeTool === "hand"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Pan Tool"
@@ -1811,7 +1811,7 @@ export default function LayersStudio({
               }
               className={`group relative p-2 rounded-xl transition-all ${
                 activeTool === "lasso"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Lasso Edit"
@@ -1843,7 +1843,7 @@ export default function LayersStudio({
               }
               className={`group relative p-2 rounded-xl transition-all ${
                 activeTool === "regional-edit"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Regional Edit"
@@ -1877,7 +1877,7 @@ export default function LayersStudio({
               }
               className={`p-2 rounded-xl transition-all ${
                 activeTool === "draw"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Highlight Marker Pen"
@@ -1901,7 +1901,7 @@ export default function LayersStudio({
               }
               className={`p-2 rounded-xl transition-all ${
                 activeTool === "eraser"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Eraser Tool"
@@ -1924,7 +1924,7 @@ export default function LayersStudio({
               }
               className={`group relative p-2 rounded-xl transition-all ${
                 activeTool === "shapes"
-                  ? "bg-[#84cc16] text-black shadow-[0_0_12px_rgba(132,204,22,0.4)]"
+                  ? "bg-[#EF0328] text-white shadow-[0_0_12px_rgba(132,204,22,0.4)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               title="Shapes (R)"
@@ -2004,7 +2004,7 @@ export default function LayersStudio({
             <button
               onClick={() => handleDecompose()}
               disabled={isProcessing}
-              className="w-10 h-10 rounded-full bg-[#84cc16] hover:bg-[#a3e635] text-black flex items-center justify-center shadow-[0_0_20px_rgba(132,204,22,0.5)] transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ml-2 flex-shrink-0"
+              className="w-10 h-10 rounded-full bg-[#EF0328] hover:bg-[#a3e635] text-black flex items-center justify-center shadow-[0_0_20px_rgba(132,204,22,0.5)] transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ml-2 flex-shrink-0"
               title="Run Layer Decomposition"
             >
               <svg
@@ -2195,7 +2195,7 @@ export default function LayersStudio({
                         {DEFAULT_SAMPLE_LAYERS.map((layerUrl, idx) => (
                           <div
                             key={idx}
-                            className="flex-shrink-0 w-11 h-16 rounded-xl overflow-hidden border border-white/10 relative flex items-center justify-center p-1 bg-[#1a1d26] shadow-sm hover:border-[#84cc16]/50 transition-all"
+                            className="flex-shrink-0 w-11 h-16 rounded-xl overflow-hidden border border-white/10 relative flex items-center justify-center p-1 bg-[#1a1d26] shadow-sm hover:border-[#EF0328]/50 transition-all"
                             style={{
                               backgroundImage: `linear-gradient(45deg, #242733 25%, transparent 25%), linear-gradient(-45deg, #242733 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #242733 75%), linear-gradient(-45deg, transparent 75%, #242733 75%)`,
                               backgroundSize: "6px 6px",
@@ -2214,7 +2214,7 @@ export default function LayersStudio({
                         ))}
                       </div>
 
-                      <div className="text-[9px] text-center text-white/40 font-semibold group-hover:text-[#84cc16] transition-colors">
+                      <div className="text-[9px] text-center text-white/40 font-semibold group-hover:text-[#EF0328] transition-colors">
                         Click to explore sample
                       </div>
                     </div>
@@ -2284,7 +2284,7 @@ export default function LayersStudio({
                         <span className="text-xs font-bold uppercase text-white/80">
                           Layer Carousel
                         </span>
-                        <span className="px-2 py-0.5 rounded-full bg-[#84cc16]/20 text-[#a3e635] text-[10px] font-black">
+                        <span className="px-2 py-0.5 rounded-full bg-white/10 text-[#a3e635] text-[10px] font-black">
                           {carouselIndex + 1} / {decomposedLayers.length}
                         </span>
                       </div>
@@ -2294,7 +2294,7 @@ export default function LayersStudio({
                           onClick={() => setIsSoloMode(!isSoloMode)}
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
                             isSoloMode
-                              ? "bg-[#84cc16] text-black border-[#84cc16]"
+                              ? "bg-[#EF0328] text-white border-[#EF0328]"
                               : "bg-white/5 text-white/60 hover:text-white border-white/10"
                           }`}
                           title="View only active layer"
@@ -2331,7 +2331,7 @@ export default function LayersStudio({
                               prev > 0 ? prev - 1 : decomposedLayers.length - 1,
                             )
                           }
-                          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-[#84cc16] text-white hover:text-black flex items-center justify-center backdrop-blur-md border border-white/10 transition-all shadow-md"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-[#EF0328] text-white hover:text-black flex items-center justify-center backdrop-blur-md border border-white/10 transition-all shadow-md"
                           title="Previous Layer"
                         >
                           ‹
@@ -2343,7 +2343,7 @@ export default function LayersStudio({
                               prev < decomposedLayers.length - 1 ? prev + 1 : 0,
                             )
                           }
-                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-[#84cc16] text-white hover:text-black flex items-center justify-center backdrop-blur-md border border-white/10 transition-all shadow-md"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-[#EF0328] text-white hover:text-black flex items-center justify-center backdrop-blur-md border border-white/10 transition-all shadow-md"
                           title="Next Layer"
                         >
                           ›
@@ -2380,7 +2380,7 @@ export default function LayersStudio({
                                 `layer_${carouselIndex + 1}.${outputFormat}`,
                               )
                             }
-                            className="px-2.5 py-1 rounded-lg bg-[#84cc16] hover:bg-[#a3e635] text-black font-extrabold text-xs flex items-center gap-1 shadow-md"
+                            className="px-2.5 py-1 rounded-lg bg-[#EF0328] hover:bg-[#a3e635] text-black font-extrabold text-xs flex items-center gap-1 shadow-md"
                             title="Download this layer"
                           >
                             <span>⬇</span>
@@ -2397,7 +2397,7 @@ export default function LayersStudio({
                           onClick={() => setCarouselIndex(idx)}
                           className={`relative flex-shrink-0 w-14 h-12 rounded-xl overflow-hidden border transition-all p-1 bg-[#181a22] ${
                             carouselIndex === idx
-                              ? "border-[#84cc16] ring-2 ring-[#84cc16]/50 scale-105"
+                              ? "border-[#EF0328] ring-2 ring-[#EF0328]/50 scale-105"
                               : "border-white/10 opacity-60 hover:opacity-100"
                           }`}
                         >
@@ -2584,7 +2584,7 @@ export default function LayersStudio({
 
                 {upscaleModel === "ai-image-upscaler" && (
                   <div className="bg-[#2d313d] rounded-2xl p-4 border border-white/5 flex items-center gap-3 shadow-sm">
-                    <div className="w-8 h-8 rounded-xl bg-[#84cc16]/10 text-[#84cc16] flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.07] text-[#EF0328] flex items-center justify-center flex-shrink-0">
                       <svg
                         width="16"
                         height="16"
@@ -2686,7 +2686,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.colorCorrect.temp}
@@ -2715,7 +2715,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.colorCorrect.hue.toFixed(1)}
@@ -2743,7 +2743,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.colorCorrect.saturation}
@@ -2771,7 +2771,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.colorCorrect.contrast}
@@ -2800,7 +2800,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.colorCorrect.splitTone.toFixed(1)}
@@ -2886,7 +2886,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.softenDetails.radius}
@@ -2914,7 +2914,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.softenDetails.detail.toFixed(2)}
@@ -3000,7 +3000,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.bloom.radius}
@@ -3028,7 +3028,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.bloom.bright.toFixed(1)}
@@ -3056,7 +3056,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.bloom.fade.toFixed(2)}
@@ -3169,7 +3169,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.halation.strength.toFixed(2)}
@@ -3197,7 +3197,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.halation.threshold.toFixed(2)}
@@ -3224,7 +3224,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.halation.radius}
@@ -3311,7 +3311,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.lensInstructions.strength.toFixed(3)}
@@ -3338,7 +3338,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.lensInstructions.radius}
@@ -3366,7 +3366,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.lensInstructions.vignette.toFixed(2)}
@@ -3394,7 +3394,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.lensInstructions.distortion.toFixed(
@@ -3483,7 +3483,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.exposure.stops.toFixed(2)}
@@ -3570,7 +3570,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.filmGrain.strength.toFixed(2)}
@@ -3598,7 +3598,7 @@ export default function LayersStudio({
                                 },
                               }))
                             }
-                            className="w-24 accent-[#84cc16] cursor-pointer h-1.5 bg-white/10 rounded-lg"
+                            className="w-24 accent-[#EF0328] cursor-pointer h-1.5 bg-white/10 rounded-lg"
                           />
                           <span className="text-xs font-bold text-white min-w-[28px] text-right">
                             {colorGrading.filmGrain.bias.toFixed(2)}
@@ -3646,13 +3646,13 @@ export default function LayersStudio({
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-white/40">
                       Model
                     </span>
-                    <span className="text-[10px] font-bold text-[#a3e635] bg-[#84cc16]/15 px-2 py-0.5 rounded-md">
+                    <span className="text-[10px] font-bold text-[#a3e635] bg-white/10 px-2 py-0.5 rounded-md">
                       1.0 credit
                     </span>
                   </div>
 
                   <div className="bg-[#2d313d] p-3.5 rounded-2xl border border-white/5 flex items-center gap-3 shadow-sm">
-                    <div className="w-10 h-10 rounded-xl bg-[#84cc16]/10 text-[#84cc16] flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.07] text-[#EF0328] flex items-center justify-center flex-shrink-0">
                       <svg
                         width="20"
                         height="20"
@@ -3726,13 +3726,13 @@ export default function LayersStudio({
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-white/40">
                       Model
                     </span>
-                    <span className="text-[10px] font-bold text-[#a3e635] bg-[#84cc16]/15 px-2 py-0.5 rounded-md">
+                    <span className="text-[10px] font-bold text-[#a3e635] bg-white/10 px-2 py-0.5 rounded-md">
                       0.03 credits
                     </span>
                   </div>
 
                   <div className="bg-[#2d313d] p-3.5 rounded-2xl border border-white/5 flex items-center gap-3 shadow-sm">
-                    <div className="w-10 h-10 rounded-xl bg-[#84cc16]/10 text-[#84cc16] flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.07] text-[#EF0328] flex items-center justify-center flex-shrink-0">
                       <svg
                         width="20"
                         height="20"
@@ -3769,18 +3769,18 @@ export default function LayersStudio({
                     </span>
                   </div>
 
-                  <div className="w-full h-44 rounded-2xl overflow-hidden relative flex items-center justify-center border border-dashed border-[#84cc16]/50 bg-[#161822] p-4">
+                  <div className="w-full h-44 rounded-2xl overflow-hidden relative flex items-center justify-center border border-dashed border-[#EF0328]/50 bg-[#161822] p-4">
                     {/* Corner Guides */}
-                    <div className="absolute top-2 left-2 text-[#84cc16] text-[10px] font-mono">
+                    <div className="absolute top-2 left-2 text-[#EF0328] text-[10px] font-mono">
                       ↖ Expand
                     </div>
-                    <div className="absolute top-2 right-2 text-[#84cc16] text-[10px] font-mono">
+                    <div className="absolute top-2 right-2 text-[#EF0328] text-[10px] font-mono">
                       ↗ Expand
                     </div>
-                    <div className="absolute bottom-2 left-2 text-[#84cc16] text-[10px] font-mono">
+                    <div className="absolute bottom-2 left-2 text-[#EF0328] text-[10px] font-mono">
                       ↙ Expand
                     </div>
-                    <div className="absolute bottom-2 right-2 text-[#84cc16] text-[10px] font-mono">
+                    <div className="absolute bottom-2 right-2 text-[#EF0328] text-[10px] font-mono">
                       ↘ Expand
                     </div>
 
@@ -3827,7 +3827,7 @@ export default function LayersStudio({
                       <span>{item.label}</span>
                     </div>
                     {item.isNew && (
-                      <span className="px-2 py-0.5 text-[10px] font-black uppercase bg-[#84cc16] text-black rounded-md tracking-wider">
+                      <span className="px-2 py-0.5 text-[10px] font-black uppercase bg-[#EF0328] text-white rounded-md tracking-wider">
                         New
                       </span>
                     )}
@@ -3847,12 +3847,12 @@ export default function LayersStudio({
                   value={textEditPrompt}
                   onChange={(e) => setTextEditPrompt(e.target.value)}
                   placeholder="Enter text modification prompt..."
-                  className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#84cc16]"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#EF0328]"
                 />
                 <button
                   onClick={() => handleExecuteSideTool("edit-text")}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-[#84cc16] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
+                  className="w-full py-2 bg-[#EF0328] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
                 >
                   {isProcessing ? "Processing..." : "Run Text Edit"}
                 </button>
@@ -3870,7 +3870,7 @@ export default function LayersStudio({
                 <button
                   onClick={() => handleExecuteSideTool("enhancer")}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-[#84cc16] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
+                  className="w-full py-2 bg-[#EF0328] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
                 >
                   {isProcessing ? "Enhancing..." : "Enhance Image"}
                 </button>
@@ -3888,7 +3888,7 @@ export default function LayersStudio({
                 <button
                   onClick={() => handleExecuteSideTool("relight")}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-[#84cc16] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
+                  className="w-full py-2 bg-[#EF0328] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
                 >
                   {isProcessing ? "Relighting..." : "Apply Relight"}
                 </button>
@@ -3906,7 +3906,7 @@ export default function LayersStudio({
                 <button
                   onClick={() => handleExecuteSideTool("angles")}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-[#84cc16] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
+                  className="w-full py-2 bg-[#EF0328] hover:bg-[#a3e635] text-black font-bold text-xs uppercase rounded-xl shadow-md"
                 >
                   {isProcessing ? "Transforming..." : "Apply Perspective Angle"}
                 </button>

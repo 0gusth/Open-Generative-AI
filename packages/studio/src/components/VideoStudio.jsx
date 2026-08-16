@@ -76,7 +76,7 @@ const CheckSvg = () => (
     height="16"
     viewBox="0 0 24 24"
     fill="none"
-    stroke="#22d3ee"
+    stroke="#EF0328"
     strokeWidth="4"
   >
     <polyline points="20 6 9 17 4 12" />
@@ -110,7 +110,7 @@ const VideoReadySvg = () => (
   >
     <polygon points="23 7 16 12 23 17 23 7" />
     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    <polyline points="7 10 10 13 15 8" stroke="#22d3ee" strokeWidth="2.5" />
+    <polyline points="7 10 10 13 15 8" stroke="#EF0328" strokeWidth="2.5" />
   </svg>
 );
 
@@ -195,17 +195,17 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
       case "openai":
         return { text: "O", bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" };
       case "google":
-        return { text: "G", bg: "bg-blue-500/10 text-blue-400 border-blue-500/25" };
+        return { text: "G", bg: "bg-white/10 text-white/70 border-white/15" };
       case "blackforest":
         return { text: "BF", bg: "bg-amber-500/10 text-amber-400 border-amber-500/25" };
       case "bytedance":
-        return { text: "BD", bg: "bg-purple-500/10 text-purple-400 border-purple-500/25" };
+        return { text: "BD", bg: "bg-white/10 text-white/70 border-white/15" };
       case "midjourney":
         return { text: "MJ", bg: "bg-indigo-500/10 text-indigo-400 border-indigo-500/25" };
       case "kling":
         return { text: "KL", bg: "bg-rose-500/10 text-rose-400 border-rose-500/25" };
       case "vidu":
-        return { text: "VD", bg: "bg-cyan-500/10 text-cyan-400 border-cyan-500/25" };
+        return { text: "VD", bg: "bg-white/10 text-white/70 border-white/15" };
       case "minimax":
         return { text: "MX", bg: "bg-pink-500/10 text-pink-400 border-pink-500/25" };
       case "ideogram":
@@ -215,9 +215,9 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
       case "alibaba":
         return { text: "AL", bg: "bg-sky-500/10 text-sky-400 border-sky-500/25" };
       case "leonardoai":
-        return { text: "LE", bg: "bg-violet-500/10 text-violet-400 border-violet-500/25" };
+        return { text: "LE", bg: "bg-white/10 text-white/70 border-white/15" };
       case "stability":
-        return { text: "SD", bg: "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/25" };
+        return { text: "SD", bg: "bg-white/10 text-white/70 border-white/15" };
       default:
         const name = provider ? provider.toUpperCase() : "AI";
         return { text: name.substring(0, 2), bg: "bg-primary/10 text-primary border-primary/25" };
@@ -257,8 +257,8 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
 
   const getIconColor = (m, isV2V) => {
     if (isV2V) return "bg-orange-500/10 text-orange-400 border-orange-500/10";
-    if (m.id.includes("kling")) return "bg-blue-500/10 text-blue-400 border-blue-500/10";
-    if (m.id.includes("veo")) return "bg-purple-500/10 text-purple-400 border-purple-500/10";
+    if (m.id.includes("kling")) return "bg-white/10 text-white/70 border-white/15";
+    if (m.id.includes("veo")) return "bg-white/10 text-white/70 border-white/15";
     if (m.id.includes("sora")) return "bg-rose-500/10 text-rose-400 border-rose-500/10";
     return "bg-primary/10 text-primary border-primary/10";
   };
@@ -1437,7 +1437,7 @@ export default function VideoStudio({
               return (
                 <div
                   key={entry.id || idx}
-                  className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
+                  className="relative group rounded-lg overflow-hidden border border-white/10 bg-[#171719] shadow-xl hover:border-primary/50 transition-all duration-300 flex flex-col cursor-pointer"
                   onClick={() => setFullscreenUrl(entry.url)}
                 >
                   <video
@@ -1570,41 +1570,9 @@ export default function VideoStudio({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh]">
-            {/* Overlapping floating cards */}
-            <div className="flex items-center justify-center gap-1.5 md:gap-3 mb-10 select-none scale-90 sm:scale-100">
-              <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl -rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/sdxl-image.avif"
-                  alt="Creative asset 1"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl -rotate-[4deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/chroma-image.avif"
-                  alt="Creative asset 2"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-18 h-18 sm:w-24 sm:h-24 rounded-full border border-white/10 shadow-2xl rotate-[6deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/neta-lumina.avif"
-                  alt="Creative asset 3"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-18 h-22 sm:w-24 sm:h-28 rounded-2xl border border-white/10 shadow-2xl rotate-[12deg] transform hover:rotate-0 hover:scale-110 hover:z-20 transition-all duration-300 overflow-hidden bg-white/[0.01] -ml-3 sm:-ml-4 flex-shrink-0">
-                <img
-                  src="https://d3adwkbyhxyrtq.cloudfront.net/webassets/videomodels/perfect-pony-xl.avif"
-                  alt="Creative asset 4"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
-              <span className="text-white font-black uppercase text-xl sm:text-3xl tracking-wide mb-1 opacity-90">START CREATING WITH</span>
-              <span className="text-[#22d3ee] font-black uppercase text-2xl sm:text-4xl sm:mt-1 tracking-tight">
+              <span className="text-white/50 font-medium text-sm sm:text-base tracking-normal mb-2">Start creating with</span>
+              <span className="text-white/95 font-semibold text-3xl sm:text-5xl tracking-tight pb-1">
                 {selectedModelName}
               </span>
             </h1>
@@ -1645,7 +1613,7 @@ export default function VideoStudio({
                   >
                     ×
                   </button>
-                  <span className="absolute bottom-0.5 left-0.5 px-1 h-3.5 bg-black/60 rounded-md text-[7px] font-black text-[#22d3ee] leading-none flex items-center justify-center pointer-events-none">
+                  <span className="absolute bottom-0.5 left-0.5 px-1 h-3.5 bg-black/60 rounded-md text-[7px] font-black text-white/80 leading-none flex items-center justify-center pointer-events-none">
                     END
                   </span>
                 </div>
@@ -1678,7 +1646,7 @@ export default function VideoStudio({
                       >
                         ×
                       </button>
-                      <span className="absolute bottom-0.5 right-0.5 px-1 h-3.5 bg-black/60 rounded-full text-[8px] font-black text-[#22d3ee] leading-none flex items-center justify-center pointer-events-none">
+                      <span className="absolute bottom-0.5 right-0.5 px-1 h-3.5 bg-black/60 rounded-full text-[8px] font-black text-white/80 leading-none flex items-center justify-center pointer-events-none">
                         {idx + 1}
                       </span>
                     </div>
@@ -1724,13 +1692,13 @@ export default function VideoStudio({
                                 fill="transparent"
                                 strokeDasharray={88}
                                 strokeDashoffset={88 - (88 * imageProgress) / 100}
-                                className="text-[#22d3ee] transition-all duration-300"
+                                className="text-white/80 transition-all duration-300"
                               />
                             </svg>
-                            <span className="absolute text-[9px] font-black text-[#22d3ee] leading-none">{imageProgress}%</span>
+                            <span className="absolute text-[9px] font-black text-white/80 leading-none">{imageProgress}%</span>
                           </div>
                         ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-[#22d3ee] transition-colors">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-white/80 transition-colors">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                           </svg>
@@ -1767,13 +1735,13 @@ export default function VideoStudio({
                                 fill="transparent"
                                 strokeDasharray={88}
                                 strokeDashoffset={88 - (88 * imageProgress) / 100}
-                                className="text-[#22d3ee] transition-all duration-300"
+                                className="text-white/80 transition-all duration-300"
                               />
                             </svg>
-                            <span className="absolute text-[9px] font-black text-[#22d3ee] leading-none">{imageProgress}%</span>
+                            <span className="absolute text-[9px] font-black text-white/80 leading-none">{imageProgress}%</span>
                           </div>
                         ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-[#22d3ee] transition-colors">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-white/80 transition-colors">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                           </svg>
@@ -1813,13 +1781,13 @@ export default function VideoStudio({
                             fill="transparent"
                             strokeDasharray={88}
                             strokeDashoffset={88 - (88 * endImageProgress) / 100}
-                            className="text-[#22d3ee] transition-all duration-300"
+                            className="text-white/80 transition-all duration-300"
                           />
                         </svg>
-                        <span className="absolute text-[9px] font-black text-[#22d3ee] leading-none">{endImageProgress}%</span>
+                        <span className="absolute text-[9px] font-black text-white/80 leading-none">{endImageProgress}%</span>
                       </div>
                     ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-[#22d3ee] transition-colors">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white/40 group-hover:text-white/80 transition-colors">
                         <line x1="12" y1="5" x2="12" y2="19" />
                         <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
@@ -1858,10 +1826,10 @@ export default function VideoStudio({
                             fill="transparent"
                             strokeDasharray={88}
                             strokeDashoffset={88 - (88 * videoProgress) / 100}
-                            className="text-[#22d3ee] transition-all duration-300"
+                            className="text-white/80 transition-all duration-300"
                           />
                         </svg>
-                        <span className="absolute text-[9px] font-black text-[#22d3ee] leading-none">{videoProgress}%</span>
+                        <span className="absolute text-[9px] font-black text-white/80 leading-none">{videoProgress}%</span>
                       </div>
                     ) : (
                       <svg
@@ -1871,7 +1839,7 @@ export default function VideoStudio({
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2.5"
-                        className="text-white/40 group-hover:text-[#22d3ee] transition-colors"
+                        className="text-white/40 group-hover:text-white/80 transition-colors"
                       >
                         <polygon points="23 7 16 12 23 17 23 7" fill="currentColor" />
                         <rect x="1" y="5" width="15" height="14" rx="2" ry="2" fill="currentColor" />
@@ -2151,7 +2119,7 @@ export default function VideoStudio({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2.5"
-                    className="opacity-40 text-white group-hover:text-[#22d3ee] transition-colors"
+                    className="opacity-40 text-white group-hover:text-white/80 transition-colors"
                   >
                     <path d="M12 20h9" />
                     <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />

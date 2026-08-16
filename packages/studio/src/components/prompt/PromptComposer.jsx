@@ -12,31 +12,31 @@ const DEFAULT_POSITION_CLASS =
   "absolute bottom-4 w-full max-w-[95%] lg:max-w-4xl z-30 animate-fade-in-up";
 
 const DEFAULT_PANEL_CLASS =
-  "w-full bg-gradient-to-b from-[#18181c]/90 via-[#0f0f12]/90 to-[#0c0c0e]/95 backdrop-blur-2xl rounded-[2rem] border border-white/[0.08] p-4 flex flex-col gap-3 shadow-[0_15px_50px_rgba(0,0,0,0.8)]";
+  "w-full bg-[#171719]/95 backdrop-blur-3xl rounded-[1.5rem] border border-white/[0.09] p-4 flex flex-col gap-3 shadow-[0_16px_48px_rgba(0,0,0,0.4),inset_0_0.5px_0_rgba(255,255,255,0.06)]";
 
 const DEFAULT_TEXTAREA_CLASS =
-  "w-full bg-transparent border-none text-white text-sm placeholder:text-white/20 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40";
+  "w-full bg-transparent border-none text-white text-[15px] placeholder:text-white/30 focus:outline-none resize-none pt-1 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40";
 
 const DEFAULT_ACTION_CLASS =
-  "bg-[#22d3ee] text-black px-7 py-3 rounded-full font-bold text-sm hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 w-full sm:w-auto shadow-lg shadow-[#22d3ee]/20 hover:shadow-[#22d3ee]/35 border border-[#22d3ee]/10 z-10 disabled:opacity-50 disabled:cursor-not-allowed";
+  "bg-[#EF0328] text-white px-7 py-3 rounded-full font-semibold text-sm hover:bg-[#FF2447] active:scale-[0.97] transition-[transform,background-color,box-shadow,opacity] duration-150 flex items-center justify-center gap-2 w-full sm:w-auto shadow-[0_4px_16px_rgba(239,3,40,0.35)] z-10 disabled:opacity-50 disabled:cursor-not-allowed";
 
 const CONTROL_LAYOUT_CLASS =
-  "h-[38px] flex items-center gap-2 rounded-md transition-all border group whitespace-nowrap shadow-inner focus:outline-none focus-visible:border-[#22d3ee]/45 focus-visible:ring-1 focus-visible:ring-[#22d3ee]/30";
+  "h-[38px] flex items-center gap-2 rounded-lg transition-[transform,background-color,border-color,color] duration-150 border group whitespace-nowrap focus:outline-none focus-visible:border-white/15 focus-visible:ring-1 focus-visible:ring-[#EF0328]/30 active:scale-[0.97]";
 
 const CONTROL_IDLE_CLASS =
-  "text-white bg-[#16161a]/60 hover:bg-[#202026]/80 border-white/[0.06]";
+  "text-white/85 bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.06]";
 
 const CONTROL_ACTIVE_CLASS =
-  "text-[#22d3ee] bg-[#22d3ee]/10 hover:bg-[#22d3ee]/15 border-[#22d3ee]/25";
+  "text-white/80 bg-white/10 hover:bg-white/20 border-white/15";
 
 const MEDIA_CONTROL_LAYOUT_CLASS =
-  "w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group focus:outline-none focus-visible:border-[#22d3ee]/45 focus-visible:ring-1 focus-visible:ring-[#22d3ee]/30";
+  "w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group focus:outline-none focus-visible:border-white/15 focus-visible:ring-1 focus-visible:ring-[#EF0328]/30";
 
 const DEFAULT_POPOVER_POSITION_CLASS =
   "absolute bottom-[calc(100%+12px)] left-0 z-50";
 
 const DEFAULT_POPOVER_CLASS =
-  "bg-[#0c0c0f]/95 rounded-xl p-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] border border-white/[0.08] backdrop-blur-2xl min-w-[160px] max-h-[40vh] overflow-y-auto custom-scrollbar";
+  "bg-[#1d1d1f]/[0.98] rounded-xl p-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.65),inset_0_0.5px_0_rgba(255,255,255,0.08)] border border-white/[0.1] backdrop-blur-3xl min-w-[160px] max-h-[40vh] overflow-y-auto custom-scrollbar";
 
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -67,8 +67,8 @@ export function promptMediaButtonClassName({
   return joinClasses(
     MEDIA_CONTROL_LAYOUT_CLASS,
     active
-      ? "border-[#22d3ee]/60 bg-[#22d3ee]/5 hover:border-[#22d3ee]/70"
-      : "border-white/[0.03] bg-white/[0.03] hover:bg-white/[0.06] hover:border-[#22d3ee]/40",
+      ? "border-white/15 bg-white/10 hover:border-white/15"
+      : "border-white/[0.03] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/15",
     className,
   );
 }
@@ -77,7 +77,7 @@ export const PROMPT_MEDIA_PREVIEW_CLASS =
   "relative w-10 h-10 shrink-0 rounded-full border border-white/10 overflow-hidden shadow-md group";
 
 export const PROMPT_CONTROL_LABEL_CLASS =
-  "text-xs font-semibold text-current opacity-70 group-hover:text-[#22d3ee] group-hover:opacity-100 transition-all";
+  "text-xs font-semibold text-current opacity-70 group-hover:text-white/80 group-hover:opacity-100 transition-all";
 
 export function PromptChevronIcon({ className = "" }) {
   return (
@@ -221,7 +221,7 @@ export function PromptMenuItem({
       role="menuitemradio"
       className={joinClasses(
         "w-full min-h-10 flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer transition-all group/menu-item",
-        "text-xs font-semibold text-white/70 hover:bg-[#22d3ee]/10 hover:text-[#22d3ee] focus:outline-none focus-visible:bg-[#22d3ee]/10 focus-visible:text-[#22d3ee]",
+        "text-xs font-semibold text-white/70 hover:bg-white/20 hover:text-white/80 focus:outline-none focus-visible:bg-white/10 focus-visible:text-white/80",
         className,
       )}
     >
@@ -239,7 +239,7 @@ export function PromptMenuItem({
           height="12"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#22d3ee"
+          stroke="#EF0328"
           strokeWidth="4.5"
           className="flex-shrink-0"
           aria-hidden="true"
@@ -278,9 +278,9 @@ export function PromptSegmentOption({
       aria-pressed={selected}
       className={joinClasses(
         "min-h-7 px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center justify-center gap-1.5",
-        "focus:outline-none focus-visible:ring-1 focus-visible:ring-[#22d3ee]/40",
+        "focus:outline-none focus-visible:ring-1 focus-visible:ring-[#EF0328]/40",
         selected
-          ? "bg-[#22d3ee] text-black shadow-md shadow-[#22d3ee]/20"
+          ? "bg-[#636366]/90 text-white shadow-sm"
           : "text-white/40 hover:text-white/70",
         className,
       )}
