@@ -12,6 +12,9 @@ import {
 } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 
+// Guards against re-processing the same dropped/pasted batch when effects
+// re-fire (dependency identity churn + React StrictMode double-invoke).
+const processedDropBatches = new WeakSet();
 // Upscale Models Definition from schema_data.json
 const UPSCALE_MODELS = [
   {
@@ -190,6 +193,8 @@ export default function LayersStudio({
   // Handle external dropped files passed from parent shell
   useEffect(() => {
     if (droppedFiles && droppedFiles.length > 0) {
+      if (processedDropBatches.has(droppedFiles)) return;
+      processedDropBatches.add(droppedFiles);
       const file = droppedFiles[0];
       if (file.type.startsWith("image/")) {
         handleUploadFile(file);

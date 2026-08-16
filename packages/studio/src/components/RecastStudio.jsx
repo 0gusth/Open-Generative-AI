@@ -30,6 +30,10 @@ import {
   promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
 
+// Guards against re-processing the same dropped/pasted batch when effects
+// re-fire (dependency identity churn + React StrictMode double-invoke).
+const processedDropBatches = new WeakSet();
+
 // ---------------------------------------------------------------------------
 // Upload button states
 // ---------------------------------------------------------------------------
@@ -670,6 +674,8 @@ export default function RecastStudio({
   // ── Handle Dropped Files ────────────────────────────────────────────────────
   useEffect(() => {
     if (droppedFiles && droppedFiles.length > 0) {
+      if (processedDropBatches.has(droppedFiles)) return;
+      processedDropBatches.add(droppedFiles);
       const imageFiles = droppedFiles.filter((f) => f.type.startsWith("image/"));
       const videoFiles = droppedFiles.filter((f) => f.type.startsWith("video/"));
       if (videoFiles.length > 0) handleVideoPick(videoFiles[0]);

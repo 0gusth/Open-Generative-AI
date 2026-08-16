@@ -7,6 +7,9 @@ import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import { audioModels, getAudioModelById } from "../models.js";
 
+// Guards against re-processing the same dropped/pasted batch when effects
+// re-fire (dependency identity churn + React StrictMode double-invoke).
+const processedDropBatches = new WeakSet();
 // ---------------------------------------------------------------------------
 // Upload button states
 // ---------------------------------------------------------------------------
@@ -581,6 +584,8 @@ export default function AudioStudio({
   // ── Handle Dropped Files ────────────────────────────────────────────────
   useEffect(() => {
     if (droppedFiles && droppedFiles.length > 0) {
+      if (processedDropBatches.has(droppedFiles)) return;
+      processedDropBatches.add(droppedFiles);
       const audioFiles = droppedFiles.filter(f => f.type.startsWith('audio/'));
       if (audioFiles.length > 0 && selectedModel) {
         // Find the first audio input field in the current model

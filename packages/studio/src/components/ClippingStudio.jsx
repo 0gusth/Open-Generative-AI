@@ -26,6 +26,10 @@ import {
   promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
 
+// Guards against re-processing the same dropped/pasted batch when effects
+// re-fire (dependency identity churn + React StrictMode double-invoke).
+const processedDropBatches = new WeakSet();
+
 const MAX_VIDEO_SIZE_MB = 100;
 const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 const CLIPPING_TOASTER_ID = "clipping-studio";
@@ -328,6 +332,8 @@ export default function ClippingStudio({
   // ── Handle Dropped Files ────────────────────────────────────────────────
   useEffect(() => {
     if (droppedFiles && droppedFiles.length > 0) {
+      if (processedDropBatches.has(droppedFiles)) return;
+      processedDropBatches.add(droppedFiles);
       const videoFiles = droppedFiles.filter(f => f.type.startsWith('video/'));
       if (videoFiles.length > 0) {
         const file = videoFiles[0];

@@ -515,6 +515,29 @@ export default function StandaloneShell() {
     setDroppedFiles(null);
   }, []);
 
+  // Paste-to-attach: Cmd/Ctrl+V with an image (or video) on the clipboard
+  // feeds the same pipeline as drag-and-drop. Plain text pastes untouched.
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const files = items
+        .filter((i) => i.kind === 'file' && (i.type.startsWith('image/') || i.type.startsWith('video/')))
+        .map((i) => i.getAsFile())
+        .filter(Boolean);
+      if (files.length === 0) return;
+      e.preventDefault();
+      const stamped = files.map((f, i) => {
+        const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        return f.name && !/^image\.(png|jpe?g)$/i.test(f.name)
+          ? f
+          : new File([f], `pasted-${Date.now()}-${i}.${ext}`, { type: f.type });
+      });
+      setDroppedFiles(stamped);
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
+
   if (!hasMounted) return (
     <div className="min-h-screen bg-[#0f0f10] flex items-center justify-center">
       <div className="animate-spin text-white/80 text-3xl">◌</div>
@@ -788,34 +811,34 @@ export default function StandaloneShell() {
         {/* Studio Content */}
         <div className="flex-1 min-h-0 h-full relative overflow-hidden bg-[#0f0f10]">
         <div className={activeTab === 'image' ? "h-full w-full" : "hidden"}>
-          <ImageStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
+          <ImageStudio apiKey={apiKey} droppedFiles={activeTab === 'image' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('image')} onGenerationEnd={makeGenerationEndCallback('image')} onGenerationComplete={makeSuccessCallback('image')} onGenerationError={makeErrorCallback('image')} />
         </div>
         <div className={activeTab === 'layers' ? "h-full w-full" : "hidden"}>
-          <LayersStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('layers')} onGenerationEnd={makeGenerationEndCallback('layers')} onGenerationComplete={makeSuccessCallback('layers')} onGenerationError={makeErrorCallback('layers')} />
+          <LayersStudio apiKey={apiKey} droppedFiles={activeTab === 'layers' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('layers')} onGenerationEnd={makeGenerationEndCallback('layers')} onGenerationComplete={makeSuccessCallback('layers')} onGenerationError={makeErrorCallback('layers')} />
         </div>
         <div className={activeTab === 'video' ? "h-full w-full" : "hidden"}>
-          <VideoStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
+          <VideoStudio apiKey={apiKey} droppedFiles={activeTab === 'video' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('video')} onGenerationEnd={makeGenerationEndCallback('video')} onGenerationComplete={makeSuccessCallback('video')} onGenerationError={makeErrorCallback('video')} />
         </div>
         <div className={activeTab === 'clipping' ? "h-full w-full" : "hidden"}>
-          <ClippingStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('clipping')} onGenerationEnd={makeGenerationEndCallback('clipping')} onGenerationComplete={makeSuccessCallback('clipping')} onGenerationError={makeErrorCallback('clipping')} />
+          <ClippingStudio apiKey={apiKey} droppedFiles={activeTab === 'clipping' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('clipping')} onGenerationEnd={makeGenerationEndCallback('clipping')} onGenerationComplete={makeSuccessCallback('clipping')} onGenerationError={makeErrorCallback('clipping')} />
         </div>
         <div className={activeTab === 'vibe-motion' ? "h-full w-full" : "hidden"}>
           <VibeMotionStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('vibe-motion')} onGenerationEnd={makeGenerationEndCallback('vibe-motion')} onGenerationComplete={makeSuccessCallback('vibe-motion')} onGenerationError={makeErrorCallback('vibe-motion')} />
         </div>
         <div className={activeTab === 'lipsync' ? "h-full w-full" : "hidden"}>
-          <LipSyncStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('lipsync')} onGenerationEnd={makeGenerationEndCallback('lipsync')} onGenerationComplete={makeSuccessCallback('lipsync')} onGenerationError={makeErrorCallback('lipsync')} />
+          <LipSyncStudio apiKey={apiKey} droppedFiles={activeTab === 'lipsync' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('lipsync')} onGenerationEnd={makeGenerationEndCallback('lipsync')} onGenerationComplete={makeSuccessCallback('lipsync')} onGenerationError={makeErrorCallback('lipsync')} />
         </div>
         <div className={activeTab === 'body-swap' ? "h-full w-full" : "hidden"}>
-          <RecastStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('body-swap')} onGenerationEnd={makeGenerationEndCallback('body-swap')} onGenerationComplete={makeSuccessCallback('body-swap')} onGenerationError={makeErrorCallback('body-swap')} />
+          <RecastStudio apiKey={apiKey} droppedFiles={activeTab === 'body-swap' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('body-swap')} onGenerationEnd={makeGenerationEndCallback('body-swap')} onGenerationComplete={makeSuccessCallback('body-swap')} onGenerationError={makeErrorCallback('body-swap')} />
         </div>
         <div className={activeTab === 'cinema' ? "h-full w-full" : "hidden"}>
           <CinemaStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
         </div>
         <div className={activeTab === 'audio' ? "h-full w-full" : "hidden"}>
-          <AudioStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('audio')} onGenerationEnd={makeGenerationEndCallback('audio')} onGenerationComplete={makeSuccessCallback('audio')} onGenerationError={makeErrorCallback('audio')} />
+          <AudioStudio apiKey={apiKey} droppedFiles={activeTab === 'audio' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('audio')} onGenerationEnd={makeGenerationEndCallback('audio')} onGenerationComplete={makeSuccessCallback('audio')} onGenerationError={makeErrorCallback('audio')} />
         </div>
         <div className={activeTab === 'marketing' ? "h-full w-full" : "hidden"}>
-          <MarketingStudio apiKey={apiKey} droppedFiles={droppedFiles} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
+          <MarketingStudio apiKey={apiKey} droppedFiles={activeTab === 'marketing' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('marketing')} onGenerationEnd={makeGenerationEndCallback('marketing')} onGenerationComplete={makeSuccessCallback('marketing')} onGenerationError={makeErrorCallback('marketing')} />
         </div>
         <div className={activeTab === 'workflows' ? "h-full w-full" : "hidden"}>
           <WorkflowStudio

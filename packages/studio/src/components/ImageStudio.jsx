@@ -45,6 +45,9 @@ import {
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 
+// Guards against re-processing the same dropped/pasted batch when effects
+// re-fire (dependency identity churn + React StrictMode double-invoke).
+const processedDropBatches = new WeakSet();
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 async function downloadImage(url, filename) {
@@ -1114,6 +1117,8 @@ export default function ImageStudio({
   // ── Handle Dropped Files ────────────────────────────────────────────────
   useEffect(() => {
     if (droppedFiles && droppedFiles.length > 0) {
+      if (processedDropBatches.has(droppedFiles)) return;
+      processedDropBatches.add(droppedFiles);
       const imageFiles = droppedFiles.filter(f => f.type.startsWith('image/'));
       if (imageFiles.length > 0) {
         processDroppedImages(imageFiles);
