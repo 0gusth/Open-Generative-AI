@@ -313,7 +313,7 @@ export const TEMPOS = [
     id: "dynamic",
     name: "Dynamic",
     character: "commercial momentum",
-    prompt: "dynamic montage: continuous propulsive momentum with clear spatial logic, energy without chaos — the working rhythm of premium commercial production",
+    prompt: "dynamic montage: continuous propulsive momentum with clear spatial logic, every cut changing both shot size and camera character — the working rhythm of premium commercial production",
   },
   {
     id: "calm",
@@ -351,7 +351,7 @@ export const TEMPOS = [
     id: "percussive",
     name: "Percussive",
     character: "cutting as drumming",
-    prompt: "percussive montage: staccato micro-cuts synchronized to rhythmic accents, rapid inserts of hands and detail between wider phrases, accelerating cut-rate building to a downbeat arrival — editing as an instrument",
+    prompt: "percussive montage: staccato micro-cuts synchronized to rhythmic accents, rapid inserts of hands and detail between wider phrases, each cut changing shot size and angle, accelerating cut-rate building to a downbeat arrival — editing as an instrument",
   },
   {
     id: "cross-cut",

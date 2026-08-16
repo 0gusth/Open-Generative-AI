@@ -353,7 +353,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try {
       let finalPrompt = compiled.prompt;
       if (enhanceOn) {
-        finalPrompt = await cinemaFusePrompt(compiled.prompt, mode);
+        finalPrompt = await cinemaFusePrompt(compiled.prompt, mode, !!(startFrame || refs.length));
       }
       let res;
       if (mode === "image") {
