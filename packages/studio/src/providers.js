@@ -410,9 +410,13 @@ async function getRunwareBalance() {
     }
 }
 
+let falBalanceCache = { at: 0, value: null };
+
 async function getFalBalance() {
     const key = getProviderKey("fal");
     if (!key) return null;
+    // fal rate-limits the billing endpoint — cache for 60s
+    if (Date.now() - falBalanceCache.at < 60000) return falBalanceCache.value;
     try {
         const response = await fetch("/api/providers/fal-billing", {
             headers: { "x-provider-key": key },
@@ -420,7 +424,9 @@ async function getFalBalance() {
         if (!response.ok) return null;
         const data = await response.json();
         const balance = data?.credits?.current_balance;
-        return typeof balance === "number" ? balance : parseFloat(balance) || null;
+        const value = typeof balance === "number" ? balance : parseFloat(balance) || null;
+        falBalanceCache = { at: Date.now(), value };
+        return value;
     } catch (error) {
         console.warn("[providers] fal balance fetch failed:", error.message);
         return null;
