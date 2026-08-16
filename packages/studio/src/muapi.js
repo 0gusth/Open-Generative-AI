@@ -14,10 +14,23 @@ function notifyAuthRequired(status, detail) {
     window.dispatchEvent(new CustomEvent('muapi:auth-required', { detail: { status, message: detail } }));
 }
 
+// Adaptive polling: fast models (Nano Banana, schnell/lite variants) finish in
+// a few seconds, so poll quickly at first and back off for long-running jobs.
+// The (maxAttempts, interval) signature is kept — their product still defines
+// the total time budget, matching the previous fixed-interval behavior.
+function pollDelay(attempt) {
+    if (attempt === 1) return 500;   // first check half a second in
+    if (attempt <= 14) return 700;   // ~10s of rapid polling
+    if (attempt <= 27) return 1500;  // ~30s mark
+    return 2500;                     // long jobs: relaxed cadence
+}
+
 async function pollForResult(requestId, key, maxAttempts = 900, interval = 2000) {
     const pollUrl = `${BASE_URL}/api/v1/predictions/${requestId}/result`;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, interval));
+    const timeBudget = maxAttempts * interval;
+    const startedAt = Date.now();
+    for (let attempt = 1; Date.now() - startedAt < timeBudget; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, pollDelay(attempt)));
         try {
             const response = await fetch(pollUrl, {
                 headers: { 'Content-Type': 'application/json', 'x-api-key': key }
@@ -26,14 +39,23 @@ async function pollForResult(requestId, key, maxAttempts = 900, interval = 2000)
                 const errText = await response.text();
                 if (response.status >= 500) continue;
                 notifyAuthRequired(response.status, errText);
-                throw new Error(`Poll Failed: ${response.status} - ${errText.slice(0, 100)}`);
+                const err = new Error(`Poll Failed: ${response.status} - ${errText.slice(0, 100)}`);
+                err.definitive = true;
+                throw err;
             }
             const data = await response.json();
             const status = data.status?.toLowerCase();
             if (status === 'completed' || status === 'succeeded' || status === 'success') return data;
-            if (status === 'failed' || status === 'error') throw new Error(`Generation failed: ${data.error || 'Unknown error'}`);
+            if (status === 'failed' || status === 'error') {
+                const err = new Error(`Generation failed: ${data.error || 'Unknown error'}`);
+                err.definitive = true;
+                throw err;
+            }
         } catch (error) {
-            if (attempt === maxAttempts) throw error;
+            // Fail fast on definitive errors (job failed, auth, 4xx) instead of
+            // silently polling a dead job until the timeout; only transient
+            // network hiccups are retried.
+            if (error.definitive || Date.now() - startedAt >= timeBudget) throw error;
         }
     }
     throw new Error('Generation timed out after polling.');
