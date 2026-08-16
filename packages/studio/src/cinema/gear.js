@@ -104,6 +104,18 @@ export const FILM_STOCKS = [
   { id: "venice-color", brand: "Sony", name: "Sony Venice Color Science", kind: "digital", medium: "both", era: ["2020s"], genres: ["drama"], prompt: "graded with Sony Venice color science — rich cinematic warmth, deep smooth shadows" },
 ];
 
+export const APERTURES = [
+  { id: "f095", name: "f/0.95 — Razor", prompt: "shot wide open at f/0.95: razor-thin focus plane isolating a single feature, backgrounds dissolved into pure glowing blur, dreamlike optical shallowness" },
+  { id: "f14", name: "f/1.4 — Isolated", prompt: "shot at f/1.4: subject fully isolated in creamy bokeh, background melted into soft color fields, cinematic shallow depth of field" },
+  { id: "f28", name: "f/2.8 — Separated", prompt: "shot at f/2.8: subject cleanly separated with softly blurred background retaining recognizable shapes, the commercial workhorse depth" },
+  { id: "f4", name: "f/4 — Contextual", prompt: "shot at f/4: subject sharp with gently softened surroundings, environment legible as context without competing for attention" },
+  { id: "f11", name: "f/11 — Deep Focus", prompt: "shot at f/11 deep focus: entire scene sharp from foreground to horizon, every plane of the composition carrying information, environment as co-protagonist" },
+];
+
+export function apertureById(id) {
+  return APERTURES.find((a) => a.id === id) || null;
+}
+
 // ── Selection helpers ────────────────────────────────────────────────────────
 
 const FILM_FORMAT = /film|instant/i;
