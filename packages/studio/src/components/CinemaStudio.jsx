@@ -99,6 +99,39 @@ const DEFAULT_SETUP = {
 
 const thumb = (category, id) => `/cinema-thumbs/${category}-${id}.webp`;
 
+// Extract the first or last frame of a generated video as a PNG File.
+// Streams through /api/proxy-media so the canvas is never CORS-tainted.
+async function extractVideoFrame(videoUrl, position /* "first" | "last" */) {
+  const res = await fetch(`/api/proxy-media?url=${encodeURIComponent(videoUrl)}`);
+  if (!res.ok) throw new Error("Could not fetch the video");
+  const blobUrl = URL.createObjectURL(await res.blob());
+  try {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.src = blobUrl;
+    await new Promise((ok, err) => {
+      video.onloadedmetadata = ok;
+      video.onerror = () => err(new Error("Could not decode the video"));
+    });
+    const target = position === "first" ? 0.05 : Math.max(0.05, video.duration - 0.1);
+    await new Promise((ok, err) => {
+      video.onseeked = ok;
+      video.onerror = () => err(new Error("Seek failed"));
+      video.currentTime = target;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    const blob = await new Promise((ok, err) =>
+      canvas.toBlob((b) => (b ? ok(b) : err(new Error("Frame capture failed"))), "image/png"),
+    );
+    return new File([blob], `${position}-frame-${Date.now()}.png`, { type: "image/png" });
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
 // ── Option card ─────────────────────────────────────────────────────────────
 
 function OptionCard({ label, image, selected, onClick, auto }) {
@@ -308,10 +341,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect };
         if (refs.length) params.images_list = refs;
         res = await generateImage(apiKey, params);
-      } else if (refs.length) {
+      } else if (refs.length || endFrame) {
         const params = {
           model: i2vSibling(modelId),
-          image_url: refs[0],
+          image_url: refs[0] || endFrame,
           images_list: refs,
           prompt: finalPrompt,
           aspect_ratio: aspect,
@@ -346,6 +379,35 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     } finally {
       setGenerating(false);
       onGenerationEnd?.();
+    }
+  };
+
+  // Sequel: last frame becomes the START reference of the next clip.
+  // Prequel: first frame becomes the END frame the new clip must land on.
+  const [extracting, setExtracting] = useState(null); // entry id while working
+  const startContinuation = async (entry, direction /* "sequel" | "prequel" */) => {
+    if (extracting) return;
+    setExtracting(entry.id);
+    const toastId = toast.loading(direction === "sequel" ? "Extraindo último frame…" : "Extraindo primeiro frame…");
+    try {
+      const file = await extractVideoFrame(entry.url, direction === "sequel" ? "last" : "first");
+      const url = await uploadFile(apiKey, file);
+      setSetup((s) => ({ ...s, mode: "video" }));
+      if (direction === "sequel") {
+        setRefs([url]);
+        setEndFrame(null);
+        setPrompt(entry.prompt ? `${entry.prompt.split(".")[0]} — the scene continues` : "");
+        toast.success("Último frame carregado como início. Descreva a continuação e Direct.", { id: toastId });
+      } else {
+        setEndFrame(url);
+        setRefs([]);
+        setPrompt(entry.prompt ? `moments before: ${entry.prompt.split(".")[0]}` : "");
+        toast.success("Primeiro frame definido como destino. Adicione uma referência inicial (opcional) e Direct.", { id: toastId });
+      }
+    } catch (e) {
+      toast.error(`Não deu: ${e.message}`, { id: toastId });
+    } finally {
+      setExtracting(null);
     }
   };
 
@@ -396,10 +458,28 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 className="relative group rounded-2xl overflow-hidden border border-white/[0.08] bg-[#171719] shadow-[0_2px_12px_rgba(0,0,0,0.25)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:-translate-y-0.5 transition-[transform,box-shadow,border-color] duration-250 ease-apple cursor-pointer"
               >
                 {entry.type === "video" ? (
-                  <video src={entry.url} muted loop playsInline
-                    onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
-                    onMouseLeave={(e) => e.currentTarget.pause()}
-                    className="w-full aspect-video object-cover bg-black/40" />
+                  <div className="relative">
+                    <video src={entry.url} muted loop playsInline
+                      onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                      onMouseLeave={(e) => e.currentTarget.pause()}
+                      className="w-full aspect-video object-cover bg-black/40" />
+                    <div className="absolute bottom-2 right-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                      <button type="button"
+                        title="Prequel — gerar o que veio ANTES deste clipe"
+                        disabled={extracting === entry.id}
+                        onClick={(e) => { e.stopPropagation(); startContinuation(entry, "prequel"); }}
+                        className="pressable h-7 px-2.5 rounded-full bg-black/70 backdrop-blur-md border border-white/[0.12] text-[10px] font-semibold text-white/85 hover:bg-black/90 disabled:opacity-50">
+                        ⏮ Prequel
+                      </button>
+                      <button type="button"
+                        title="Sequel — continuar este clipe"
+                        disabled={extracting === entry.id}
+                        onClick={(e) => { e.stopPropagation(); startContinuation(entry, "sequel"); }}
+                        className="pressable h-7 px-2.5 rounded-full bg-black/70 backdrop-blur-md border border-white/[0.12] text-[10px] font-semibold text-white/85 hover:bg-black/90 disabled:opacity-50">
+                        Sequel ⏭
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <img src={entry.url} alt="" className="w-full aspect-video object-cover bg-black/40 group-hover:scale-[1.02] transition-transform duration-350 ease-apple" />
                 )}
