@@ -221,7 +221,7 @@ async function generateImageRunware(air, params) {
         numberResults: 1,
         outputType: "URL",
         outputFormat: "PNG",
-        deliveryMethod: "sync",
+        deliveryMethod: "async",
     };
     const refs = params.images_list?.length
         ? params.images_list
@@ -230,9 +230,13 @@ async function generateImageRunware(air, params) {
             : null;
     if (refs) task.referenceImages = refs;
 
-    const results = await runwareCall([task]);
-    const result = results.find((t) => t.taskType === "imageInference");
-    if (!result?.imageURL) throw new Error("Runware returned no image URL");
+    const submitted = await runwareCall([task]);
+    const accepted = submitted.find((t) => t.taskType === "imageInference");
+    // Fast models may return the URL straight from the submit call
+    if (accepted?.imageURL) {
+        return { url: accepted.imageURL, id: accepted.taskUUID, provider: "runware" };
+    }
+    const result = await pollRunwareTask(accepted?.taskUUID || task.taskUUID, "image");
     return { url: result.imageURL, id: result.taskUUID, provider: "runware" };
 }
 
@@ -287,33 +291,34 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
 
 // ── Video generation (Runware videoInference, async + getResponse poll) ─────
 
-async function pollRunwareVideo(taskUUID, { budgetMs = 600000 } = {}) {
+// Poll an async Runware task until its media URL appears. Images poll fast
+// (1s early, 2s later); videos relax to 3s. Budget scales to the media kind.
+async function pollRunwareTask(taskUUID, kind) {
+    const urlField = kind === "video" ? "videoURL" : "imageURL";
+    const budgetMs = kind === "video" ? 600000 : 300000;
     const startedAt = Date.now();
+    let attempt = 0;
     while (Date.now() - startedAt < budgetMs) {
-        await new Promise((r) => setTimeout(r, 3000));
+        attempt++;
+        const delay = kind === "video" ? 3000 : attempt <= 20 ? 1000 : 2000;
+        await new Promise((r) => setTimeout(r, delay));
         let results;
         try {
             results = await runwareCall([
                 { taskType: "getResponse", taskUUID: makeUUID(), responseTaskUUID: taskUUID },
             ]);
         } catch (error) {
-            // transient poll failure — keep waiting
-            continue;
+            continue; // transient poll failure — keep waiting
         }
-        const entry = results.find(
-            (t) => t.taskUUID === taskUUID || t.taskType === "videoInference" || t.videoURL,
-        );
+        const entry = results.find((t) => t.taskUUID === taskUUID || t[urlField]);
         if (!entry) continue;
         const status = (entry.status || "").toLowerCase();
-        if (entry.videoURL || status === "success" || status === "completed") {
-            if (!entry.videoURL) continue;
-            return entry;
-        }
+        if (entry[urlField]) return entry;
         if (status === "error" || status === "failed") {
-            throw new Error(entry.error || "Runware video generation failed");
+            throw new Error(entry.error || `Runware ${kind} generation failed`);
         }
     }
-    throw new Error("Runware video generation timed out");
+    throw new Error(`Runware ${kind} generation timed out`);
 }
 
 async function generateVideoRunware(air, params) {
@@ -339,7 +344,7 @@ async function generateVideoRunware(air, params) {
     const submitted = await runwareCall([task]);
     const accepted = submitted.find((t) => t.taskType === "videoInference");
     const taskUUID = accepted?.taskUUID || task.taskUUID;
-    const result = await pollRunwareVideo(taskUUID);
+    const result = await pollRunwareTask(taskUUID, "video");
     return { url: result.videoURL, id: taskUUID, provider: "runware" };
 }
 
