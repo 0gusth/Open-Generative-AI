@@ -1,5 +1,5 @@
 import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById } from './models.js';
-import { tryProviderGenerate } from './providers.js';
+import { tryProviderGenerate, tryProviderVideo } from './providers.js';
 
 // In an http(s) browser we route through the host app's proxy (Next.js routes
 // under /api/* re-issue the call server-side) so api.muapi.ai CORS is bypassed.
@@ -84,10 +84,10 @@ async function submitAndPoll(endpoint, payload, key, onRequestId, maxAttempts = 
 }
 
 export async function generateImage(apiKey, params) {
-    // Cost-benefit router: fal/Runware first when configured, Muapi fallback
-    const routed = await tryProviderGenerate(params.model, 't2i', params);
-    if (routed) return routed;
     const modelInfo = getModelById(params.model);
+    // Provider router: Runware/fal first; Muapi only when unavailable there
+    const routed = await tryProviderGenerate(params.model, 't2i', params, modelInfo?.name);
+    if (routed) return routed;
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = { prompt: params.prompt };
     if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
@@ -106,10 +106,10 @@ export async function generateImage(apiKey, params) {
 }
 
 export async function generateI2I(apiKey, params) {
-    // Cost-benefit router: fal/Runware first when configured, Muapi fallback
-    const routed = await tryProviderGenerate(params.model, 'i2i', params);
-    if (routed) return routed;
     const modelInfo = getI2IModelById(params.model);
+    // Provider router: Runware/fal first; Muapi only when unavailable there
+    const routed = await tryProviderGenerate(params.model, 'i2i', params, modelInfo?.name);
+    if (routed) return routed;
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};
     if (params.prompt) payload.prompt = params.prompt;
@@ -147,6 +147,11 @@ export async function decomposeLayers(apiKey, params) {
 
 export async function generateVideo(apiKey, params) {
     const modelInfo = getVideoModelById(params.model);
+    // Provider router: Runware first; Muapi only when unavailable there
+    if (!params.request_id) { // extend-mode is Muapi-specific state, keep it there
+        const routed = await tryProviderVideo(params.model, params, modelInfo?.name);
+        if (routed) return routed;
+    }
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};
     if (params.prompt) payload.prompt = params.prompt;
@@ -163,6 +168,12 @@ export async function generateVideo(apiKey, params) {
 }
 
 export async function generateI2V(apiKey, params) {
+    {
+        const modelInfo = getI2VModelById(params.model);
+        // Provider router: Runware first; Muapi only when unavailable there
+        const routed = await tryProviderVideo(params.model, params, modelInfo?.name);
+        if (routed) return routed;
+    }
     const modelInfo = getI2VModelById(params.model);
     const endpoint = modelInfo?.endpoint || params.model;
     const payload = {};

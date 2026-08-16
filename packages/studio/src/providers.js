@@ -1,21 +1,20 @@
-// Multi-provider router: sends generations to fal.ai or Runware when the
-// selected model is available there and a key is configured, falling back to
-// Muapi otherwise. Routing policy (user-defined):
-//   1. Only providers that host the model AND have a key are candidates.
-//   2. If candidate prices are similar (within PRICE_SIMILARITY), pick the
-//      fastest (fal's inference engine benchmarks 2-5x faster in 2026).
-//   3. Otherwise pick the cheapest (usually Runware on open models).
-//   4. Any error falls through to the Muapi path — routing never breaks a
-//      generation that would have worked before.
+// Multi-provider router — Muapi is the LAST resort, not the default.
+//
+// Policy (user-defined):
+//   1. Image and video generations route to Runware or fal whenever the model
+//      exists there and a key is configured. Muapi only serves models that are
+//      genuinely unavailable elsewhere (and anything that errors mid-route).
+//   2. Among providers: similar price (±15%) → fastest wins (fal); otherwise
+//      cheapest wins (usually Runware).
+//   3. Coverage is static table + DYNAMIC lookup: models not hand-mapped are
+//      resolved against Runware's modelSearch API by display name and cached,
+//      so the whole Runware catalog is reachable without mapping 400 ids.
 
-const PRICE_SIMILARITY = 0.15; // ±15% counts as "same price"
-
-// Speed rank: lower = faster (2026 benchmarks: fal ~2-5x on same models).
+const PRICE_SIMILARITY = 0.15;
 const SPEED_RANK = { fal: 1, runware: 2 };
+const RUNWARE_CACHE_KEY = "runware_air_cache_v1";
 
-// Routes keyed by this app's model ids. Costs are USD per image at ~1MP,
-// from each provider's public pricing (verified Aug 2026). Extend freely —
-// unknown models simply keep using Muapi.
+// Hand-verified routes (Aug 2026 docs). Cost = USD per image ~1MP.
 export const PROVIDER_ROUTES = {
     "nano-banana": {
         t2i: {
@@ -23,14 +22,13 @@ export const PROVIDER_ROUTES = {
             fal: { endpoint: "fal-ai/nano-banana", cost: 0.039 },
         },
         i2i: {
+            runware: { model: "google:4@1", cost: 0.039 },
             fal: { endpoint: "fal-ai/nano-banana/edit", cost: 0.039 },
         },
     },
     "nano-banana-2": {
-        t2i: {
-            runware: { model: "google:4@3", cost: 0.069 },
-            fal: { endpoint: "fal-ai/nano-banana-2", cost: 0.069 },
-        },
+        t2i: { runware: { model: "google:4@3", cost: 0.069 } },
+        i2i: { runware: { model: "google:4@3", cost: 0.069 } },
     },
     "flux-schnell": {
         t2i: {
@@ -68,16 +66,121 @@ export function setProviderKey(provider, key) {
     else window.localStorage.removeItem(storage);
 }
 
-// Pick a provider for (modelId, mode) or return null to use Muapi.
-export function pickProvider(modelId, mode) {
+function makeUUID() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    });
+}
+
+async function runwareCall(tasks) {
+    const key = getProviderKey("runware");
+    const response = await fetch("/api/providers/runware", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-provider-key": key },
+        body: JSON.stringify(tasks),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data?.errors?.[0]?.message || data?.error || `Runware error ${response.status}`);
+    }
+    if (data?.errors?.length) throw new Error(data.errors[0].message || "Runware task error");
+    return data.data || [];
+}
+
+// ── Dynamic model resolution against Runware's catalog ──────────────────────
+
+function readAirCache() {
+    try {
+        return JSON.parse(window.localStorage.getItem(RUNWARE_CACHE_KEY) || "{}");
+    } catch {
+        return {};
+    }
+}
+
+function writeAirCache(cache) {
+    try {
+        window.localStorage.setItem(RUNWARE_CACHE_KEY, JSON.stringify(cache));
+    } catch { /* storage full — cache is best-effort */ }
+}
+
+// Normalize a display name for fuzzy comparison: lowercase alnum tokens,
+// dropping mode suffixes this app appends ("I2V", "Image To Video"…).
+const NAME_NOISE = /\b(i2v|t2v|t2i|i2i|image to video|text to video|text to image|image to image)\b/g;
+function normalizeName(name) {
+    return (name || "")
+        .toLowerCase()
+        .replace(NAME_NOISE, " ")
+        .replace(/[^a-z0-9.]+/g, " ")
+        .trim();
+}
+
+function nameTokens(name) {
+    return new Set(normalizeName(name).split(/\s+/).filter(Boolean));
+}
+
+function tokenOverlap(a, b) {
+    const ta = nameTokens(a);
+    const tb = nameTokens(b);
+    if (ta.size === 0 || tb.size === 0) return 0;
+    let hit = 0;
+    for (const t of ta) if (tb.has(t)) hit++;
+    return hit / Math.max(ta.size, tb.size);
+}
+
+// Resolve a model display name to a Runware AIR id ("klingai:5@3") via
+// modelSearch. Cached (including misses, as null) to avoid repeat lookups.
+async function resolveRunwareAir(displayName) {
+    if (!displayName) return null;
+    const cacheId = normalizeName(displayName);
+    const cache = readAirCache();
+    if (cacheId in cache) return cache[cacheId];
+
+    let air = null;
+    try {
+        const results = await runwareCall([
+            {
+                taskType: "modelSearch",
+                taskUUID: makeUUID(),
+                search: normalizeName(displayName),
+                limit: 20,
+            },
+        ]);
+        const models = results.find((t) => t.taskType === "modelSearch")?.results || [];
+        let best = null;
+        let bestScore = 0;
+        for (const m of models) {
+            const score = tokenOverlap(displayName, m.name);
+            if (score > bestScore) {
+                best = m;
+                bestScore = score;
+            }
+        }
+        // Require a strong match — a wrong model is worse than the fallback.
+        if (best && bestScore >= 0.6) air = best.air;
+    } catch (error) {
+        console.warn("[providers] Runware modelSearch failed:", error.message);
+        return null; // do not cache transient failures
+    }
+    cache[cacheId] = air;
+    writeAirCache(cache);
+    return air;
+}
+
+// ── Candidate selection ─────────────────────────────────────────────────────
+
+function staticCandidates(modelId, mode) {
     const route = PROVIDER_ROUTES[modelId]?.[mode];
-    if (!route) return null;
-    const candidates = Object.entries(route)
+    if (!route) return [];
+    return Object.entries(route)
         .filter(([provider]) => !!getProviderKey(provider))
         .map(([provider, config]) => ({ provider, config }));
+}
+
+function chooseByPolicy(candidates) {
     if (candidates.length === 0) return null;
     if (candidates.length === 1) return candidates[0];
-
     candidates.sort((a, b) => a.config.cost - b.config.cost);
     const [cheapest, next] = candidates;
     const similar =
@@ -88,6 +191,12 @@ export function pickProvider(modelId, mode) {
     }
     return cheapest;
 }
+
+export function pickProvider(modelId, mode) {
+    return chooseByPolicy(staticCandidates(modelId, mode));
+}
+
+// ── Image generation ────────────────────────────────────────────────────────
 
 const AR_DIMENSIONS = {
     "1:1": [1024, 1024],
@@ -100,21 +209,12 @@ const AR_DIMENSIONS = {
     "auto": [1024, 1024],
 };
 
-function makeUUID() {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-    });
-}
-
-async function generateViaRunware(config, params) {
-    const key = getProviderKey("runware");
+async function generateImageRunware(air, params) {
     const [width, height] = AR_DIMENSIONS[params.aspect_ratio] || AR_DIMENSIONS["1:1"];
     const task = {
         taskType: "imageInference",
         taskUUID: makeUUID(),
-        model: config.model,
+        model: air,
         positivePrompt: params.prompt || "",
         width,
         height,
@@ -123,35 +223,31 @@ async function generateViaRunware(config, params) {
         outputFormat: "PNG",
         deliveryMethod: "sync",
     };
-    if (params.images_list?.length) task.referenceImages = params.images_list;
+    const refs = params.images_list?.length
+        ? params.images_list
+        : params.image_url
+            ? [params.image_url]
+            : null;
+    if (refs) task.referenceImages = refs;
 
-    const response = await fetch("/api/providers/runware", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-provider-key": key },
-        body: JSON.stringify([task]),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data?.errors?.[0]?.message || data?.error || `Runware error ${response.status}`);
-    }
-    const result = (data.data || []).find((t) => t.taskType === "imageInference");
-    const url = result?.imageURL;
-    if (!url) throw new Error("Runware returned no image URL");
-    return { url, id: result.taskUUID, provider: "runware" };
+    const results = await runwareCall([task]);
+    const result = results.find((t) => t.taskType === "imageInference");
+    if (!result?.imageURL) throw new Error("Runware returned no image URL");
+    return { url: result.imageURL, id: result.taskUUID, provider: "runware" };
 }
 
-async function generateViaFal(config, params) {
+async function generateImageFal(endpoint, params) {
     const key = getProviderKey("fal");
-    const input = {
-        prompt: params.prompt || "",
-        num_images: 1,
-    };
-    if (params.aspect_ratio && params.aspect_ratio !== "auto") {
-        input.aspect_ratio = params.aspect_ratio;
-    }
-    if (params.images_list?.length) input.image_urls = params.images_list;
+    const input = { prompt: params.prompt || "", num_images: 1 };
+    if (params.aspect_ratio && params.aspect_ratio !== "auto") input.aspect_ratio = params.aspect_ratio;
+    const refs = params.images_list?.length
+        ? params.images_list
+        : params.image_url
+            ? [params.image_url]
+            : null;
+    if (refs) input.image_urls = refs;
 
-    const response = await fetch(`/api/providers/fal/${config.endpoint}`, {
+    const response = await fetch(`/api/providers/fal/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-provider-key": key },
         body: JSON.stringify(input),
@@ -165,17 +261,98 @@ async function generateViaFal(config, params) {
     return { url, id: data.request_id || makeUUID(), provider: "fal" };
 }
 
-// Try routing a generation through fal/Runware. Returns {url, id, provider}
-// or null when no route applies (caller then uses the Muapi path).
-export async function tryProviderGenerate(modelId, mode, params) {
+// Route an image generation. displayName enables dynamic Runware lookup when
+// the model has no hand-mapped route. Returns {url, id, provider} or null.
+export async function tryProviderGenerate(modelId, mode, params, displayName) {
     const choice = pickProvider(modelId, mode);
-    if (!choice) return null;
     try {
-        if (choice.provider === "runware") return await generateViaRunware(choice.config, params);
-        if (choice.provider === "fal") return await generateViaFal(choice.config, params);
-        return null;
+        if (choice?.provider === "runware") return await generateImageRunware(choice.config.model, params);
+        if (choice?.provider === "fal") return await generateImageFal(choice.config.endpoint, params);
     } catch (error) {
-        console.warn(`[providers] ${choice.provider} route failed for ${modelId}, falling back to Muapi:`, error.message);
+        console.warn(`[providers] ${choice.provider} route failed for ${modelId}:`, error.message);
+        // static route failed — still try dynamic below before Muapi
+    }
+    if (getProviderKey("runware")) {
+        const air = await resolveRunwareAir(displayName || modelId);
+        if (air) {
+            try {
+                return await generateImageRunware(air, params);
+            } catch (error) {
+                console.warn(`[providers] Runware dynamic route failed for ${modelId}:`, error.message);
+            }
+        }
+    }
+    return null; // Muapi is the last resort
+}
+
+// ── Video generation (Runware videoInference, async + getResponse poll) ─────
+
+async function pollRunwareVideo(taskUUID, { budgetMs = 600000 } = {}) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < budgetMs) {
+        await new Promise((r) => setTimeout(r, 3000));
+        let results;
+        try {
+            results = await runwareCall([
+                { taskType: "getResponse", taskUUID: makeUUID(), responseTaskUUID: taskUUID },
+            ]);
+        } catch (error) {
+            // transient poll failure — keep waiting
+            continue;
+        }
+        const entry = results.find(
+            (t) => t.taskUUID === taskUUID || t.taskType === "videoInference" || t.videoURL,
+        );
+        if (!entry) continue;
+        const status = (entry.status || "").toLowerCase();
+        if (entry.videoURL || status === "success" || status === "completed") {
+            if (!entry.videoURL) continue;
+            return entry;
+        }
+        if (status === "error" || status === "failed") {
+            throw new Error(entry.error || "Runware video generation failed");
+        }
+    }
+    throw new Error("Runware video generation timed out");
+}
+
+async function generateVideoRunware(air, params) {
+    const task = {
+        taskType: "videoInference",
+        taskUUID: makeUUID(),
+        model: air,
+        positivePrompt: params.prompt || "",
+        deliveryMethod: "async",
+        outputType: "URL",
+        numberResults: 1,
+    };
+    if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;
+    // Image-to-video: first (and optionally last) frame
+    const frames = [];
+    if (params.image_url) frames.push({ inputImage: params.image_url, frame: "first" });
+    if (params.last_image) frames.push({ inputImage: params.last_image, frame: "last" });
+    if (frames.length) task.frameImages = frames;
+    if (!params.image_url && params.images_list?.length) {
+        task.referenceImages = params.images_list;
+    }
+
+    const submitted = await runwareCall([task]);
+    const accepted = submitted.find((t) => t.taskType === "videoInference");
+    const taskUUID = accepted?.taskUUID || task.taskUUID;
+    const result = await pollRunwareVideo(taskUUID);
+    return { url: result.videoURL, id: taskUUID, provider: "runware" };
+}
+
+// Route a video generation (t2v or i2v) through Runware's catalog.
+// Returns {url, id, provider} or null → caller falls back to Muapi.
+export async function tryProviderVideo(modelId, params, displayName) {
+    if (!getProviderKey("runware")) return null;
+    const air = await resolveRunwareAir(displayName || modelId);
+    if (!air) return null;
+    try {
+        return await generateVideoRunware(air, params);
+    } catch (error) {
+        console.warn(`[providers] Runware video route failed for ${modelId}:`, error.message);
         return null;
     }
 }
