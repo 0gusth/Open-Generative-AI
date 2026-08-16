@@ -236,8 +236,14 @@ async function generateImageRunware(air, params) {
     if (accepted?.imageURL) {
         return { url: accepted.imageURL, id: accepted.taskUUID, provider: "runware" };
     }
-    const result = await pollRunwareTask(accepted?.taskUUID || task.taskUUID, "image");
-    return { url: result.imageURL, id: result.taskUUID, provider: "runware" };
+    try {
+        const result = await pollRunwareTask(accepted?.taskUUID || task.taskUUID, "image");
+        return { url: result.imageURL, id: result.taskUUID, provider: "runware" };
+    } catch (error) {
+        // Task was accepted — regenerating elsewhere would double-charge.
+        error.noFallback = true;
+        throw error;
+    }
 }
 
 async function generateImageFal(endpoint, params) {
@@ -273,6 +279,12 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
         if (choice?.provider === "runware") return await generateImageRunware(choice.config.model, params);
         if (choice?.provider === "fal") return await generateImageFal(choice.config.endpoint, params);
     } catch (error) {
+        if (error.noFallback) {
+            throw new Error(
+                "The provider accepted this generation but it is still rendering (heavy model or busy queue). " +
+                "It will appear in your Runware library — do not regenerate, you would be charged twice.",
+            );
+        }
         console.warn(`[providers] ${choice.provider} route failed for ${modelId}:`, error.message);
         // static route failed — still try dynamic below before Muapi
     }
@@ -282,6 +294,12 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
             try {
                 return await generateImageRunware(air, params);
             } catch (error) {
+                if (error.noFallback) {
+                    throw new Error(
+                        "The provider accepted this generation but it is still rendering (heavy model or busy queue). " +
+                        "It will appear in your Runware library — do not regenerate, you would be charged twice.",
+                    );
+                }
                 console.warn(`[providers] Runware dynamic route failed for ${modelId}:`, error.message);
             }
         }
@@ -295,7 +313,7 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
 // (1s early, 2s later); videos relax to 3s. Budget scales to the media kind.
 async function pollRunwareTask(taskUUID, kind) {
     const urlField = kind === "video" ? "videoURL" : "imageURL";
-    const budgetMs = kind === "video" ? 600000 : 300000;
+    const budgetMs = 600000; // heavy models + queue peaks need the full window
     const startedAt = Date.now();
     let attempt = 0;
     while (Date.now() - startedAt < budgetMs) {
@@ -345,8 +363,13 @@ async function generateVideoRunware(air, params) {
     const submitted = await runwareCall([task]);
     const accepted = submitted.find((t) => t.taskType === "videoInference");
     const taskUUID = accepted?.taskUUID || task.taskUUID;
-    const result = await pollRunwareTask(taskUUID, "video");
-    return { url: result.videoURL, id: taskUUID, provider: "runware" };
+    try {
+        const result = await pollRunwareTask(taskUUID, "video");
+        return { url: result.videoURL, id: taskUUID, provider: "runware" };
+    } catch (error) {
+        error.timedOutAfterAccept = true;
+        throw error;
+    }
 }
 
 // Route a video generation (t2v or i2v) through Runware's catalog.
@@ -358,6 +381,12 @@ export async function tryProviderVideo(modelId, params, displayName) {
     try {
         return await generateVideoRunware(air, params);
     } catch (error) {
+        if (error.timedOutAfterAccept) {
+            throw new Error(
+                "The provider accepted this video but it is still rendering. " +
+                "It will appear in your Runware library — do not regenerate, you would be charged twice.",
+            );
+        }
         console.warn(`[providers] Runware video route failed for ${modelId}:`, error.message);
         return null;
     }

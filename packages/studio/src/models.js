@@ -8029,17 +8029,6 @@ export const i2iModels = [
     "provider_name": "Fal"
   },
   {
-    "id": "ai-image-extension",
-    "name": "AI Image Extension",
-    "endpoint": "ai-image-extension",
-    "family": "tools",
-    "imageField": "image_url",
-    "hasPrompt": false,
-    "inputs": {},
-    "provider": "muapi",
-    "provider_name": "Fal"
-  },
-  {
     "id": "ai-object-eraser",
     "name": "AI Object Eraser",
     "endpoint": "ai-object-eraser",
