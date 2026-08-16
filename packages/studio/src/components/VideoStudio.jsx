@@ -1222,7 +1222,8 @@ export default function VideoStudio({
         } else {
           i2vParams.image_url = uploadedImageUrl;
         }
-        if (trimmedPrompt) i2vParams.prompt = trimmedPrompt;
+        // Normalize @img1 → @image1 (native multi-reference syntax on Seedance-class models)
+        if (trimmedPrompt) i2vParams.prompt = trimmedPrompt.replace(/@im(?:g|age)\s?(\d{1,2})/gi, "@image$1");
         i2vParams.aspect_ratio = selectedAr;
         const i2vModel = i2vModels.find((m) => m.id === selectedModel);
         if (uploadedEndImageUrl && i2vModel?.lastImageField) {
@@ -1599,6 +1600,11 @@ export default function VideoStudio({
                   >
                     ×
                   </button>
+                  {(uploadedEndImageUrl || i2vModels.find((m) => m.id === selectedModel)?.lastImageField) && imageMode && (
+                    <span className="absolute bottom-0.5 left-0.5 px-1 h-3.5 bg-black/60 rounded-md text-[7px] font-black text-white/80 leading-none flex items-center justify-center pointer-events-none">
+                      START
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -1764,10 +1770,13 @@ export default function VideoStudio({
                   />
                   <button
                     type="button"
-                    title="Upload end frame (optional)"
+                    title="End frame — the video will finish on this image (optional)"
                     onClick={() => endImageFileInputRef.current?.click()}
                     className={promptMediaButtonClassName()}
                   >
+                    <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white/80 text-[7px] font-medium text-center leading-3 pointer-events-none z-10">
+                      END
+                    </span>
                     {endImageUploading ? (
                       <div className="flex flex-col items-center justify-center w-full h-full absolute inset-0 bg-black/80 z-20 backdrop-blur-[2px]">
                         <svg className="w-8 h-8 -rotate-90">

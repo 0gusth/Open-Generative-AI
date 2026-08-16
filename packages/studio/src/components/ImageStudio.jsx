@@ -1260,6 +1260,22 @@ export default function ImageStudio({
   };
 
   // ── Generation ───────────────────────────────────────────────────────────
+  // Resolve @img1/@image1 prompt references against the attached images.
+  // Models without native @image support get plain-English "image N" phrasing.
+  const resolveImageRefs = (text, imageCount) => {
+    if (!text) return text;
+    let missing = null;
+    const resolved = text.replace(/@im(?:g|age)\s?(\d{1,2})/gi, (match, n) => {
+      const idx = parseInt(n, 10);
+      if (idx < 1 || idx > imageCount) {
+        missing = match;
+        return match;
+      }
+      return `image ${idx}`;
+    });
+    return { resolved, missing };
+  };
+
   const handleGenerate = async () => {
     if (generating) return;
 
@@ -1271,6 +1287,11 @@ export default function ImageStudio({
       const modelInfo = getI2IModelById(selectedModelId);
       if (modelInfo?.swapField && !swapImageUrl) {
         alert("Please upload a swap face image.");
+        return;
+      }
+      const refCheck = resolveImageRefs(prompt.trim(), uploadedImageUrls.length);
+      if (refCheck?.missing) {
+        alert(`Your prompt references ${refCheck.missing}, but only ${uploadedImageUrls.length} image${uploadedImageUrls.length === 1 ? " is" : "s are"} attached.`);
         return;
       }
     } else {
@@ -1295,7 +1316,7 @@ export default function ImageStudio({
               aspect_ratio: selectedAr,
             };
             if (swapImageUrl) genParams.swap_url = swapImageUrl;
-            if (prompt.trim()) genParams.prompt = prompt.trim();
+            if (prompt.trim()) genParams.prompt = resolveImageRefs(prompt.trim(), uploadedImageUrls.length).resolved;
             if (currentQualityField && selectedQuality) {
               genParams[currentQualityField] = selectedQuality;
             }
@@ -1347,7 +1368,7 @@ export default function ImageStudio({
 
   const placeholderText =
     uploadedImageUrls.length > 1
-      ? `${uploadedImageUrls.length} images selected — describe the transformation (optional)`
+      ? `${uploadedImageUrls.length} images selected — reference them with @img1, @img2…`
       : imageMode
         ? "Describe how to transform this image (optional)"
         : "Describe the image you want to create";
@@ -1480,6 +1501,11 @@ export default function ImageStudio({
               {uploadedImageUrls && uploadedImageUrls.length > 0 && uploadedImageUrls.map((url, idx) => (
                 <div key={url} className={PROMPT_MEDIA_PREVIEW_CLASS}>
                   <img src={url} alt="" className="w-full h-full object-cover" />
+                  {uploadedImageUrls.length > 1 && (
+                    <span className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-sm text-white/90 text-[8px] font-medium text-center leading-3 pointer-events-none">
+                      @img{idx + 1}
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
