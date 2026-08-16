@@ -54,6 +54,19 @@ function i2vSibling(t2vId) {
   return "kling-v3.0-standard-image-to-video";
 }
 
+// Best multi-reference (omni) i2v in the same family — may be a different
+// version than the direct sibling (e.g. Seedance 2.5 t2v → Seedance 2 omni).
+function omniSibling(t2vId) {
+  const family = t2vId.split(/[-.]/)[0]; // "seedance", "kling", "veo"…
+  let best = null;
+  for (const m of i2vModels) {
+    if (!m.id.startsWith(family)) continue;
+    const max = getMaxImagesForI2VModel(m.id);
+    if (max > 2 && (!best || max > best.max)) best = { id: m.id, max };
+  }
+  return best; // null when the family has no omni model
+}
+
 const FALLBACK_ASPECTS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"];
 
 // Capability readers — everything the selected model declares, nothing more.
@@ -310,7 +323,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       audio: mode === "video" && modelSupportsAudio(modelObj),
       startFrame: mode === "video" && !!sib,
       endFrame: mode === "video" && !!sib?.lastImageField,
-      multiRef: mode === "video" ? getMaxImagesForI2VModel(sib?.id || "") > 2 : true,
+      multiRef: mode === "video" ? !!omniSibling(modelId) : true,
+      omni: mode === "video" ? omniSibling(modelId) : null,
     };
   }, [modelObj, mode, modelId]);
 
@@ -348,8 +362,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         res = await generateImage(apiKey, params);
       } else if (startFrame || refs.length || endFrame) {
         const allImages = [startFrame, ...refs].filter(Boolean);
+        const useOmni = refs.length > 0 && caps.omni;
         const params = {
-          model: i2vSibling(modelId),
+          model: useOmni ? caps.omni.id : i2vSibling(modelId),
           image_url: allImages[0] || endFrame,
           prompt: finalPrompt,
           aspect_ratio: aspect,

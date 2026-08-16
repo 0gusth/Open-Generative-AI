@@ -12,6 +12,7 @@ const DesignAgentStudio = dynamic(() => import('studio').then(mod => mod.DesignA
 import { Image as ImageIcon, Layers as LayersIcon, Clapperboard, AudioLines, Scissors, Zap, Mic, PersonStanding, Film, Megaphone, Workflow as WorkflowIcon, Bot, PenTool, LayoutGrid, Sparkles, Settings as SettingsIcon, PanelLeft, Menu as MenuIcon } from 'lucide-react';
 import axios from 'axios';
 import ApiKeyModal from './ApiKeyModal';
+import { Toaster } from 'react-hot-toast';
 
 const TABS = [
   {
@@ -635,6 +636,20 @@ export default function StandaloneShell() {
           </div>
         </div>
       )}
+
+      <Toaster
+        position="bottom-center"
+        toastOptions={{
+          style: {
+            background: 'rgba(29,29,31,0.96)',
+            color: 'rgba(255,255,255,0.9)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '12px',
+            fontSize: '13px',
+            backdropFilter: 'blur(20px)',
+          },
+        }}
+      />
 
       {/* Header */}
       {isHeaderVisible && (

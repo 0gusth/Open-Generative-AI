@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 // read the bytes (clipboard/copy needs same-origin or CORS, and some provider
 // CDNs send no CORS headers). Host allowlist prevents SSRF.
 const ALLOWED_HOSTS = [
+    'runware.ai', // any subdomain: im. (images), vm. (videos)…
     'im.runware.ai',
     'cdn.muapi.ai',
     'd3adwkbyhxyrtq.cloudfront.net',
