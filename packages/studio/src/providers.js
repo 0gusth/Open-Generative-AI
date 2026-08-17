@@ -482,19 +482,23 @@ async function generateVideoRunware(air, params) {
 
 // Route a video generation (t2v or i2v) through Runware's catalog.
 // Returns {url, id, provider} or null → caller falls back to Muapi.
+// AIR ids (creator:model@version, straight from Runware's own catalog) route
+// directly and NEVER fall back — their errors surface with the real cause.
 export async function tryProviderVideo(modelId, params, displayName) {
     if (!getProviderKey("runware")) return null;
-    const air = await resolveRunwareAir(displayName || modelId);
+    const direct = /:.+@/.test(modelId || "");
+    const air = direct ? modelId : await resolveRunwareAir(displayName || modelId);
     if (!air) return null;
     try {
         return await generateVideoRunware(air, params);
     } catch (error) {
-        if (error.timedOutAfterAccept) {
+        if (error.timedOutAfterAccept && !error.definitive) {
             throw new Error(
                 "The provider accepted this video but it is still rendering. " +
                 "It will appear in your Runware library — do not regenerate, you would be charged twice.",
             );
         }
+        if (direct || error.noFallback) throw error; // accepted/definitive: never re-generate on the wrapper
         console.warn(`[providers] Runware video route failed for ${modelId}:`, error.message);
         return null;
     }

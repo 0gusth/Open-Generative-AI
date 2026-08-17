@@ -21,6 +21,7 @@ import { MOVEMENTS } from "../cinema/movement.js";
 import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import { EFFECTS } from "../cinema/effects.js";
 import { truthFor } from "../modelTruth.js";
+import { fetchRunwareVideoCatalog, mergeVideoCatalogs, isAirId } from "../runwareCatalog.js";
 import {
   PromptComposer,
   PromptTextarea,
@@ -48,6 +49,7 @@ const DEFAULT_MODEL = { image: "nano-banana-2", video: "kling-v3.0-standard-text
 
 // Heuristic i2v sibling for reference-driven video, verified fallback last.
 function i2vSibling(t2vId) {
+  if (t2vId.includes(":") && t2vId.includes("@")) return t2vId; // Runware AIR handles both t2v and i2v
   const candidates = [
     t2vId.replace("-t2v", "-i2v"),
     t2vId.replace("text-to-video", "image-to-video"),
@@ -121,17 +123,20 @@ const CINEMA_FAVORITES = {
     "gpt-image-2",                         // long structured prompts
     "grok-imagine-text-to-image-quality",  // text/logo rendering, multi-image compositing
   ],
+  // Runware-native AIRs first (fast primary route); wrapper ids only where
+  // Runware lacks the model.
   video: [
-    "seedance-2.5-text-to-video",          // deep dialect, 12-asset multiref, audio
-    "seedance-v2.0-t2v",                   // Seedance 2.0
-    "kling-v3.0-standard-text-to-video",   // character/performance king
-    "kling-v2.6-pro-t2v",                  // fast character work
-    "veo3.1-text-to-video",                // environment hero, frames, audio
-    "minimax-hailuo-2.3-pro-t2v",          // physical motion/VFX
-    "minimax-h3-text-to-video",            // MiniMax flagship, reference-driven
-    "wan2.7-text-to-video",                // 60fps artistic
-    "grok-imagine-text-to-video",          // editing chains + animate stills
-    "gemini-omni-text-to-video",           // reference-driven with native audio
+    "bytedance:seedance@2.5",              // deep dialect, 12-asset multiref, audio
+    "bytedance:seedance@2.0",              // Seedance 2.0
+    "klingai:kling-video@3-pro",           // character/performance king — no wrapper slowness
+    "klingai:kling-video@o3-standard",     // Kling 3.0 Omni — reference-driven
+    "google:3@3",                          // Veo 3.1 Fast — environment hero
+    "minimax:h3@0",                        // MiniMax H3 flagship
+    "minimax-hailuo-2.3-pro-t2v",          // physical motion/VFX (wrapper)
+    "alibaba:wan@2.7",                     // 60fps artistic
+    "openai:3@2",                          // Sora 2 Pro — scale and physics
+    "xai:grok-imagine@video-1.5",          // Grok Imagine 1.5
+    "google:gemini@omni-flash",            // reference-driven with native audio
   ],
 };
 
@@ -140,7 +145,14 @@ function groupByProvider(models) {
   const groups = new Map();
   for (const m of models) {
     const key = m.provider_name || "Other";
-    if (!groups.has(key)) groups.set(key, { name: key, logo: PROVIDER_LOGOS[m.provider], invert: INVERT_LOGOS.includes(m.provider), items: [] });
+    if (!groups.has(key)) {
+      groups.set(key, {
+        name: key,
+        logo: m.logoUrl || PROVIDER_LOGOS[m.provider],
+        invert: !m.logoUrl && INVERT_LOGOS.includes(m.provider),
+        items: [],
+      });
+    }
     groups.get(key).items.push(m);
   }
   return [...groups.values()];
@@ -485,10 +497,19 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 60))); } catch {}
   }, [history]);
 
+  // Runware-native video catalog (primary source); wrapper models only where
+  // Runware doesn't carry an equivalent.
+  const [rwCatalog, setRwCatalog] = useState([]);
+  useEffect(() => { fetchRunwareVideoCatalog().then(setRwCatalog); }, []);
+  const models = useMemo(() => ({
+    image: t2iModels,
+    video: mergeVideoCatalogs(rwCatalog, t2vModels),
+  }), [rwCatalog]);
+
   // model list follows mode
   useEffect(() => {
-    if (!MODELS[mode].some((m) => m.id === modelId)) setModelId(DEFAULT_MODEL[mode]);
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!models[mode].some((m) => m.id === modelId)) setModelId(DEFAULT_MODEL[mode]);
+  }, [mode, models]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // close panel on outside click / Esc
   useEffect(() => {
@@ -520,28 +541,32 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     return mediaForCamera(cam, mode).map((s) => ({ ...s, thumbCat: "stock" }));
   }, [cameraItems, setup.camera, mode]);
 
-  const modelObj = useMemo(() => MODELS[mode].find((m) => m.id === modelId) || null, [mode, modelId]);
+  const modelObj = useMemo(() => models[mode].find((m) => m.id === modelId) || null, [models, mode, modelId]);
   const caps = useMemo(() => {
-    const sib = mode === "video" ? i2vModels.find((m) => m.id === i2vSibling(modelId)) : null;
-    // TRUTH first (official model spec), catalog as fallback — aggregator
-    // metadata under-declares (Seedance 2.0 there: high/basic + 5/10/15;
-    // the real model: 480p→4K, 4–15s, bitrate, 7 aspects).
-    const truth = mode === "video" ? truthFor(modelId) : null;
+    const air = isAirId(modelId);
+    const rw = modelObj?.rw || null;
+    const sib = mode === "video" && !air ? i2vModels.find((m) => m.id === i2vSibling(modelId)) : null;
+    // TRUTH first (official model spec) → Runware capability tags → wrapper
+    // catalog. Aggregator metadata under-declares (Seedance 2.0 there:
+    // high/basic + 5/10/15; the real model: 480p→4K, 4–15s, bitrate).
+    const truth = mode === "video" ? truthFor(`${modelId} ${modelObj?.name || ""}`) : null;
     const catalogQuality = mode === "video" ? modelQualityAxis(modelObj) : null;
     return {
       aspects: truth?.aspects || modelAspects(modelObj),
-      durations: truth?.durations || modelDurations(modelObj),
+      durations: truth?.durations || (rw ? [4, 5, 6, 7, 8, 9, 10] : modelDurations(modelObj)),
       qualityAxis: truth?.qualities
         ? { field: "resolution", options: truth.qualities }
-        : catalogQuality,
+        : rw
+          ? { field: "resolution", options: rw.fourK ? ["720p", "1080p", "4k"] : ["480p", "720p", "1080p"] }
+          : catalogQuality,
       bitrate: !!truth?.bitrate,
-      audio: mode === "video" && (truth ? !!truth.audio : modelSupportsAudio(modelObj)),
-      startFrame: mode === "video" && !!sib,
-      endFrame: mode === "video" && !!sib?.lastImageField,
-      multiRef: mode === "video" ? !!omniSibling(modelId) : true,
-      omni: mode === "video" ? omniSibling(modelId) : null,
+      audio: mode === "video" && (truth ? !!truth.audio : rw ? rw.audio : modelSupportsAudio(modelObj)),
+      startFrame: mode === "video" && (air ? !!rw?.i2v : !!sib),
+      endFrame: mode === "video" && (air ? !!rw?.firstLast : !!sib?.lastImageField),
+      multiRef: mode === "video" ? (air ? !!rw?.i2v : !!omniSibling(modelId)) : true,
+      omni: mode === "video" && !air ? omniSibling(modelId) : null,
     };
-  }, [modelObj, mode, modelId]);
+  }, [models, modelObj, mode, modelId]);
 
   // keep selections valid when the model changes
   useEffect(() => {
@@ -1005,7 +1030,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   onClick={() => setOpenList(openList === "model" ? null : "model")}
                   className={promptControlClassName({ compact: true, active: openList === "model" })}
                   title="Generation model">
-                  <span className="text-xs font-semibold">{MODELS[mode].find((m) => m.id === modelId)?.name}</span>
+                  <span className="text-xs font-semibold">{models[mode].find((m) => m.id === modelId)?.name}</span>
                   <PromptChevronIcon />
                 </button>
                 {openList === "model" && (
@@ -1033,14 +1058,14 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                     {!modelSearch && modelTab === "fav" && (
                       <PromptMenuList>
                         {CINEMA_FAVORITES[mode]
-                          .map((id) => MODELS[mode].find((m) => m.id === id))
+                          .map((id) => models[mode].find((m) => m.id === id))
                           .filter(Boolean)
                           .map((m) => (
                             <PromptMenuItem key={m.id} selected={modelId === m.id}
                               onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
                               <span className="flex items-center gap-2">
-                                {PROVIDER_LOGOS[m.provider] && (
-                                  <img src={PROVIDER_LOGOS[m.provider]} alt="" className={`w-3.5 h-3.5 object-contain ${INVERT_LOGOS.includes(m.provider) ? "invert" : ""}`} />
+                                {(m.logoUrl || PROVIDER_LOGOS[m.provider]) && (
+                                  <img src={m.logoUrl || PROVIDER_LOGOS[m.provider]} alt="" className={`w-3.5 h-3.5 object-contain ${!m.logoUrl && INVERT_LOGOS.includes(m.provider) ? "invert" : ""}`} />
                                 )}
                                 {m.name}
                               </span>
@@ -1049,7 +1074,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                       </PromptMenuList>
                     )}
                     {(modelSearch || modelTab === "all") && groupByProvider(
-                      MODELS[mode].filter((m) => !modelSearch ||
+                      models[mode].filter((m) => !modelSearch ||
                         m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
                         (m.provider_name || "").toLowerCase().includes(modelSearch.toLowerCase())),
                     ).map((group) => (
