@@ -523,9 +523,18 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     video: mergeVideoCatalogs(rwCatalog, t2vModels),
   }), [rwCatalog]);
 
-  // model list follows mode
+  // Model list follows mode. DEFAULT_MODEL holds legacy wrapper ids that no
+  // longer exist in the Runware-native catalog, so fall back through:
+  // default → first favorite present → first model. Landing on an id that
+  // isn't in the list leaves the picker blank and generation dead.
   useEffect(() => {
-    if (!models[mode].some((m) => m.id === modelId)) setModelId(DEFAULT_MODEL[mode]);
+    const list = models[mode];
+    if (!list.length || list.some((m) => m.id === modelId)) return;
+    const favorite = CINEMA_FAVORITES[mode].find((id) => list.some((m) => m.id === id));
+    const fallback = list.some((m) => m.id === DEFAULT_MODEL[mode])
+      ? DEFAULT_MODEL[mode]
+      : favorite || list[0].id;
+    setModelId(fallback);
   }, [mode, models]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // close panel on outside click / Esc
