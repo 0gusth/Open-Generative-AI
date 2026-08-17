@@ -216,6 +216,7 @@ const AR_DIMENSIONS = {
 };
 
 async function generateImageRunware(air, params) {
+    announceRoute("runware", air);
     const [width, height] = AR_DIMENSIONS[params.aspect_ratio] || AR_DIMENSIONS["1:1"];
     const task = {
         taskType: "imageInference",
@@ -321,6 +322,13 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
 
 // Poll an async Runware task until its media URL appears. Images poll fast
 // (1s early, 2s later); videos relax to 3s. Budget scales to the media kind.
+// Tell the UI which provider is actually rendering (placeholder cards show
+// it with an elapsed timer — a silent spinner reads as frozen after 30s).
+export function announceRoute(provider, modelId) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("generation-route", { detail: { provider, modelId } }));
+}
+
 async function pollRunwareTask(taskUUID, kind) {
     const urlField = kind === "video" ? "videoURL" : "imageURL";
     const budgetMs = 600000; // heavy models + queue peaks need the full window
@@ -423,6 +431,7 @@ async function submitRunwareTask(task) {
 }
 
 async function generateVideoRunware(air, params) {
+    announceRoute("runware", air);
     const [width, height] = videoDimensions(params);
     const task = {
         taskType: "videoInference",

@@ -79,6 +79,9 @@ async function pollForResult(requestId, key, maxAttempts = 900, interval = 2000)
 }
 
 async function submitAndPoll(endpoint, payload, key, onRequestId, maxAttempts = 60) {
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("generation-route", { detail: { provider: "muapi", modelId: payload?.model || endpoint } }));
+    }
     const url = `${BASE_URL}/api/v1/${endpoint}`;
     const response = await fetch(url, {
         method: 'POST',

@@ -598,6 +598,23 @@ export default function VideoStudio({
     return () => window.removeEventListener("generation-progress", onProgress);
   }, [generating]);
 
+  // Which provider took the job + elapsed time — a silent spinner reads as
+  // frozen, especially on Muapi where closed models take minutes.
+  const [renderRoute, setRenderRoute] = useState(null);
+  const [renderElapsed, setRenderElapsed] = useState(0);
+  useEffect(() => {
+    const onRoute = (e) => setRenderRoute(e.detail?.provider || null);
+    window.addEventListener("generation-route", onRoute);
+    return () => window.removeEventListener("generation-route", onRoute);
+  }, []);
+  useEffect(() => {
+    if (!generating) { setRenderRoute(null); setRenderElapsed(0); return; }
+    const startedAt = Date.now();
+    const timer = setInterval(() => setRenderElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [generating]);
+  const renderElapsedLabel = `${Math.floor(renderElapsed / 60)}:${String(renderElapsed % 60).padStart(2, "0")}`;
+
 
   // Server ledger sync (cross-browser history + live pending queue)
   useEffect(() => {
@@ -1624,6 +1641,16 @@ export default function VideoStudio({
                   <span className="text-[13px] font-medium text-white/60 tabular-nums">
                     {typeof genProgress === "number" ? `${Math.round(genProgress)}%` : "Generating…"}
                   </span>
+                  {renderElapsed >= 2 && (
+                    <span className="text-[11px] tabular-nums text-white/40">
+                      {renderRoute ? `via ${renderRoute === "muapi" ? "Muapi" : renderRoute === "fal" ? "fal" : "Runware"} · ` : ""}{renderElapsedLabel}
+                    </span>
+                  )}
+                  {renderRoute === "muapi" && renderElapsed >= 20 && (
+                    <span className="text-[11px] text-white/35 text-center px-6">
+                      Modelo fechado — no Muapi um render leva 2–5 min. Está vivo, pode navegar.
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

@@ -349,6 +349,23 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const [openList, setOpenList] = useState(null);
   const [modelSearch, setModelSearch] = useState("");
 
+  // Render telemetry for the placeholder card: which provider took the job
+  // and for how long it has been running — a silent spinner reads as frozen.
+  const [renderRoute, setRenderRoute] = useState(null); // "runware" | "muapi" | "fal"
+  const [renderElapsed, setRenderElapsed] = useState(0);
+  useEffect(() => {
+    const onRoute = (e) => setRenderRoute(e.detail?.provider || null);
+    window.addEventListener("generation-route", onRoute);
+    return () => window.removeEventListener("generation-route", onRoute);
+  }, []);
+  useEffect(() => {
+    if (!generating) { setRenderRoute(null); setRenderElapsed(0); return; }
+    const startedAt = Date.now();
+    const timer = setInterval(() => setRenderElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [generating]);
+  const elapsedLabel = `${Math.floor(renderElapsed / 60)}:${String(renderElapsed % 60).padStart(2, "0")}`;
+
   // ── Cast: saved characters (@name) — cross-browser via /api/characters ──
   const [cast, setCast] = useState([]);
   const loadCast = useCallback(async () => {
@@ -645,6 +662,16 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   <div className="w-6 h-6 rounded-full border-2 border-white/15 border-t-white/70 animate-spin" />
                   <span className="text-[13px] font-medium text-white/60">Directing…</span>
+                  {renderElapsed >= 2 && (
+                    <span className="text-[11px] tabular-nums text-white/40">
+                      {renderRoute ? `via ${renderRoute === "muapi" ? "Muapi" : renderRoute === "fal" ? "fal" : "Runware"} · ` : ""}{elapsedLabel}
+                    </span>
+                  )}
+                  {renderRoute === "muapi" && renderElapsed >= 20 && (
+                    <span className="text-[11px] text-white/35 text-center px-6">
+                      Modelo fechado — no Muapi um render leva 2–5 min. Está vivo, pode navegar.
+                    </span>
+                  )}
                 </div>
               </div>
             )}
