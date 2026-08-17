@@ -775,9 +775,13 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                       {renderRoute ? `via ${renderRoute === "muapi" ? "Muapi" : renderRoute === "fal" ? "fal" : "Runware"} · ` : ""}{elapsedLabel}
                     </span>
                   )}
-                  {renderRoute === "muapi" && renderElapsed >= 20 && (
+                  {renderElapsed >= 20 && (
                     <span className="text-[11px] text-white/35 text-center px-6">
-                      Modelo fechado — no Muapi um render leva 2–5 min. Está vivo, pode navegar.
+                      {renderRoute === "muapi"
+                        ? "Modelo fechado — no Muapi um render leva 2–5 min. Está vivo, pode navegar."
+                        : /4k|1080/i.test(resolution || "")
+                          ? "Alta qualidade leva 5–15 min de GPU — normal em qualquer plataforma. Está vivo, pode navegar."
+                          : "Está vivo — renders levam de 1 a 3 min neste nível. Pode navegar."}
                     </span>
                   )}
                 </div>
