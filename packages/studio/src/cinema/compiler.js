@@ -23,6 +23,20 @@ import { MOVEMENTS, movementById, movementsForGenre } from "./movement.js";
 import { shotSizeById, angleById } from "./shots.js";
 import { effectById } from "./effects.js";
 
+// A still has no duration: genre framing lines written for cinema carry
+// temporal clauses ("held long on faces", "prolonged takes, cutting only
+// when a moment completes") that are pure noise to an image model — and
+// they drag every frame toward the same close-up. Strip them for stills.
+const TEMPORAL_CLAUSE = /\b(held long(?: on [a-z ]+)?|prolonged takes?|cutting only when[^,.]*|lingering|sustained takes?|long takes?|holds? on [a-z ]+ for [^,.]*)\b[,.]?\s*/gi;
+function stillFraming(framing) {
+  return (framing || "")
+    .replace(TEMPORAL_CLAUSE, ", ")
+    .replace(/\s*,\s*(,\s*)+/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/(^[,\s]+|[,\s]+$)/g, "");
+}
+
 const pickDeterministic = (list, seedString) => {
   // Stable "auto" pick: same setup → same choice (no Date/random — respects
   // reproducibility); varies with the prompt so different scenes differ.
@@ -112,7 +126,7 @@ export function compileCinematography(setup) {
     blocks.push([shotSize?.prompt, angle?.prompt].filter(Boolean).join(", "));
     if (genre) blocks.push(`${genre.name.toLowerCase()} visual language`);
   } else if (genre) {
-    blocks.push(`${genre.name.toLowerCase()} visual language: ${genre.blocks.framing}`);
+    blocks.push(`${genre.name.toLowerCase()} visual language: ${mode === "image" ? stillFraming(genre.blocks.framing) : genre.blocks.framing}`);
   }
 
   blocks.push(lighting ? lighting.prompt : genre ? genre.blocks.light : null);

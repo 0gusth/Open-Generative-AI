@@ -220,7 +220,10 @@ const AR_DIMENSIONS = {
 // Image quality tiers scale the aspect-ratio base (1K) up. Runware snaps to
 // each architecture's allowed sizes through the healing loop, so asking for
 // 2K/4K on a model that caps lower degrades instead of failing.
-const IMAGE_TIER_SCALE = { "1k": 1, "2k": 1.5, "4k": 2.5 };
+// Flagship image models (Seedream 5, Nano Banana 2/Pro, Ideogram 4) are tuned
+// for 2K+. Rendering them at the 1MP base makes current models look years old
+// — soft detail, mushy micro-texture. 2K is the floor for finished work.
+const IMAGE_TIER_SCALE = { "1k": 1, "2k": 1.5, "4k": 2.9 };
 const roundTo64 = (n) => Math.max(256, Math.round(n / 64) * 64);
 
 async function generateImageRunware(air, params) {

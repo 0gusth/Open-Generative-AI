@@ -421,7 +421,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const [highBitrate, setHighBitrate] = useState(true); // cinema default: high
   // Image mode controls — quality tier and how many variations per Direct.
   // Image-first workflow lives on cheap iteration: 4 takes, pick one, animate.
-  const [imageTier, setImageTier] = useState("1k");
+  const [imageTier, setImageTier] = useState("2k"); // 1K makes flagship models look dated
   const [variations, setVariations] = useState(1);
   const [startFrame, setStartFrame] = useState(null);
   const [endFrame, setEndFrame] = useState(null);
