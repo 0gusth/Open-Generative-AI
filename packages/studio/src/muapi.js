@@ -1,6 +1,16 @@
 import { getModelById, getVideoModelById, getI2IModelById, getI2VModelById, getV2VModelById, getRecastModelById, getLipSyncModelById, getAudioModelById } from './models.js';
-import { tryProviderGenerate, tryProviderVideo } from './providers.js';
+import { tryProviderGenerate, tryProviderVideo, getProviderKey } from './providers.js';
 import { recordGeneration } from './ledger.js';
+
+// Generation is Runware-first, fal-second — NEVER Muapi. When the router
+// can't place a job, the user gets the real reason instead of a silent
+// fallback that generates on the wrong provider.
+function providerRouteError(modelName) {
+    if (!getProviderKey('runware') && !getProviderKey('fal')) {
+        return new Error('No provider key configured. Add your Runware (or fal) API key in Settings — generation runs only on Runware/fal.');
+    }
+    return new Error(`"${modelName}" is not available on Runware or fal. Pick a model from the catalog.`);
+}
 
 function logGeneration(result, params, type) {
     if (result?.url) {
@@ -23,7 +33,6 @@ function logGeneration(result, params, type) {
 const BASE_URL = (typeof window !== 'undefined' && window.location?.protocol?.startsWith('http'))
     ? '/api'
     : 'https://api.muapi.ai';
-const PROXY_WF_BASE = '/api/workflow';
 
 function notifyAuthRequired(status, detail) {
     if (typeof window === 'undefined') return;
@@ -104,52 +113,20 @@ async function submitAndPoll(endpoint, payload, key, onRequestId, maxAttempts = 
 
 export async function generateImage(apiKey, params) {
     const modelInfo = getModelById(params.model);
-    // Provider router: Runware/fal first; Muapi only when unavailable there
+    // Runware (direct AIR or name-resolved) → fal. No Muapi path.
     params.__modelId = params.model;
     const routed = await tryProviderGenerate(params.model, 't2i', params, modelInfo?.name);
     if (routed) return logGeneration(routed, params, 'image');
-    const endpoint = modelInfo?.endpoint || params.model;
-    const payload = { prompt: params.prompt };
-    if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
-    if (params.resolution) payload.resolution = params.resolution;
-    if (params.quality) payload.quality = params.quality;
-    if (params.image_url) { 
-        payload.image_url = params.image_url; 
-        payload.strength = params.strength || 0.6; 
-    } else if (params.images_list) {
-        payload.images_list = params.images_list;
-    } else {
-        payload.image_url = null;
-    }
-    if (params.seed && params.seed !== -1) payload.seed = params.seed;
-    return logGeneration(await submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 60), params, 'image');
+    throw providerRouteError(modelInfo?.name || params.model);
 }
 
 export async function generateI2I(apiKey, params) {
     const modelInfo = getI2IModelById(params.model);
-    // Provider router: Runware/fal first; Muapi only when unavailable there
+    // Runware (direct AIR or name-resolved) → fal. No Muapi path.
     params.__modelId = params.model;
     const routed = await tryProviderGenerate(params.model, 'i2i', params, modelInfo?.name);
     if (routed) return logGeneration(routed, params, 'image');
-    const endpoint = modelInfo?.endpoint || params.model;
-    const payload = {};
-    if (params.prompt) payload.prompt = params.prompt;
-    const imageField = modelInfo?.imageField || 'image_url';
-    const imagesList = params.images_list?.length > 0 ? params.images_list : (params.image_url ? [params.image_url] : null);
-    if (imagesList) {
-        if (imageField === 'images_list') payload.images_list = imagesList;
-        else payload[imageField] = imagesList[0];
-    }
-    if (modelInfo?.swapField && params.swap_url) {
-        payload[modelInfo.swapField] = params.swap_url;
-    }
-    if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
-    if (params.resolution) payload.resolution = params.resolution;
-    if (params.quality) payload.quality = params.quality;
-    if (modelInfo?.inputs?.name) {
-        payload.name = params.name || modelInfo.inputs.name.default;
-    }
-    return logGeneration(await submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 60), params, 'image');
+    throw providerRouteError(modelInfo?.name || params.model);
 }
 
 export async function decomposeLayers(apiKey, params) {
@@ -168,119 +145,20 @@ export async function decomposeLayers(apiKey, params) {
 
 export async function generateVideo(apiKey, params) {
     const modelInfo = getVideoModelById(params.model);
-    // Provider router: Runware first; Muapi only when unavailable there
-    if (!params.request_id) { // extend-mode is Muapi-specific state, keep it there
-        params.__modelId = params.model;
-        const routed = await tryProviderVideo(params.model, params, modelInfo?.name);
-        if (routed) return logGeneration(routed, params, 'video');
-    }
-    const endpoint = modelInfo?.endpoint || params.model;
-    const payload = {};
-    if (params.prompt) payload.prompt = params.prompt;
-    if (params.request_id) payload.request_id = params.request_id;
-    if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
-    if (params.duration) payload.duration = params.duration;
-    if (params.resolution) payload.resolution = params.resolution;
-    if (params.quality) payload.quality = params.quality;
-    if (params.mode) payload.mode = params.mode;
-    if (typeof params.generate_audio === 'boolean' && modelInfo?.inputs?.generate_audio) payload.generate_audio = params.generate_audio;
-    if (typeof params.high_bitrate === 'boolean' && modelInfo?.inputs?.high_bitrate) payload.high_bitrate = params.high_bitrate;
-    if (params.image_url) payload.image_url = params.image_url;
-    if (params.images_list?.length > 0) payload.images_list = params.images_list;
-    if (params.videos_list?.length > 0) payload.videos_list = params.videos_list;
-    adaptVideoPayload(payload, modelInfo);
-    return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
-}
-
-// Translate truth-layer values (quality tiers "480p".."4k", aspect "auto",
-// free-range durations) into whatever THIS wrapper model declares. The truth
-// layer speaks the model's real spec; Muapi's metadata is often narrower.
-function adaptVideoPayload(payload, modelInfo) {
-    const inputs = modelInfo?.inputs;
-    if (!inputs) return;
-    // Quality tier → declared field/enum
-    const tier = payload.resolution;
-    if (tier) {
-        const rEnum = inputs.resolution?.enum;
-        const qEnum = inputs.quality?.enum;
-        if (rEnum?.length) {
-            if (!rEnum.includes(tier)) {
-                const hit = rEnum.find((v) => String(v).toLowerCase().includes(String(tier).toLowerCase().replace('p', '')));
-                payload.resolution = hit || rEnum[rEnum.length - 1];
-            }
-        } else if (qEnum?.length) {
-            delete payload.resolution;
-            payload.quality = qEnum.includes(tier) ? tier
-                : /4k|2160|1080/i.test(tier)
-                    ? (qEnum.find((v) => /high|pro|hd/i.test(v)) || qEnum[0])
-                    : (qEnum.find((v) => /basic|std|standard|low/i.test(v)) || qEnum[qEnum.length - 1]);
-        } else {
-            delete payload.resolution; // model has no quality axis — don't send noise
-        }
-    }
-    // Aspect "auto" only when the wrapper declares it
-    if (payload.aspect_ratio === 'auto' && !inputs.aspect_ratio?.enum?.includes('auto')) {
-        delete payload.aspect_ratio;
-    }
-    // Duration → clamp to declared enum/range
-    const d = inputs.duration;
-    if (payload.duration && d) {
-        if (Array.isArray(d.enum) && d.enum.length && !d.enum.map(Number).includes(Number(payload.duration))) {
-            const target = Number(payload.duration);
-            payload.duration = d.enum.map(Number).reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
-        } else if (typeof d.minValue === 'number' && typeof d.maxValue === 'number') {
-            payload.duration = Math.min(d.maxValue, Math.max(d.minValue, Number(payload.duration)));
-        }
-    }
+    // Runware only (direct AIR or name-resolved). No Muapi path.
+    params.__modelId = params.model;
+    const routed = await tryProviderVideo(params.model, params, modelInfo?.name);
+    if (routed) return logGeneration(routed, params, 'video');
+    throw providerRouteError(modelInfo?.name || params.model);
 }
 
 export async function generateI2V(apiKey, params) {
-    {
-        const modelInfo = getI2VModelById(params.model);
-        // Provider router: Runware first; Muapi only when unavailable there
-        params.__modelId = params.model;
-        const routed = await tryProviderVideo(params.model, params, modelInfo?.name);
-        if (routed) return logGeneration(routed, params, 'video');
-    }
     const modelInfo = getI2VModelById(params.model);
-    const endpoint = modelInfo?.endpoint || params.model;
-    const payload = {};
-    if (params.prompt) payload.prompt = params.prompt;
-    const imageField = modelInfo?.imageField || 'image_url';
-    const imageInput = modelInfo?.inputs?.[imageField];
-    const imageUrls = params.images_list?.length > 0
-        ? params.images_list
-        : (params.image_url ? [params.image_url] : []);
-    if (imageUrls.length > 0) {
-        if (imageInput?.type === 'array' || imageField === 'images_list') {
-            payload[imageField] = imageUrls;
-        } else {
-            payload[imageField] = imageUrls[0];
-        }
-    }
-    if (typeof params.generate_audio === 'boolean' && modelInfo?.inputs?.generate_audio) payload.generate_audio = params.generate_audio;
-    const lastImageField = modelInfo?.lastImageField;
-    if (lastImageField && params.last_image) {
-        if (lastImageField === 'images_list') {
-            if (!payload.images_list) payload.images_list = [];
-            if (payload.images_list.indexOf(params.last_image) === -1) {
-                payload.images_list.push(params.last_image);
-            }
-        } else {
-            payload[lastImageField] = params.last_image;
-        }
-    }
-    if (params.aspect_ratio) payload.aspect_ratio = params.aspect_ratio;
-    if (params.duration) payload.duration = params.duration;
-    if (params.resolution) payload.resolution = params.resolution;
-    if (params.quality) payload.quality = params.quality;
-    if (params.mode) payload.mode = params.mode;
-    if (typeof params.high_bitrate === 'boolean' && modelInfo?.inputs?.high_bitrate) payload.high_bitrate = params.high_bitrate;
-    if (modelInfo?.inputs?.name) {
-        payload.name = params.name || modelInfo.inputs.name.default;
-    }
-    adaptVideoPayload(payload, modelInfo);
-    return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
+    // Runware only (direct AIR or name-resolved). No Muapi path.
+    params.__modelId = params.model;
+    const routed = await tryProviderVideo(params.model, params, modelInfo?.name);
+    if (routed) return logGeneration(routed, params, 'video');
+    throw providerRouteError(modelInfo?.name || params.model);
 }
 
 export async function generateMarketingStudioAd(apiKey, params) {

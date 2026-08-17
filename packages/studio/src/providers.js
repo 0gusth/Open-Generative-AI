@@ -283,22 +283,35 @@ async function generateImageFal(endpoint, params) {
     return { url, id: data.request_id || makeUUID(), provider: "fal" };
 }
 
+const stillRenderingError = () => new Error(
+    "The provider accepted this generation but it is still rendering (heavy model or busy queue). " +
+    "It will appear in your Runware library — do not regenerate, you would be charged twice.",
+);
+
 // Route an image generation. displayName enables dynamic Runware lookup when
 // the model has no hand-mapped route. Returns {url, id, provider} or null.
+// AIR ids (creator:model@version — Runware's own catalog) route directly and
+// NEVER fall back: their errors surface with the provider's real cause.
 export async function tryProviderGenerate(modelId, mode, params, displayName) {
+    if (/:.+@/.test(modelId || "")) {
+        if (!getProviderKey("runware")) {
+            throw new Error("Runware API key required — add it in Settings to generate with this model.");
+        }
+        try {
+            return await generateImageRunware(modelId, params);
+        } catch (error) {
+            if (error.noFallback && !error.definitive) throw stillRenderingError();
+            throw error;
+        }
+    }
     const choice = pickProvider(modelId, mode);
     try {
         if (choice?.provider === "runware") return await generateImageRunware(choice.config.model, params);
         if (choice?.provider === "fal") return await generateImageFal(choice.config.endpoint, params);
     } catch (error) {
-        if (error.noFallback) {
-            throw new Error(
-                "The provider accepted this generation but it is still rendering (heavy model or busy queue). " +
-                "It will appear in your Runware library — do not regenerate, you would be charged twice.",
-            );
-        }
+        if (error.noFallback) throw stillRenderingError();
         console.warn(`[providers] ${choice.provider} route failed for ${modelId}:`, error.message);
-        // static route failed — still try dynamic below before Muapi
+        // static route failed — still try dynamic Runware resolution below
     }
     if (getProviderKey("runware")) {
         const air = await resolveRunwareAir(displayName || modelId);
@@ -306,17 +319,12 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
             try {
                 return await generateImageRunware(air, params);
             } catch (error) {
-                if (error.noFallback) {
-                    throw new Error(
-                        "The provider accepted this generation but it is still rendering (heavy model or busy queue). " +
-                        "It will appear in your Runware library — do not regenerate, you would be charged twice.",
-                    );
-                }
+                if (error.noFallback) throw stillRenderingError();
                 console.warn(`[providers] Runware dynamic route failed for ${modelId}:`, error.message);
             }
         }
     }
-    return null; // Muapi is the last resort
+    return null; // caller surfaces a clear error — there is no Muapi fallback
 }
 
 // ── Video generation (Runware videoInference, async + getResponse poll) ─────
