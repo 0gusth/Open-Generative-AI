@@ -166,7 +166,13 @@ export function compileCinematography(setup) {
     grade: palette ? palette.prompt : genre ? genre.blocks.palette : null,
   };
 
-  const order = assemblyProfile(setup.modelId, mode);
+  // IMAGE-TO-VIDEO: the frame already carries framing, optics, light and
+  // grade. Re-stating them makes the model rebuild the scene from scratch
+  // instead of animating the still — the exact "it ignored my reference"
+  // failure. Only motion sections ride along.
+  const order = setup.hasStartFrame
+    ? ["subject", "motion", "vfx", "pace"]
+    : assemblyProfile(setup.modelId, mode);
   const prompt = order.map((k) => section[k]).filter(Boolean).join(". ");
 
   return {
