@@ -217,9 +217,20 @@ const AR_DIMENSIONS = {
     "auto": [1024, 1024],
 };
 
+// Image quality tiers scale the aspect-ratio base (1K) up. Runware snaps to
+// each architecture's allowed sizes through the healing loop, so asking for
+// 2K/4K on a model that caps lower degrades instead of failing.
+const IMAGE_TIER_SCALE = { "1k": 1, "2k": 1.5, "4k": 2.5 };
+const roundTo64 = (n) => Math.max(256, Math.round(n / 64) * 64);
+
 async function generateImageRunware(air, params) {
     announceRoute("runware", air);
-    const [width, height] = AR_DIMENSIONS[params.aspect_ratio] || AR_DIMENSIONS["1:1"];
+    let [width, height] = AR_DIMENSIONS[params.aspect_ratio] || AR_DIMENSIONS["1:1"];
+    const scale = IMAGE_TIER_SCALE[String(params.quality_tier || "1k").toLowerCase()];
+    if (scale && scale !== 1) {
+        width = roundTo64(width * scale);
+        height = roundTo64(height * scale);
+    }
     const task = {
         taskType: "imageInference",
         taskUUID: makeUUID(),
@@ -227,7 +238,7 @@ async function generateImageRunware(air, params) {
         positivePrompt: params.prompt || "",
         width,
         height,
-        numberResults: 1,
+        numberResults: Math.min(4, Math.max(1, parseInt(params.numberResults, 10) || 1)),
         outputType: "URL",
         outputFormat: "PNG",
         deliveryMethod: "async",
@@ -241,9 +252,11 @@ async function generateImageRunware(air, params) {
 
     const submitted = await submitRunwareTask(task);
     const accepted = submitted.find((t) => t.taskType === "imageInference");
-    // Fast models may return the URL straight from the submit call
+    // Fast models may return the URL straight from the submit call. With
+    // numberResults > 1 every variation comes back — surface them all.
     if (accepted?.imageURL) {
-        return { url: accepted.imageURL, id: accepted.taskUUID, provider: "runware" };
+        const urls = submitted.filter((t) => t.imageURL).map((t) => t.imageURL);
+        return { url: accepted.imageURL, urls, id: accepted.taskUUID, provider: "runware" };
     }
     const pendingId = accepted?.taskUUID || task.taskUUID;
     addPending({ id: pendingId, provider: "runware", type: "image", model: params.__modelId || "", prompt: params.prompt || "" });

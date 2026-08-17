@@ -388,6 +388,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     return next;
   });
   const [highBitrate, setHighBitrate] = useState(true); // cinema default: high
+  // Image mode controls — quality tier and how many variations per Direct.
+  // Image-first workflow lives on cheap iteration: 4 takes, pick one, animate.
+  const [imageTier, setImageTier] = useState("1k");
+  const [variations, setVariations] = useState(1);
   const [startFrame, setStartFrame] = useState(null);
   const [endFrame, setEndFrame] = useState(null);
   const startFrameInputRef = useRef(null);
@@ -666,7 +670,13 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       }
       let res;
       if (mode === "image") {
-        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect };
+        const params = {
+          model: modelId,
+          prompt: finalPrompt,
+          aspect_ratio: aspect,
+          quality_tier: imageTier,
+          numberResults: variations,
+        };
         if (effRefs.length) params.images_list = effRefs;
         res = await generateImage(apiKey, params);
       } else if (startFrame || effRefs.length || endFrame) {
@@ -703,7 +713,13 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         aspect_ratio: aspect,
         timestamp: new Date().toISOString(),
       };
-      setHistory((prev) => [entry, ...prev]);
+      // Variations: every image comes back — show them all, newest first.
+      const extras = (res.urls || []).filter((u) => u && u !== res.url).map((u, i) => ({
+        ...entry,
+        id: `${entry.id}-v${i + 2}`,
+        url: u,
+      }));
+      setHistory((prev) => [entry, ...extras, ...prev]);
       onGenerationComplete?.({ url: res.url, model: modelId, prompt: finalPrompt, type: mode });
     } catch (e) {
       const msg = formatErrorMessage(e, "Cinema generation failed");
@@ -1188,6 +1204,54 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </PromptPopover>
                 )}
               </div>
+              {/* Image mode: quality tier + variations per Direct */}
+              {mode === "image" && (
+                <>
+                  <div className="relative">
+                    <button type="button"
+                      onClick={() => setOpenList(openList === "imgQuality" ? null : "imgQuality")}
+                      className={promptControlClassName({ compact: true, active: openList === "imgQuality" })}
+                      title="Resolução da imagem">
+                      <span className="text-xs font-semibold uppercase tabular-nums">{imageTier}</span>
+                      <PromptChevronIcon />
+                    </button>
+                    {openList === "imgQuality" && (
+                      <PromptPopover>
+                        <PromptMenuList>
+                          {["1k", "2k", "4k"].map((t) => (
+                            <PromptMenuItem key={t} selected={imageTier === t}
+                              onClick={() => { setImageTier(t); setOpenList(null); }}>
+                              {t.toUpperCase()}
+                            </PromptMenuItem>
+                          ))}
+                        </PromptMenuList>
+                      </PromptPopover>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <button type="button"
+                      onClick={() => setOpenList(openList === "variations" ? null : "variations")}
+                      className={promptControlClassName({ compact: true, active: openList === "variations" })}
+                      title="Quantas variações por geração">
+                      <span className="text-xs font-semibold tabular-nums">{variations}×</span>
+                      <PromptChevronIcon />
+                    </button>
+                    {openList === "variations" && (
+                      <PromptPopover>
+                        <PromptMenuList>
+                          {[1, 2, 3, 4].map((n) => (
+                            <PromptMenuItem key={n} selected={variations === n}
+                              onClick={() => { setVariations(n); setOpenList(null); }}>
+                              {n} {n === 1 ? "imagem" : "variações"}
+                            </PromptMenuItem>
+                          ))}
+                        </PromptMenuList>
+                      </PromptPopover>
+                    )}
+                  </div>
+                </>
+              )}
+
               {/* Audio — discreet switch (only when the model generates sound) */}
               {caps.audio && (
                 <button type="button" onClick={toggleAudio}
