@@ -20,6 +20,7 @@ import { LIGHTING } from "../cinema/lighting.js";
 import { MOVEMENTS } from "../cinema/movement.js";
 import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import { EFFECTS } from "../cinema/effects.js";
+import { truthFor } from "../modelTruth.js";
 import {
   PromptComposer,
   PromptTextarea,
@@ -357,6 +358,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     try { window.localStorage.setItem("cinema_audio_on", next ? "1" : "0"); } catch {}
     return next;
   });
+  const [highBitrate, setHighBitrate] = useState(true); // cinema default: high
   const [startFrame, setStartFrame] = useState(null);
   const [endFrame, setEndFrame] = useState(null);
   const startFrameInputRef = useRef(null);
@@ -521,11 +523,19 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const modelObj = useMemo(() => MODELS[mode].find((m) => m.id === modelId) || null, [mode, modelId]);
   const caps = useMemo(() => {
     const sib = mode === "video" ? i2vModels.find((m) => m.id === i2vSibling(modelId)) : null;
+    // TRUTH first (official model spec), catalog as fallback — aggregator
+    // metadata under-declares (Seedance 2.0 there: high/basic + 5/10/15;
+    // the real model: 480p→4K, 4–15s, bitrate, 7 aspects).
+    const truth = mode === "video" ? truthFor(modelId) : null;
+    const catalogQuality = mode === "video" ? modelQualityAxis(modelObj) : null;
     return {
-      aspects: modelAspects(modelObj),
-      durations: modelDurations(modelObj),
-      qualityAxis: mode === "video" ? modelQualityAxis(modelObj) : null,
-      audio: mode === "video" && modelSupportsAudio(modelObj),
+      aspects: truth?.aspects || modelAspects(modelObj),
+      durations: truth?.durations || modelDurations(modelObj),
+      qualityAxis: truth?.qualities
+        ? { field: "resolution", options: truth.qualities }
+        : catalogQuality,
+      bitrate: !!truth?.bitrate,
+      audio: mode === "video" && (truth ? !!truth.audio : modelSupportsAudio(modelObj)),
       startFrame: mode === "video" && !!sib,
       endFrame: mode === "video" && !!sib?.lastImageField,
       multiRef: mode === "video" ? !!omniSibling(modelId) : true,
@@ -608,11 +618,13 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         };
         if (allImages.length > 1) params.images_list = allImages;
         if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
+        if (caps.bitrate) params.high_bitrate = highBitrate;
         if (endFrame) params.last_image = endFrame;
         res = await generateI2V(apiKey, params);
       } else {
         const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn };
         if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
+        if (caps.bitrate) params.high_bitrate = highBitrate;
         res = await generateVideo(apiKey, params);
       }
       if (!res?.url) throw new Error("No result returned");
@@ -1094,6 +1106,17 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </svg>
                   <span className={`relative w-7 h-[16px] rounded-full transition-colors duration-150 ${audioOn ? "bg-[#30D158]" : "bg-white/15"}`}>
                     <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${audioOn ? "left-[14px]" : "left-[2px]"}`} />
+                  </span>
+                </button>
+              )}
+              {/* Bitrate — discreet switch (models with high/standard bitrate) */}
+              {caps.bitrate && (
+                <button type="button" onClick={() => setHighBitrate((v) => !v)}
+                  title={highBitrate ? "Bitrate alto" : "Bitrate padrão"} aria-pressed={highBitrate}
+                  className="pressable h-[34px] px-2 flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.04]">
+                  <span className={`text-[10px] font-bold tracking-wide ${highBitrate ? "text-white/85" : "text-white/35"}`}>HB</span>
+                  <span className={`relative w-7 h-[16px] rounded-full transition-colors duration-150 ${highBitrate ? "bg-[#30D158]" : "bg-white/15"}`}>
+                    <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${highBitrate ? "left-[14px]" : "left-[2px]"}`} />
                   </span>
                 </button>
               )}

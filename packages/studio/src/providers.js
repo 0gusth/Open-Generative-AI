@@ -379,13 +379,21 @@ async function pollRunwareTask(taskUUID, kind) {
 // Video dimensions by aspect ratio, per resolution tier (multiples of 16).
 const VIDEO_DIMENSIONS = {
     "480p": { "16:9": [848, 480], "9:16": [480, 848], "1:1": [640, 640], "4:3": [640, 480], "3:4": [480, 640], "21:9": [1120, 480] },
+    "768p": { "16:9": [1360, 768], "9:16": [768, 1360], "1:1": [1024, 1024], "4:3": [1024, 768], "3:4": [768, 1024], "21:9": [1792, 768] },
     "720p": { "16:9": [1280, 720], "9:16": [720, 1280], "1:1": [960, 960], "4:3": [960, 720], "3:4": [720, 960], "21:9": [1680, 720] },
     "1080p": { "16:9": [1920, 1088], "9:16": [1088, 1920], "1:1": [1440, 1440], "4:3": [1440, 1088], "3:4": [1088, 1440], "21:9": [2560, 1088] },
+    "4k": { "16:9": [3840, 2160], "9:16": [2160, 3840], "1:1": [2880, 2880], "4:3": [2880, 2160], "3:4": [2160, 2880], "21:9": [5040, 2160] },
 };
 
 function videoDimensions(params) {
-    const tierKey = /1080/.test(params.resolution || "") ? "1080p" : /480/.test(params.resolution || "") ? "480p" : "720p";
+    const res = params.resolution || "";
+    const tierKey = /4k|2160/i.test(res) ? "4k"
+        : /1080/.test(res) ? "1080p"
+        : /768/.test(res) ? "768p"
+        : /480/.test(res) ? "480p"
+        : "720p";
     const tier = VIDEO_DIMENSIONS[tierKey];
+    // "auto" aspect → let the subject decide framing; 16:9 is the render base
     return tier[params.aspect_ratio] || tier["16:9"];
 }
 

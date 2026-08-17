@@ -184,10 +184,54 @@ export async function generateVideo(apiKey, params) {
     if (params.quality) payload.quality = params.quality;
     if (params.mode) payload.mode = params.mode;
     if (typeof params.generate_audio === 'boolean' && modelInfo?.inputs?.generate_audio) payload.generate_audio = params.generate_audio;
+    if (typeof params.high_bitrate === 'boolean' && modelInfo?.inputs?.high_bitrate) payload.high_bitrate = params.high_bitrate;
     if (params.image_url) payload.image_url = params.image_url;
     if (params.images_list?.length > 0) payload.images_list = params.images_list;
     if (params.videos_list?.length > 0) payload.videos_list = params.videos_list;
+    adaptVideoPayload(payload, modelInfo);
     return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
+}
+
+// Translate truth-layer values (quality tiers "480p".."4k", aspect "auto",
+// free-range durations) into whatever THIS wrapper model declares. The truth
+// layer speaks the model's real spec; Muapi's metadata is often narrower.
+function adaptVideoPayload(payload, modelInfo) {
+    const inputs = modelInfo?.inputs;
+    if (!inputs) return;
+    // Quality tier → declared field/enum
+    const tier = payload.resolution;
+    if (tier) {
+        const rEnum = inputs.resolution?.enum;
+        const qEnum = inputs.quality?.enum;
+        if (rEnum?.length) {
+            if (!rEnum.includes(tier)) {
+                const hit = rEnum.find((v) => String(v).toLowerCase().includes(String(tier).toLowerCase().replace('p', '')));
+                payload.resolution = hit || rEnum[rEnum.length - 1];
+            }
+        } else if (qEnum?.length) {
+            delete payload.resolution;
+            payload.quality = qEnum.includes(tier) ? tier
+                : /4k|2160|1080/i.test(tier)
+                    ? (qEnum.find((v) => /high|pro|hd/i.test(v)) || qEnum[0])
+                    : (qEnum.find((v) => /basic|std|standard|low/i.test(v)) || qEnum[qEnum.length - 1]);
+        } else {
+            delete payload.resolution; // model has no quality axis — don't send noise
+        }
+    }
+    // Aspect "auto" only when the wrapper declares it
+    if (payload.aspect_ratio === 'auto' && !inputs.aspect_ratio?.enum?.includes('auto')) {
+        delete payload.aspect_ratio;
+    }
+    // Duration → clamp to declared enum/range
+    const d = inputs.duration;
+    if (payload.duration && d) {
+        if (Array.isArray(d.enum) && d.enum.length && !d.enum.map(Number).includes(Number(payload.duration))) {
+            const target = Number(payload.duration);
+            payload.duration = d.enum.map(Number).reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
+        } else if (typeof d.minValue === 'number' && typeof d.maxValue === 'number') {
+            payload.duration = Math.min(d.maxValue, Math.max(d.minValue, Number(payload.duration)));
+        }
+    }
 }
 
 export async function generateI2V(apiKey, params) {
@@ -231,9 +275,11 @@ export async function generateI2V(apiKey, params) {
     if (params.resolution) payload.resolution = params.resolution;
     if (params.quality) payload.quality = params.quality;
     if (params.mode) payload.mode = params.mode;
+    if (typeof params.high_bitrate === 'boolean' && modelInfo?.inputs?.high_bitrate) payload.high_bitrate = params.high_bitrate;
     if (modelInfo?.inputs?.name) {
         payload.name = params.name || modelInfo.inputs.name.default;
     }
+    adaptVideoPayload(payload, modelInfo);
     return submitAndPoll(endpoint, payload, apiKey, params.onRequestId, 900);
 }
 
