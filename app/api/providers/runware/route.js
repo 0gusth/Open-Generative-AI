@@ -27,6 +27,16 @@ export async function POST(request) {
             body,
         });
         const data = await response.json();
+        // Permanent failure ledger: whenever the upstream rejects a
+        // generation, keep the EXACT payload + verdict. Debugging "it still
+        // blocks" from theory cost days; from this file it takes seconds.
+        try {
+            if (data?.errors?.length && /videoInference|imageInference/.test(body)) {
+                const { appendFileSync } = require('fs');
+                appendFileSync(process.cwd() + '/.data/provider-failures.log',
+                    JSON.stringify({ at: new Date().toISOString(), errors: data.errors, request: JSON.parse(body) }) + '\n');
+            }
+        } catch { /* never break the proxy for logging */ }
         return NextResponse.json(data, { status: response.status });
     } catch (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
