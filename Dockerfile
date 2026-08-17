@@ -23,6 +23,12 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
+
+# Server-side state (history, productions, characters, ledgers) lives here —
+# mount a persistent volume on this path or everything resets on redeploy.
+RUN mkdir -p /app/.data
+VOLUME ["/app/.data"]
 
 EXPOSE 3000
 CMD ["npm", "start"]

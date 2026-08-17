@@ -6,4 +6,9 @@ services:
       - "3001:3000"
     environment:
       - NODE_ENV=production
+      # Access lock: set a code before exposing this publicly — without it
+      # anyone with the URL can read your history and productions.
+      - APP_ACCESS_CODE=${APP_ACCESS_CODE:-}
+    volumes:
+      - ./.data:/app/.data
     restart: unless-stopped

@@ -20,8 +20,34 @@ function addSecurityHeaders(response) {
     return response;
 }
 
-export function middleware(request) {
+// sha256 hex via WebCrypto — the middleware runs on the edge runtime.
+async function sha256Hex(text) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function middleware(request) {
     const url = request.nextUrl;
+
+    // ── Access lock for public deployments ──────────────────────────────
+    // With APP_ACCESS_CODE set, everything except the unlock flow needs the
+    // unlock cookie: pages redirect to /unlock, API calls answer 401. The
+    // history/productions/characters routes hold personal data and MUST NOT
+    // be reachable on an open URL. Without the env var (local dev) the app
+    // stays open exactly as before.
+    const accessCode = process.env.APP_ACCESS_CODE;
+    if (accessCode) {
+        const open = url.pathname === '/unlock' || url.pathname === '/api/unlock';
+        if (!open) {
+            const cookie = request.cookies.get('app_access')?.value;
+            if (cookie !== await sha256Hex(accessCode)) {
+                if (url.pathname.startsWith('/api/')) {
+                    return NextResponse.json({ error: 'Locked — open the app and enter the access code first.' }, { status: 401 });
+                }
+                return addSecurityHeaders(NextResponse.redirect(new URL('/unlock', request.url)));
+            }
+        }
+    }
 
     // Only /api/v1/* is rewritten upstream; /api/workflow and /api/app have
     // their own catch-all route handlers and never reached the inner branch.
