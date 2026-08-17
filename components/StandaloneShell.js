@@ -1202,7 +1202,7 @@ export default function StandaloneShell() {
             <div className="space-y-4 mb-8">
               <div className="bg-white/5 border border-white/[0.03] rounded-md p-4">
                 <label className="block text-xs font-bold text-white/30 mb-2">
-                   Muapi Key (default + fallback)
+                   Muapi Key <span className="font-normal text-white/25">(legado — não gera mais)</span>
                 </label>
                 <div className="text-[13px] font-mono text-white/80">
                   {apiKey.slice(0, 8)}••••••••••••••••
@@ -1211,7 +1211,7 @@ export default function StandaloneShell() {
 
               <div className="bg-white/5 border border-white/[0.03] rounded-md p-4">
                 <label className="block text-xs font-bold text-white/30 mb-2">
-                  Runware Key <span className="font-normal text-white/25">(optional — cheapest routing)</span>
+                  Runware Key <span className="font-normal text-white/25">(principal — necessária para gerar)</span>
                 </label>
                 <input
                   type="password"
@@ -1224,7 +1224,7 @@ export default function StandaloneShell() {
 
               <div className="bg-white/5 border border-white/[0.03] rounded-md p-4">
                 <label className="block text-xs font-bold text-white/30 mb-2">
-                  fal.ai Key <span className="font-normal text-white/25">(optional — fastest routing)</span>
+                  fal.ai Key <span className="font-normal text-white/25">(opcional — modelos que a Runware não tem)</span>
                 </label>
                 <input
                   type="password"
@@ -1236,9 +1236,9 @@ export default function StandaloneShell() {
               </div>
 
               <p className="text-[11px] text-white/30 leading-relaxed px-1">
-                With extra providers set, generations route to the cheapest one that
-                hosts the model — or the fastest when prices are similar. Muapi
-                remains the fallback for everything else.
+                Imagens e vídeos geram na Runware (catálogo nativo) e, quando o
+                modelo só existe lá, na fal. A chave Muapi permanece salva apenas
+                para ferramentas antigas — ela não participa mais das gerações.
               </p>
 
               <button
