@@ -670,8 +670,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   }, [caps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compiled = useMemo(
-    () => compileCinematography({ ...setup, prompt }),
-    [setup, prompt],
+    () => compileCinematography({ ...setup, prompt, modelId }),
+    [setup, prompt, modelId],
   );
 
   // count of non-auto choices per panel (for button badges)
@@ -707,7 +707,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           dialect: dialectFor(modelId, mode, mode === "video" && !!startFrame),
         });
       }
-      const compiledNow = compileCinematography({ ...setup, prompt: scene });
+      const compiledNow = compileCinematography({ ...setup, prompt: scene, modelId });
       const material = inlineCast(compiledNow.prompt);
       // Pre-flight: proper names on ByteDance models trip copyright moderation.
       // The scene enhancer strips names when on; warn when it's off.

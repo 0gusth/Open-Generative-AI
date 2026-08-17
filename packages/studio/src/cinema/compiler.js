@@ -46,6 +46,29 @@ const pickDeterministic = (list, seedString) => {
   return list[Math.abs(h) % list.length];
 };
 
+// Per-family assembly order — the deterministic half of the model dialects.
+// Each deviation is corpus-backed, not taste:
+//  • Seedance reads left-to-right with falling attention and wants the CAMERA
+//    block in 3rd position ("moved to the end, FOV gets ignored; moved to the
+//    front, it conflicts with identity"), plus all six slots present.
+//  • Veo leans on environment and light as the hero — light rides early.
+//  • Image models want dense declarative attributes with the optical stack
+//    close to the subject, and carry no motion sections at all.
+const ASSEMBLY_PROFILES = {
+  seedance: ["subject", "genreTag", "framing", "motion", "vfx", "gear", "light", "pace", "grade"],
+  veo: ["subject", "genreTag", "framing", "light", "motion", "vfx", "gear", "pace", "grade"],
+  imageDense: ["subject", "genreTag", "framing", "gear", "light", "grade"],
+  default: ["subject", "genreTag", "framing", "light", "motion", "vfx", "pace", "gear", "grade"],
+};
+
+export function assemblyProfile(modelId = "", mode = "image") {
+  const id = String(modelId || "");
+  if (mode === "image") return ASSEMBLY_PROFILES.imageDense;
+  if (/seedance|bytedance/i.test(id)) return ASSEMBLY_PROFILES.seedance;
+  if (/veo|google:3@|google:veo/i.test(id)) return ASSEMBLY_PROFILES.veo;
+  return ASSEMBLY_PROFILES.default;
+}
+
 // setup = {
 //   mode: "image" | "video",
 //   prompt: string,
@@ -118,34 +141,28 @@ export function compileCinematography(setup) {
   const tempo = mode === "video" && setup.tempo && setup.tempo !== "auto"
     ? tempoById(setup.tempo) : null;
 
-  // ── Assembly: subject → framing → light → movement/pace → gear → grade ──
-  const blocks = [];
-  if (subject) blocks.push(subject);
+  // ── Assembly, arranged for the target model (deterministic, no LLM) ──
+  // Named sections, then ordered by the family's profile. Rule 5's default
+  // order stands; profiles only reorder what the model demonstrably reads
+  // differently (see assemblyProfile).
+  const section = {
+    subject: subject || null,
+    framing: shotSize || angle
+      ? [shotSize?.prompt, angle?.prompt].filter(Boolean).join(", ")
+      : genre
+        ? `${genre.name.toLowerCase()} visual language: ${mode === "image" ? stillFraming(genre.blocks.framing) : genre.blocks.framing}`
+        : null,
+    genreTag: (shotSize || angle) && genre ? `${genre.name.toLowerCase()} visual language` : null,
+    light: lighting ? lighting.prompt : genre ? genre.blocks.light : null,
+    motion: mode === "video" ? (movement ? movement.prompt : genre ? genre.blocks.motion : null) : null,
+    vfx: mode === "video" && effect ? `VFX event: ${effect.prompt}` : null,
+    pace: mode === "video" ? (tempo ? tempo.prompt : genre ? genre.blocks.pace : null) : null,
+    gear: [camera?.prompt, lens?.prompt, aperture?.prompt, medium?.prompt, era?.prompt].filter(Boolean).join(". ") || null,
+    grade: palette ? palette.prompt : genre ? genre.blocks.palette : null,
+  };
 
-  if (shotSize || angle) {
-    blocks.push([shotSize?.prompt, angle?.prompt].filter(Boolean).join(", "));
-    if (genre) blocks.push(`${genre.name.toLowerCase()} visual language`);
-  } else if (genre) {
-    blocks.push(`${genre.name.toLowerCase()} visual language: ${mode === "image" ? stillFraming(genre.blocks.framing) : genre.blocks.framing}`);
-  }
-
-  blocks.push(lighting ? lighting.prompt : genre ? genre.blocks.light : null);
-
-  if (mode === "video") {
-    blocks.push(movement ? movement.prompt : genre ? genre.blocks.motion : null);
-    if (effect) blocks.push(`VFX event: ${effect.prompt}`);
-    blocks.push(tempo ? tempo.prompt : genre ? genre.blocks.pace : null);
-  }
-
-  if (camera) blocks.push(camera.prompt);
-  if (lens) blocks.push(lens.prompt);
-  if (aperture) blocks.push(aperture.prompt);
-  if (medium) blocks.push(medium.prompt);
-  if (era) blocks.push(era.prompt);
-
-  blocks.push(palette ? palette.prompt : genre ? genre.blocks.palette : null);
-
-  const prompt = blocks.filter(Boolean).join(". ");
+  const order = assemblyProfile(setup.modelId, mode);
+  const prompt = order.map((k) => section[k]).filter(Boolean).join(". ");
 
   return {
     prompt,
