@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { runClipping, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { downloadMedia } from "./Lightbox.jsx";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
@@ -378,25 +379,20 @@ export default function ClippingStudio({
   };
 
   // ── Copy Link & Download Helpers ─────────────────────────────────────────
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert("URL copied to clipboard!");
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("URL copied to clipboard");
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Failed to copy URL"));
+    }
   };
 
   const downloadVideo = async (url, title = "clipped_video") => {
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `${title.replace(/\s+/g, '_')}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(url, "_blank");
+      await downloadMedia(url, `${title.replace(/\s+/g, '_')}.mp4`);
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Download failed"));
     }
   };
 
@@ -458,6 +454,7 @@ export default function ClippingStudio({
         num_highlights: numHighlights,
         aspect_ratio: aspectRatio,
         return_coordinates_only: returnCoordinatesOnly,
+        prompt: prompt.trim() || undefined,
       };
 
       const res = await runClipping(apiKey, params);
@@ -473,19 +470,14 @@ export default function ClippingStudio({
         coordinates: Array.isArray(outputCoordinates) ? outputCoordinates : (res.output?.clips || []),
         returnCoordinatesOnly: returnCoordinatesOnly,
         aspectRatio: aspectRatio,
+        prompt: prompt.trim() || undefined,
+        numHighlights: numHighlights,
         timestamp: new Date().toISOString(),
       };
 
-      // Mock coordinates if API succeeded but modal coordinates are empty in coordinate-only mode
+      // Coordinate-only mode with no timings back is a failure, not a result.
       if (returnCoordinatesOnly && newResult.coordinates.length === 0) {
-        newResult.coordinates = Array.from({ length: numHighlights }).map((_, idx) => ({
-          label: `Highlight #${idx + 1}`,
-          start_time: idx * 15,
-          end_time: (idx + 1) * 15,
-          start: idx * 15,
-          end: (idx + 1) * 15,
-          score: 0.95 - (idx * 0.05)
-        }));
+        throw new Error("The API did not return highlight timings for this video. Try again or disable coordinates-only mode.");
       }
 
       setResult(newResult);

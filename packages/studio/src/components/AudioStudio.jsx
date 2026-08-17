@@ -691,6 +691,7 @@ export default function AudioStudio({
     } catch (e) {
       console.error("[AudioStudio]", e);
       const errMsg = formatErrorMessage(e, "Audio generation failed");
+      setGenerateError(errMsg);
       if (onGenerationError) onGenerationError(errMsg);
       else toast.error(errMsg);
     } finally {

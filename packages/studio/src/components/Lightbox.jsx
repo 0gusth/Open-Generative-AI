@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { formatErrorMessage } from "../utils/formatError.js";
 
 // Robust media download: direct fetch first, same-origin proxy fallback
 // (provider CDNs without CORS), then a blob-powered save.
@@ -17,8 +19,11 @@ export async function downloadMedia(url, filename) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  a.remove();
+  // Revoking synchronously can abort the save in Firefox/Safari — defer it.
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 // Gallery lightbox: fullscreen viewer over the whole creation set.
@@ -101,8 +106,7 @@ export default function Lightbox({ items, index, onClose, onNavigate, onAdjust }
             className="max-w-full max-h-[78vh] rounded-xl object-contain shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
           />
         )}
-        {(item.prompt || item.model) && (
-          <div className="max-w-2xl w-full px-4 flex flex-col items-center gap-2">
+        <div className="max-w-2xl w-full px-4 flex flex-col items-center gap-2">
             {item.prompt && (
               <p className="text-[13px] text-white/70 leading-relaxed text-center max-h-[16vh] overflow-y-auto custom-scrollbar select-text">
                 {item.prompt}
@@ -141,7 +145,9 @@ export default function Lightbox({ items, index, onClose, onNavigate, onAdjust }
                   try {
                     const isVideo = item.type === "video" || /\.(mp4|webm|mov)($|\?)/i.test(item.url);
                     await downloadMedia(item.url, `${(item.model || "generation").replace(/[^a-z0-9-]/gi, "-")}-${index + 1}.${isVideo ? "mp4" : "png"}`);
-                  } catch { /* surfaced by silence — rare */ }
+                  } catch (e) {
+                    toast.error(formatErrorMessage(e, "Download failed"));
+                  }
                   setDownloading(false);
                 }}
                 className="pressable h-8 px-3 rounded-full bg-[#1d1d1f]/80 backdrop-blur-xl border border-white/[0.12] text-[11px] font-medium text-white/80 hover:text-white flex items-center gap-1.5 disabled:opacity-50"
@@ -178,11 +184,12 @@ export default function Lightbox({ items, index, onClose, onNavigate, onAdjust }
                 </button>
               </form>
             )}
-            <p className="text-[11px] text-white/35 tabular-nums">
-              {item.model}{items.length > 1 ? ` · ${index + 1} / ${items.length}` : ""}
-            </p>
-          </div>
-        )}
+            {(item.model || items.length > 1) && (
+              <p className="text-[11px] text-white/35 tabular-nums">
+                {item.model}{items.length > 1 ? ` · ${index + 1} / ${items.length}` : ""}
+              </p>
+            )}
+        </div>
       </div>
     </div>
   );

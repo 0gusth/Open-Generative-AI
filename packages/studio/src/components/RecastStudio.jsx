@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import { downloadMedia } from "./Lightbox.jsx";
 import { processRecast, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
+import { seekPosterFrame } from "../utils/videoPoster.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
@@ -424,9 +426,23 @@ export default function RecastStudio({
 }) {
   const LEGACY_PERSIST_KEY = "hg_recast_studio_persistent";
   const PERSIST_KEY = scopedPersistKey(LEGACY_PERSIST_KEY, apiKey);
+  // Assets were stored under a raw shared key — one identity's uploads and
+  // results leaked into every other account on the same browser. Scope it
+  // like the main persist key (legacy key still read as fallback).
+  const LEGACY_ASSETS_KEY = "hg_recast_studio_assets";
+  const ASSETS_KEY = scopedPersistKey(LEGACY_ASSETS_KEY, apiKey);
   useEffect(() => {
     migrateLegacyPersistKey(LEGACY_PERSIST_KEY, PERSIST_KEY);
-  }, [PERSIST_KEY]);
+    migrateLegacyPersistKey(LEGACY_ASSETS_KEY, ASSETS_KEY);
+  }, [PERSIST_KEY, ASSETS_KEY]);
+  const readStoredAssets = (field) => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(ASSETS_KEY) || localStorage.getItem(LEGACY_ASSETS_KEY);
+      if (stored) return JSON.parse(stored)[field] || [];
+    } catch { /* corrupted or absent — start empty */ }
+    return [];
+  };
 
   // ── Model state ───────────────────────────────────────────────────────────
   const firstModel = recastModels[0];
@@ -453,44 +469,11 @@ export default function RecastStudio({
   const [characterOrientation, setCharacterOrientation] = useState("image");
 
   // ── Assets Library ────────────────────────────────────────────────────────
-  const [assetVideos, setAssetVideos] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("hg_recast_studio_assets");
-        if (stored) {
-          const data = JSON.parse(stored);
-          return data.videos || [];
-        }
-      } catch (err) {}
-    }
-    return [];
-  });
+  const [assetVideos, setAssetVideos] = useState(() => readStoredAssets("videos"));
 
-  const [assetImages, setAssetImages] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("hg_recast_studio_assets");
-        if (stored) {
-          const data = JSON.parse(stored);
-          return data.images || [];
-        }
-      } catch (err) {}
-    }
-    return [];
-  });
+  const [assetImages, setAssetImages] = useState(() => readStoredAssets("images"));
 
-  const [assetResults, setAssetResults] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("hg_recast_studio_assets");
-        if (stored) {
-          const data = JSON.parse(stored);
-          return data.results || [];
-        }
-      } catch (err) {}
-    }
-    return [];
-  });
+  const [assetResults, setAssetResults] = useState(() => readStoredAssets("results"));
 
   // ── Generation / UI state ─────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -543,7 +526,7 @@ export default function RecastStudio({
   useEffect(() => {
     try {
       localStorage.setItem(
-        "hg_recast_studio_assets",
+        ASSETS_KEY,
         JSON.stringify({
           videos: assetVideos,
           images: assetImages,
@@ -698,22 +681,8 @@ export default function RecastStudio({
     setInternalHistory((prev) => [entry, ...prev].slice(0, 30));
   }, []);
 
-  const downloadFile = async (url, filename) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(url, "_blank");
-    }
-  };
+  const downloadFile = (url, filename) =>
+    downloadMedia(url, filename).catch(() => toast.error("Download failed — try again."));
 
   // ── Generation ──────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
@@ -804,6 +773,7 @@ export default function RecastStudio({
               >
                 <video
                   src={entry.url}
+                  onLoadedMetadata={seekPosterFrame}
                   className="w-full aspect-video object-cover bg-black/40 hover:opacity-80 transition-opacity"
                   controls={false}
                   loop
@@ -841,7 +811,7 @@ export default function RecastStudio({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (confirm("Are you sure you want to delete this generated item?")) {
-                        setInternalHistory(prev => prev.filter((_, i) => i !== idx));
+                        setInternalHistory((prev) => prev.filter((h) => h !== entry));
                       }
                     }}
                     className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
@@ -870,7 +840,7 @@ export default function RecastStudio({
                       danger: true,
                       onSelect: () => {
                         if (confirm("Are you sure you want to delete this generated item?")) {
-                          setInternalHistory((prev) => prev.filter((_, i) => i !== idx));
+                          setInternalHistory((prev) => prev.filter((h) => h !== entry));
                         }
                       },
                     },

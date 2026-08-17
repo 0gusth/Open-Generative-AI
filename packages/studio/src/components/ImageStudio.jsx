@@ -44,7 +44,7 @@ import {
 } from "./prompt/PromptComposer.jsx";
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
-import Lightbox from "./Lightbox.jsx";
+import Lightbox, { downloadMedia } from "./Lightbox.jsx";
 import { enhancePrompt } from "../providers.js";
 
 // Guards against re-processing the same dropped/pasted batch when effects
@@ -81,22 +81,9 @@ function RefField({ label, color, onFiles, onClick }) {
 }
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-async function downloadImage(url, filename) {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
-  } catch {
-    window.open(url, "_blank");
-  }
-}
+// Shared with the lightbox: blob download with a proxy-media fallback for
+// CDNs that refuse cross-origin fetches (window.open just opened a tab).
+const downloadImage = (url, filename) => downloadMedia(url, filename);
 
 // ─── UploadButton (inline picker) ───────────────────────────────────────────
 
@@ -209,7 +196,11 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
       const toUpload =
         maxImages === 1
           ? files.slice(0, 1)
-          : files.slice(0, maxImages - selectedEntries.length || 1);
+          : files.slice(0, Math.max(0, maxImages - selectedEntries.length));
+      if (toUpload.length === 0) {
+        toast.error(`Limit of ${maxImages} reference images reached — remove one first.`);
+        return;
+      }
 
       await Promise.all(
         toUpload.map(async (file) => {
@@ -237,15 +228,16 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear, initialUrls = [], 
               }),
             );
 
-            // Auto-select if there's room
-            if (selectedEntries.length < maxImages) {
-              const newEntry = { url: uploadedUrl };
-              setSelectedEntries((prev) => [...prev, newEntry]);
-
-              if (maxImages === 1) {
-                fireOnSelect([newEntry]);
-                setPanelOpen(false);
-              }
+            // Auto-select if there's room. Functional update: parallel
+            // uploads all captured the same stale length, so the cap check
+            // must happen against the CURRENT list, inside the updater.
+            const newEntry = { url: uploadedUrl };
+            setSelectedEntries((prev) =>
+              prev.length < maxImages ? [...prev, newEntry] : prev,
+            );
+            if (maxImages === 1) {
+              fireOnSelect([newEntry]);
+              setPanelOpen(false);
             }
           } catch (err) {
             console.error("[UploadButton] Upload failed for", file.name, err);
@@ -975,13 +967,10 @@ export default function ImageStudio({
   const [dropdownOpen, setDropdownOpen] = useState(null); // 'model' | 'ar' | 'quality' | null
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
-  const [fullscreenUrl, setFullscreenUrl] = useState(null);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
 
   // ── Canvas / history state ──────────────────────────────────────────────
-  const [currentImageUrl, setCurrentImageUrl] = useState(null);
-  const [activeHistoryIdx, setActiveHistoryIdx] = useState(0);
   const [batchSize, setBatchSize] = useState(1);
   const [localHistory, setLocalHistory] = useState([]); // [{id,url,prompt,model,aspect_ratio,timestamp}]
   const [pendingRenders, setPendingRenders] = useState([]);
@@ -1068,7 +1057,12 @@ export default function ImageStudio({
         merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         return merged.slice(0, 100);
       });
-      setPendingRenders(pending.filter((p) => p.type !== "video"));
+      setPendingRenders((prev) => {
+        const next = pending.filter((p) => p.type !== "video");
+        // Identity-stable when unchanged: a fresh array every 15s re-rendered
+        // this whole studio (grid, videos and all) even with nothing new.
+        return JSON.stringify(next) === JSON.stringify(prev) ? prev : next;
+      });
     };
     sync();
     const interval = setInterval(async () => {
@@ -1095,11 +1089,13 @@ export default function ImageStudio({
   // parent so it deletes server-side (UsageLog + S3) and updates the same
   // state `history` reads from. Falls back to the old local-only removal
   // when there's no server-backed list (e.g. standalone/embedded studio).
-  const handleDeleteEntry = useCallback(async (entry, idx) => {
+  const handleDeleteEntry = useCallback(async (entry) => {
     if (historyItems && onDeleteHistoryItem) {
       await onDeleteHistoryItem(entry);
     } else {
-      setLocalHistory((prev) => prev.filter((_, i) => i !== idx));
+      // Remove by identity, never by index: the rendered list is filtered
+      // (project scope), so an index into it deletes the wrong item here.
+      setLocalHistory((prev) => prev.filter((h) => h !== entry && (h.id == null || h.id !== entry.id)));
     }
   }, [historyItems, onDeleteHistoryItem]);
 
@@ -1184,6 +1180,11 @@ export default function ImageStudio({
     localHistory,
   ]);
 
+  // Fresh view of the attached list for merges that happen AFTER an await —
+  // two quick pastes must not clobber each other's result.
+  const uploadedImageUrlsRef = useRef(uploadedImageUrls);
+  useEffect(() => { uploadedImageUrlsRef.current = uploadedImageUrls; }, [uploadedImageUrls]);
+
   const processDroppedImages = async (files) => {
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
     const tooLarge = files.filter((f) => f.size > MAX_IMAGE_SIZE);
@@ -1194,9 +1195,18 @@ export default function ImageStudio({
       return;
     }
 
+    // Pasting/dropping ADDS to what is already attached (it used to replace
+    // the whole list, so the second paste silently erased the first image).
+    const room = maxImages === 1 ? 1 : Math.max(0, maxImages - uploadedImageUrls.length);
+    if (room === 0) {
+      toast.error(`Limite de ${maxImages} referências atingido — remova uma antes de colar outra.`);
+      return;
+    }
+    if (files.length > room) {
+      toast(`Só ${room} espaço(s) livre(s) — anexando as ${room} primeiras.`, { icon: "⚠️" });
+    }
     setGenerating(true); // Show as generating/busy
-    const toUpload =
-      maxImages === 1 ? files.slice(0, 1) : files.slice(0, maxImages);
+    const toUpload = files.slice(0, room);
     // Instant local previews while the real upload happens in the background
     const localPreviews = toUpload.map((f) => URL.createObjectURL(f));
     setUploadingPreviews(localPreviews);
@@ -1216,7 +1226,13 @@ export default function ImageStudio({
         })
       );
 
-      handleUploadSelect({ urls });
+      // handleUploadSelect's contract is "this is the FULL selection" —
+      // merge here so paste appends instead of replacing.
+      const attached = uploadedImageUrlsRef.current;
+      const merged = maxImages === 1
+        ? urls.slice(0, 1)
+        : [...attached, ...urls.filter((u) => !attached.includes(u))].slice(0, maxImages);
+      handleUploadSelect({ urls: merged });
     } catch (err) {
       alert(`Image upload failed: ${err.message}`);
     } finally {
@@ -1416,29 +1432,9 @@ export default function ImageStudio({
       if (!historyItems) {
         setLocalHistory((prev) => [entry, ...prev.slice(0, 49)]);
       }
-      setActiveHistoryIdx(0);
-      setCurrentImageUrl(entry.url);
     },
     [historyItems],
   );
-
-  // ── View state ─────────────────────────────────────
-
-  const resetToPrompt = () => {
-    setCurrentImageUrl(null);
-    setPrompt("");
-    setUploadedImageUrls([]);
-    setImageMode(false);
-    const firstT2I = t2iModels[0];
-    const ars = getAspectRatiosForModel(firstT2I.id);
-    const resolutions = getResolutionsForModel(firstT2I.id);
-    setSelectedModelId(firstT2I.id);
-    setSelectedModelName(firstT2I.name);
-    setSelectedAr(ars[0] || "1:1");
-    setSelectedQuality(resolutions[0] || null);
-    setSelectedEffect("");
-    setMaxImages(1);
-  };
 
   // ── Generation ───────────────────────────────────────────────────────────
   // Resolve @img1/@style/@character prompt references against the attached
@@ -1496,14 +1492,15 @@ export default function ImageStudio({
     onGenerationStart?.();
     let finalPrompt = prompt.trim();
     let sentPrompt = finalPrompt;
-    if (enhanceOn && finalPrompt) {
-      setGenerating(true); // placeholder appears while the prompt is enriched
-      finalPrompt = await enhancePrompt(finalPrompt, "image", selectedModelId);
-    }
     setGenerating(true);
     setGenerateError(null);
 
     try {
+      if (enhanceOn && finalPrompt) {
+        // Inside the try: a rejection here used to strand the button in
+        // "Generating…" forever — no finally had run yet.
+        finalPrompt = await enhancePrompt(finalPrompt, "image", selectedModelId);
+      }
       const results = await Promise.all(
         Array.from({ length: batchSize }).map(async () => {
           if (imageMode) {
@@ -2057,33 +2054,6 @@ export default function ImageStudio({
           onClose={() => setLightboxIdx(null)}
           onNavigate={setLightboxIdx}
         />
-      )}
-
-      {fullscreenUrl && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in"
-          onClick={() => setFullscreenUrl(null)}
-        >
-          <button
-            type="button"
-            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              setFullscreenUrl(null);
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <img 
-            src={fullscreenUrl} 
-            alt="Fullscreen Preview" 
-            className="max-w-[95vw] max-h-[95vh] rounded-2xl shadow-2xl object-contain animate-scale-up" 
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
       )}
 
       {/* ── DRAW CANVAS MODAL ── */}

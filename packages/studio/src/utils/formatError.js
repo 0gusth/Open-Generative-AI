@@ -5,12 +5,18 @@ export function formatErrorMessage(err, fallback = "Generation failed") {
   if (!err) return fallback;
   let message = typeof err === 'string' ? err : (err.message || fallback);
 
-  // If message contains JSON payload (e.g. `API Request Failed: 402 Payment Required - {...}`)
-  if (message.includes('{') && message.includes('}')) {
+  // HTTP status carried on the error object beats sniffing digits out of text
+  // (UUIDs and URLs in messages routinely contain "402"-like sequences).
+  const status = typeof err?.status === 'number' ? err.status : null;
+  const hasCode = (code) =>
+    status !== null ? status === code : new RegExp(`\\b${code}\\b`).test(message);
+
+  // Parse a JSON payload only when the message IS one — bare, or after the
+  // technical prefix (e.g. `API Request Failed: 402 Payment Required - {...}`).
+  const jsonCandidate = message.replace(/^API Request Failed: \d+ [^-]+ - /, '').trim();
+  if (jsonCandidate.startsWith('{')) {
     try {
-      const jsonStart = message.indexOf('{');
-      const jsonStr = message.slice(jsonStart);
-      const data = JSON.parse(jsonStr);
+      const data = JSON.parse(jsonCandidate);
       if (data.detail && typeof data.detail === 'string') {
         return data.detail;
       }
@@ -35,13 +41,13 @@ export function formatErrorMessage(err, fallback = "Generation failed") {
   }
 
   // Handle common HTTP error codes
-  if (message.includes('402') || /insufficient_?\s?credits/i.test(message)) {
+  if (hasCode(402) || /insufficient_?\s?credits/i.test(message)) {
     return "Saldo insuficiente no provedor para este render. Recarregue a conta (ou escolha um modelo/qualidade mais barato) e tente de novo — nada foi cobrado.";
   }
-  if (message.includes('401') || message.includes('403')) {
+  if (hasCode(401) || hasCode(403)) {
     return "Authentication failed. Please check your account session or API key.";
   }
-  if (message.includes('429')) {
+  if (hasCode(429)) {
     return "Too many requests. Please wait a moment and try again.";
   }
 

@@ -18,14 +18,18 @@ export default function DesignAgentStudio({
 }) {
   const [userData, setUserData] = useState(null);
 
-  // Written synchronously during render (not inside an effect below) so it's already in
-  // localStorage before CreativeCanvas's own mount effects read it — passive effects run
-  // child-before-parent within a commit, so setting this from *our* useEffect ran after
-  // CreativeCanvas's first sessions/agent-skills fetch had already gone out unauthenticated.
-  if (typeof window !== 'undefined' && apiKey) {
-    sessionStorage.setItem("fromDesignAgent", "true");
-    localStorage.setItem("token", apiKey);
-  }
+  // CreativeCanvas reads these storage keys in its own mount effects, so they must be
+  // written before it first mounts. The write lives in an effect (never in the render
+  // body — StrictMode double-renders would duplicate the side effect); mounting the
+  // canvas is deferred below until this effect has committed the keys.
+  const [storageReady, setStorageReady] = useState(false);
+  useEffect(() => {
+    if (apiKey) {
+      sessionStorage.setItem("fromDesignAgent", "true");
+      localStorage.setItem("token", apiKey);
+    }
+    setStorageReady(true);
+  }, [apiKey]);
 
   useEffect(() => {
     if (!apiKey) return;
@@ -58,9 +62,15 @@ export default function DesignAgentStudio({
     fetchUser();
   }, [apiKey, userEmail, balance]);
 
+  // Hold the canvas back for one commit so the token is in storage before its
+  // mount effects fire their first authenticated fetches.
+  if (!storageReady) {
+    return <div className="h-full w-full bg-black design-agent-studio" />;
+  }
+
   return (
     <div className="h-full w-full bg-black overflow-hidden design-agent-studio">
-      <CreativeCanvas 
+      <CreativeCanvas
         user={userData}
         isAuthorized={!!userData}
         creditConversionRate={200}

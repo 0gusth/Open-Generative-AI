@@ -11,6 +11,7 @@ import {
   expandImage,
 } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { downloadMedia } from "./Lightbox.jsx";
 
 // Guards against re-processing the same dropped/pasted batch when effects
 // re-fire (dependency identity churn + React StrictMode double-invoke).
@@ -308,8 +309,11 @@ export default function LayersStudio({
     const wrapper = imageWrapperRef.current || imageRef.current;
     if (!wrapper) return { x: 0, y: 0, xPct: 0, yPct: 0 };
     const rect = wrapper.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    // touchend delivers an EMPTY touches list — the lifted finger only
+    // exists in changedTouches, and touches[0] here crashed on mobile.
+    const point = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    const clientX = point.clientX;
+    const clientY = point.clientY;
 
     const xPx = Math.max(0, Math.min(rect.width, clientX - rect.left));
     const yPx = Math.max(0, Math.min(rect.height, clientY - rect.top));
@@ -574,8 +578,11 @@ export default function LayersStudio({
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    // touchend delivers an EMPTY touches list — the lifted finger only
+    // exists in changedTouches, and touches[0] here crashed on mobile.
+    const point = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    const clientX = point.clientX;
+    const clientY = point.clientY;
 
     return {
       x: (clientX - rect.left) * scaleX,
@@ -671,21 +678,26 @@ export default function LayersStudio({
     onGenerationStart?.();
 
     try {
+      // One bbox convention for the whole file: x-first, normalized 0-1000 —
+      // the same shape markedRegions/buildSeedreamLayerPrompt already use.
+      // (This path used to send y-first raw pixels, so edits landed on a
+      // transposed region.)
       let bboxTag = "";
-      if (activeTool === "lasso" && lassoPoints.length > 0) {
+      const canvas = drawingCanvasRef.current;
+      if (activeTool === "lasso" && lassoPoints.length > 0 && canvas?.width && canvas?.height) {
         const xs = lassoPoints.map((p) => p.x);
         const ys = lassoPoints.map((p) => p.y);
-        const minX = Math.round(Math.min(...xs));
-        const minY = Math.round(Math.min(...ys));
-        const maxX = Math.round(Math.max(...xs));
-        const maxY = Math.round(Math.max(...ys));
-        bboxTag = `<bbox>${minY} ${minX} ${maxY} ${maxX}</bbox>`;
+        const xmin = Math.round((Math.min(...xs) / canvas.width) * 1000);
+        const ymin = Math.round((Math.min(...ys) / canvas.height) * 1000);
+        const xmax = Math.round((Math.max(...xs) / canvas.width) * 1000);
+        const ymax = Math.round((Math.max(...ys) / canvas.height) * 1000);
+        bboxTag = `<bbox>${xmin} ${ymin} ${xmax} ${ymax}</bbox>`;
       } else if (activeTool === "regional-edit") {
-        const minX = Math.round(regionalBox.x * 10);
-        const minY = Math.round(regionalBox.y * 10);
-        const maxX = Math.round((regionalBox.x + regionalBox.width) * 10);
-        const maxY = Math.round((regionalBox.y + regionalBox.height) * 10);
-        bboxTag = `<bbox>${minY} ${minX} ${maxY} ${maxX}</bbox>`;
+        const xmin = Math.round(regionalBox.x * 10);
+        const ymin = Math.round(regionalBox.y * 10);
+        const xmax = Math.round((regionalBox.x + regionalBox.width) * 10);
+        const ymax = Math.round((regionalBox.y + regionalBox.height) * 10);
+        bboxTag = `<bbox>${xmin} ${ymin} ${xmax} ${ymax}</bbox>`;
       }
 
       const formattedPrompt = bboxTag
@@ -707,18 +719,15 @@ export default function LayersStudio({
         (result.url ? [result.url] : []);
       const layerUrls = Array.isArray(rawImages) ? rawImages : [rawImages];
 
-      if (layerUrls.length > 0) {
-        setDecomposedLayers(layerUrls);
-        setCarouselIndex(0);
-        const initialVis = {};
-        layerUrls.forEach((_, idx) => {
-          initialVis[idx] = true;
-        });
-        setVisibleLayers(initialVis);
-        toast.success(
-          `Generated ${layerUrls.length} layer(s) with Seedream 5 Pro!`,
-        );
+      // This is an EDIT: the result replaces the working image. (It used to
+      // land only in the layers carousel, so the canvas never changed and the
+      // user paid for an edit they could not see.)
+      if (layerUrls.length > 0 && layerUrls[0]) {
+        setCurrentImageUrl(layerUrls[0]);
+        toast.success("Region edited — applied to the canvas.");
         onGenerationComplete?.(result);
+      } else {
+        toast.error("The edit returned no image — nothing was changed.");
       }
     } catch (err) {
       const errorMsg = formatErrorMessage(err);
@@ -779,10 +788,10 @@ export default function LayersStudio({
     setProgress(15);
     onGenerationStart?.();
 
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+    }, 800);
     try {
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-      }, 800);
 
       const result = await decomposeLayers(apiKey, {
         image_url: currentImageUrl,
@@ -791,7 +800,6 @@ export default function LayersStudio({
         output_format: outputFormat,
       });
 
-      clearInterval(progressInterval);
       setProgress(100);
 
       const rawImages =
@@ -817,6 +825,7 @@ export default function LayersStudio({
       toast.error(`Decomposition failed: ${errorMsg}`);
       onGenerationError?.(errorMsg);
     } finally {
+      clearInterval(progressInterval);
       setIsProcessing(false);
       onGenerationEnd?.();
     }
@@ -837,10 +846,10 @@ export default function LayersStudio({
     setProgress(15);
     onGenerationStart?.();
 
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+    }, 700);
     try {
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-      }, 700);
 
       const result = await upscaleImage(apiKey, {
         model: upscaleModel,
@@ -849,7 +858,6 @@ export default function LayersStudio({
         upscale_factor: topazFactor,
       });
 
-      clearInterval(progressInterval);
       setProgress(100);
 
       const outputUrl =
@@ -876,6 +884,7 @@ export default function LayersStudio({
       toast.error(`Upscale failed: ${errorMsg}`);
       onGenerationError?.(errorMsg);
     } finally {
+      clearInterval(progressInterval);
       setIsProcessing(false);
       onGenerationEnd?.();
     }
@@ -896,16 +905,15 @@ export default function LayersStudio({
     setProgress(15);
     onGenerationStart?.();
 
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+    }, 700);
     try {
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-      }, 700);
 
       const result = await removeBackground(apiKey, {
         image_url: currentImageUrl,
       });
 
-      clearInterval(progressInterval);
       setProgress(100);
 
       const outputUrl =
@@ -934,6 +942,7 @@ export default function LayersStudio({
       toast.error(`Background removal failed: ${errorMsg}`);
       onGenerationError?.(errorMsg);
     } finally {
+      clearInterval(progressInterval);
       setIsProcessing(false);
       onGenerationEnd?.();
     }
@@ -954,16 +963,15 @@ export default function LayersStudio({
     setProgress(15);
     onGenerationStart?.();
 
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => (prev < 90 ? prev + 5 : prev));
+    }, 700);
     try {
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => (prev < 90 ? prev + 5 : prev));
-      }, 700);
 
       const result = await expandImage(apiKey, {
         image_url: currentImageUrl,
       });
 
-      clearInterval(progressInterval);
       setProgress(100);
 
       const outputUrl =
@@ -987,6 +995,7 @@ export default function LayersStudio({
       toast.error(`Image expansion failed: ${errorMsg}`);
       onGenerationError?.(errorMsg);
     } finally {
+      clearInterval(progressInterval);
       setIsProcessing(false);
       onGenerationEnd?.();
     }
@@ -1186,22 +1195,10 @@ export default function LayersStudio({
     }));
   };
 
-  const handleDownloadSingle = async (url, filename) => {
-    try {
-      const resp = await fetch(url);
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename || `layer.${outputFormat}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(url, "_blank");
-    }
-  };
+  const handleDownloadSingle = (url, filename) =>
+    downloadMedia(url, filename || `layer.${outputFormat}`).catch(() =>
+      toast.error("Download failed — try again."),
+    );
 
   const handleDownloadAll = () => {
     if (decomposedLayers.length === 0) {
@@ -3939,7 +3936,7 @@ export default function LayersStudio({
                     >
                       <path d="M12 2L14.4 7.6L20 10L14.4 12.4L12 18L9.6 12.4L4 10L9.6 7.6L12 2Z" />
                     </svg>
-                    <span>Separate layers {layerCount > 4 ? 12 : 8}</span>
+                    <span>Separate {layerCount} layers</span>
                   </>
                 )}
               </button>

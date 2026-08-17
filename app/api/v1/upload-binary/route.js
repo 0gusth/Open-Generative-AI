@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { validateUploadProxyTarget, getApiKeyFromRequest, isBlockedFileType } from '../../../../src/lib/uploadProxyTarget';
+import { validateUploadProxyTarget, getApiKeyFromRequest, isBlockedFileType } from '../../../../lib/uploadProxyTarget';
 
 export async function POST(request) {
     try {

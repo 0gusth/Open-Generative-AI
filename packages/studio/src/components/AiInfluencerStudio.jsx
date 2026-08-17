@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { generateImage } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { downloadMedia } from "./Lightbox.jsx";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
@@ -416,19 +417,21 @@ export default function AiInfluencerStudio({
           aspect_ratio: aspectRatio,
         });
       }
-      if (res?.url) {
-        setCurrentResult(res.url);
-        setHistory((prev) => [{ url: res.url, prompt, ts: Date.now() }, ...prev]);
-        setSelectedHistoryIdx(0);
-        onGenerationComplete?.({
-          url: res.url,
-          model: INFLUENCER_MODEL,
-          prompt,
-          type: "image",
-        });
+      if (!res?.url) {
+        throw new Error("No image URL returned by API");
       }
+      setCurrentResult(res.url);
+      setHistory((prev) => [{ url: res.url, prompt, ts: Date.now() }, ...prev]);
+      setSelectedHistoryIdx(0);
+      onGenerationComplete?.({
+        url: res.url,
+        model: INFLUENCER_MODEL,
+        prompt,
+        type: "image",
+      });
     } catch (err) {
       const message = formatErrorMessage(err, "Generation failed. Please try again.");
+      setErrorMsg(message);
       if (onGenerationError) onGenerationError(message);
       else toast.error(message);
     } finally {
@@ -440,15 +443,9 @@ export default function AiInfluencerStudio({
   // ── Download helper ───────────────────────────────────────────────────────
   const downloadImg = async (url) => {
     try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `ai-influencer-${Date.now()}.webp`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch {
-      window.open(url, "_blank");
+      await downloadMedia(url, `ai-influencer-${Date.now()}.webp`);
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Download failed"));
     }
   };
 

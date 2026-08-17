@@ -5,6 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { processLipSync, uploadFile } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
+import { seekPosterFrame } from "../utils/videoPoster.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
@@ -771,6 +772,7 @@ export default function LipSyncStudio({
               >
                 <video
                   src={entry.url}
+                  onLoadedMetadata={seekPosterFrame}
                   className="w-full aspect-video object-cover bg-black/40 hover:opacity-80 transition-opacity"
                   controls={false}
                   loop

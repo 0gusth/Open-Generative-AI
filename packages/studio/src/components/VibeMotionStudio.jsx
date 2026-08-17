@@ -4,7 +4,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { runMotionGraphics, runMotionGraphicsEdit } from "../muapi.js";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { seekPosterFrame } from "../utils/videoPoster.js";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
+import { downloadMedia } from "./Lightbox.jsx";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
@@ -30,18 +32,9 @@ import {
 // ── helpers ───────────────────────────────────────────────────────────────────
 async function downloadFile(url, filename) {
   try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
-  } catch {
-    window.open(url, "_blank");
+    await downloadMedia(url, filename);
+  } catch (err) {
+    toast.error(formatErrorMessage(err, "Download failed"));
   }
 }
 
@@ -173,6 +166,9 @@ export default function VibeMotionStudio({
       }
 
       const videoUrl = result?.output?.video || result?.url || result?.outputs?.[0];
+      if (!videoUrl) {
+        throw new Error("No video URL returned by API");
+      }
       const requestId = result?.id || result?.request_id || pendingRequestId.current;
 
       const entry = {
@@ -203,6 +199,7 @@ export default function VibeMotionStudio({
       if (isStaleEdit) {
         console.warn("[VibeMotionStudio] Remix unavailable:", raw.slice(0, 120));
         const msg = "This generation can't be remixed — the animation code wasn't saved server-side. Generate a new motion graphic first, then remix that result.";
+        setGenerateError(msg);
         if (onGenerationError) onGenerationError(msg);
         else toast.error(msg);
         setEditMode(false);
@@ -210,6 +207,7 @@ export default function VibeMotionStudio({
       } else {
         console.error("[VibeMotionStudio]", err);
         const errMsg = formatErrorMessage(raw || err, "Vibe Motion generation failed");
+        setGenerateError(errMsg);
         if (onGenerationError) onGenerationError(errMsg);
         else toast.error(errMsg);
       }
@@ -316,6 +314,7 @@ export default function VibeMotionStudio({
                 {/* Video thumbnail */}
                 <video
                   src={entry.url}
+                  onLoadedMetadata={seekPosterFrame}
                   className="w-full aspect-video object-cover bg-black/40 hover:opacity-80 transition-opacity"
                   controls={false}
                   loop

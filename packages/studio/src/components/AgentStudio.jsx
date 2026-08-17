@@ -286,7 +286,8 @@ export default function AgentStudio({ apiKey }) {
       );
       setChatMessages((prev) => [
         ...prev,
-        assistantMessage || { role: "assistant", content: "" },
+        // Never render an empty bubble — say plainly that the turn failed.
+        assistantMessage || { role: "assistant", content: "The agent returned no reply — try again." },
       ]);
       if (result.conversation_id && result.conversation_id !== conversationId) {
         setConversationId(result.conversation_id);

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import { uploadFile, generateI2I } from "../muapi.js";
+import { formatErrorMessage } from "../utils/formatError.js";
 
 export default function DrawModal({
   isOpen,
@@ -947,6 +949,7 @@ export default function DrawModal({
         }),
       );
 
+      let successCount = 0;
       results.forEach((res) => {
         if (res && res.url) {
           const entry = {
@@ -958,14 +961,20 @@ export default function DrawModal({
             timestamp: new Date().toISOString(),
           };
           onAddHistoryItem(entry);
+          successCount++;
         }
       });
 
-      alert("Generations complete!");
+      if (successCount === 0) {
+        // Keep the modal open so the drawing isn't lost.
+        toast.error("No images were generated — try again.");
+        return;
+      }
+      toast.success(successCount === 1 ? "Generation complete" : `${successCount} generations complete`);
       onClose();
     } catch (e) {
       console.error("[DrawModal] Generation failed:", e);
-      alert(`Generation failed: ${e.message}`);
+      toast.error(formatErrorMessage(e, "Generation failed"));
     } finally {
       setGenerating(false);
     }

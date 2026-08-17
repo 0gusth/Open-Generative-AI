@@ -4,6 +4,7 @@
 // generation).
 
 import toast from "react-hot-toast";
+import { PROVIDER_KEY_STORAGE } from "./providerKeys.js";
 import { formatErrorMessage } from "./utils/formatError.js";
 
 async function post(body) {
@@ -52,7 +53,7 @@ export function removePending(id) {
 export async function reconcilePending() {
     let key = null;
     try {
-        key = window.localStorage.getItem("provider_key_runware");
+        key = window.localStorage.getItem(PROVIDER_KEY_STORAGE.runware);
     } catch { /* no storage */ }
     if (!key) return 0;
 

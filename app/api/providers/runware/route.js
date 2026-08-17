@@ -17,6 +17,25 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    // Stale-bundle guard: the legacy shapes (top-level frameImages, or a
+    // frame entry with no image) only come from an app tab loaded before the
+    // i2v rework. Those submits burned money all morning — reject them here
+    // with an actionable message instead of letting the provider guess.
+    try {
+        const tasks = JSON.parse(body);
+        if (Array.isArray(tasks)) {
+            const video = tasks.find((t) => t?.taskType === 'videoInference');
+            const stale = video && (video.frameImages
+                || (video.inputs?.frameImages || []).some((f) => !f?.image));
+            if (stale) {
+                return NextResponse.json({ errors: [{
+                    code: 'staleClient',
+                    message: 'This browser tab is running an outdated version of the app. Reload the page (Cmd+R) and generate again.',
+                }] }, { status: 409 });
+            }
+        }
+    } catch { /* non-JSON bodies fall through to the provider */ }
+
     try {
         const response = await fetch(RUNWARE_URL, {
             method: 'POST',

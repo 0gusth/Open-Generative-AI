@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import { uploadFile, generateMarketingStudioAd } from "../muapi.js";
+import { formatErrorMessage } from "../utils/formatError.js";
+import { downloadMedia } from "./Lightbox.jsx";
 import { scopedPersistKey, migrateLegacyPersistKey } from "../persistKey.js";
 import MobileGenerationActions, {
   GenerationCopyButtons,
@@ -332,7 +335,8 @@ export default function MarketingStudio({
   useEffect(() => {
     const timer = setTimeout(() => {
       const state = { prompt, params, productImage, avatarImage, additionalImages, localHistory };
-      localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
+      // Quota exceeded / private mode — persistence is best-effort.
+      try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch (_) {}
     }, 500);
     return () => clearTimeout(timer);
   }, [prompt, params, productImage, avatarImage, additionalImages, localHistory]);
@@ -341,18 +345,9 @@ export default function MarketingStudio({
 
   const downloadFile = async (url, filename) => {
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(url, "_blank");
+      await downloadMedia(url, filename);
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Download failed"));
     }
   };
 
@@ -396,22 +391,25 @@ export default function MarketingStudio({
         video_files: params.videoUrl ? [params.videoUrl] : []
       });
 
-      if (result?.url) {
-        const entry = {
-          id: Date.now(),
-          url: result.url,
-          prompt,
-          format: params.format,
-          timestamp: new Date().toISOString()
-        };
-        if (!historyItems) {
-          setLocalHistory(prev => [entry, ...prev]);
-        }
-        setFullscreenUrl(result.url);
-        onGenerationComplete?.({ url: result.url, type: "video" });
+      if (!result?.url) {
+        throw new Error("No image URL returned by API");
       }
+      const entry = {
+        id: Date.now(),
+        url: result.url,
+        prompt,
+        format: params.format,
+        timestamp: new Date().toISOString()
+      };
+      if (!historyItems) {
+        setLocalHistory(prev => [entry, ...prev]);
+      }
+      setFullscreenUrl(result.url);
+      onGenerationComplete?.({ url: result.url, type: "video" });
     } catch (err) {
-      onGenerationError?.(err.message?.slice(0, 120) || "Marketing generation failed");
+      const msg = formatErrorMessage(err, "Marketing generation failed");
+      if (onGenerationError) onGenerationError(msg);
+      else toast.error(msg);
     } finally {
       setIsGenerating(false);
       onGenerationEnd?.();
@@ -455,15 +453,15 @@ export default function MarketingStudio({
                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                      </svg>
                    </button>
+                   {/* Shared history has no delete callback — only offer delete for local history. */}
+                   {!historyItems && (
                    <button
                     type="button"
                     title="Delete"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (confirm("Are you sure you want to delete this generated item?")) {
-                        if (!historyItems) {
-                          setLocalHistory(prev => prev.filter(h => h.id !== entry.id));
-                        }
+                        setLocalHistory(prev => prev.filter(h => h.id !== entry.id));
                       }
                     }}
                     className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/10"
@@ -475,6 +473,7 @@ export default function MarketingStudio({
                       <line x1="14" y1="11" x2="14" y2="17" />
                     </svg>
                    </button>
+                   )}
                 </div>
                 <MobileGenerationActions
                   prompt={entry.prompt}
@@ -486,20 +485,23 @@ export default function MarketingStudio({
                       onSelect: () =>
                         downloadFile(entry.url, `marketing-ad-${entry.id}.mp4`),
                     },
-                    {
-                      kind: "delete",
-                      label: "Delete",
-                      danger: true,
-                      onSelect: () => {
-                        if (confirm("Are you sure you want to delete this generated item?")) {
-                          if (!historyItems) {
-                            setLocalHistory((prev) =>
-                              prev.filter((item) => item.id !== entry.id),
-                            );
-                          }
-                        }
-                      },
-                    },
+                    // Shared history has no delete callback — only offer delete for local history.
+                    ...(!historyItems
+                      ? [
+                          {
+                            kind: "delete",
+                            label: "Delete",
+                            danger: true,
+                            onSelect: () => {
+                              if (confirm("Are you sure you want to delete this generated item?")) {
+                                setLocalHistory((prev) =>
+                                  prev.filter((item) => item.id !== entry.id),
+                                );
+                              }
+                            },
+                          },
+                        ]
+                      : []),
                   ]}
                 />
 
@@ -924,6 +926,8 @@ export default function MarketingStudio({
           </div>
         </div>
       )}
+
+      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ duration: 5000, style: { background: '#18181b', color: '#ffffff', border: '1px solid rgba(255,255,255,0.15)', fontSize: '13px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.6)', maxWidth: '440px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', padding: '12px 16px' } }} />
     </div>
   );
 }

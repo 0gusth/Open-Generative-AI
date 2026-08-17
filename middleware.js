@@ -23,18 +23,15 @@ function addSecurityHeaders(response) {
 export function middleware(request) {
     const url = request.nextUrl;
 
-    // Catch requests to /api/workflow, /api/app, and /api/v1
-    const isMuApi = url.pathname.startsWith('/api/workflow') ||
-                    url.pathname.startsWith('/api/app') ||
-                    url.pathname.startsWith('/api/v1');
-
-    if (isMuApi) {
+    // Only /api/v1/* is rewritten upstream; /api/workflow and /api/app have
+    // their own catch-all route handlers and never reached the inner branch.
+    if (url.pathname.startsWith('/api/v1')) {
         // Exclude paths that have their own dedicated route handlers with custom logic
         const isHandledByRoute = url.pathname.startsWith('/api/v1/creative-agent') ||
                                 url.pathname.startsWith('/api/v1/get_upload_url') ||
                                 url.pathname.startsWith('/api/v1/upload-binary');
 
-        if (url.pathname.startsWith('/api/v1') && !isHandledByRoute) {
+        if (!isHandledByRoute) {
             const targetUrl = new URL(url.pathname + url.search, 'https://api.muapi.ai');
             const rewriteResponse = NextResponse.rewrite(targetUrl);
             return addSecurityHeaders(rewriteResponse);
