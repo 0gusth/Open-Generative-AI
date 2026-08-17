@@ -29,7 +29,7 @@ const UNUSABLE_CODES = new Set([
     'invalidModel', 'invalidViduModelConfiguration', 'unsupportedDimensionsKlingV26Standard',
 ]);
 
-async function probeOne(key, air) {
+async function submitProbe(key, air, extra = {}) {
     const res = await fetch(RUNWARE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -37,12 +37,14 @@ async function probeOne(key, air) {
             taskType: 'videoInference', taskUUID: crypto.randomUUID(), model: air,
             positivePrompt: 'probe', width: 100, height: 100, duration: 5,
             numberResults: 1, outputType: 'URL', deliveryMethod: 'async',
+            ...extra,
         }]),
     });
-    const data = await res.json();
-    const e = data.errors?.[0];
-    if (!e) return { unexpectedAccept: true }; // should never happen at 100x100
-    const entry = {};
+    return (await res.json()).errors?.[0];
+}
+
+function harvest(e, entry) {
+    if (!e) return entry;
     if (UNUSABLE_CODES.has(e.code)) entry.unusableT2v = e.message?.slice(0, 120) || e.code;
     const sizes = parseSizes(e.allowedValues);
     if (sizes && /dimension|resolution|width|height/i.test(e.code + ' ' + (e.parameter || ''))) {
@@ -51,7 +53,24 @@ async function probeOne(key, air) {
     if (/duration/i.test(e.code + ' ' + (e.parameter || '')) && Array.isArray(e.allowedValues)) {
         entry.durations = e.allowedValues.filter((v) => typeof v === 'number');
     }
-    return Object.keys(entry).length ? entry : { code: e.code };
+    return entry;
+}
+
+async function probeOne(key, air) {
+    // Pass 1: invalid dims + generateAudio. Parameter validation runs before
+    // dimension validation, so an audio complaint here means the model does
+    // not take the parameter; a dimension complaint means audio was accepted.
+    const e1 = await submitProbe(key, air, { generateAudio: true });
+    if (!e1) return { unexpectedAccept: true };
+    const entry = {};
+    if (/generateAudio/i.test((e1.message || '') + String(e1.parameter || ''))) {
+        entry.audioParam = false;
+        harvest(await submitProbe(key, air), entry); // pass 2: sizes/durations
+    } else {
+        entry.audioParam = true;
+        harvest(e1, entry);
+    }
+    return Object.keys(entry).length ? entry : { code: e1.code };
 }
 
 export async function POST(request) {

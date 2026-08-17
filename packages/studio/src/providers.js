@@ -429,52 +429,97 @@ const isDimensionError = (error) =>
     (error.runwareErrors || []).some((e) => e.code === "unsupportedModelResolution")
     || /width\/height|width.*height.*combination|unsupported.*resolution/i.test(error.message || "");
 
+// Parameter name(s) an error is complaining about — Runware ships them as a
+// string, an array, or only inside the message text. Never trust one shape.
+function offendingParams(e, task) {
+    const names = new Set();
+    for (const p of Array.isArray(e.parameter) ? e.parameter : [e.parameter]) {
+        if (typeof p === "string" && p in task) names.add(p);
+    }
+    const m = (e.message || "").match(/'(\w+)' parameter/);
+    if (m && m[1] in task) names.add(m[1]);
+    return [...names];
+}
+
+// Protected fields the healer must never strip — without them there is no task.
+const CORE_TASK_FIELDS = new Set(["taskType", "taskUUID", "model", "positivePrompt", "deliveryMethod", "outputType", "numberResults"]);
+
+// Healing loop: submit, read the API's complaint, adapt, resubmit — until it
+// is accepted or the complaint is one we cannot fix (then surface it whole).
+// Each iteration removes one class of problem, so it converges fast.
 async function submitRunwareTask(task) {
-    try {
-        return await runwareCall([task]);
-    } catch (error) {
-        // Self-heal 1: the API tells us which sizes this architecture accepts.
-        // Runware uses several codes for this ("unsupportedModelResolution",
-        // "unsupportedDimensions", …) — trust the allowedValues shape, not the
-        // code string.
-        const dimError = (error.runwareErrors || []).find(
-            (e) => Array.isArray(e.allowedValues) && e.allowedValues.every((v) => /^\d+x\d+$/.test(String(v))),
-        );
-        if (dimError && task.width && task.height) {
-            const [w, h] = closestAllowedSize(dimError.allowedValues, task.width, task.height);
-            return await runwareCall([{ ...task, taskUUID: makeUUID(), width: w, height: h }]);
-        }
-        // Self-heal 2: dimension rejection WITHOUT allowedValues — walk a
-        // same-ratio ladder, then try dimensionless (model default).
-        if (isDimensionError(error) && task.width && task.height) {
-            const ratio = task.width / task.height;
-            const ladder = Object.values(DIMENSION_LADDER)
-                .find((sizes) => Math.abs(sizes[0][0] / sizes[0][1] - ratio) < 0.05) || [];
-            for (const [w, h] of ladder) {
-                if (w === task.width && h === task.height) continue;
-                try {
-                    return await runwareCall([{ ...task, taskUUID: makeUUID(), width: w, height: h }]);
-                } catch (e) {
-                    if (!isDimensionError(e)) throw e; // different problem — surface it
+    let current = { ...task };
+    let laddered = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            return await runwareCall([current]);
+        } catch (error) {
+            const errs = error.runwareErrors || [];
+            let healed = false;
+
+            // 1. Exact sizes offered (allowedValues shaped like WxH, any code)
+            const dimError = errs.find(
+                (e) => Array.isArray(e.allowedValues) && e.allowedValues.length && e.allowedValues.every((v) => /^\d+\s*[x*:]\s*\d+/.test(String(v))),
+            );
+            if (!healed && dimError && current.width && current.height) {
+                const [w, h] = closestAllowedSize(dimError.allowedValues.map((v) => String(v).replace(/\s*\(.*\)$/, "").replace(/[*:]/, "x")), current.width, current.height);
+                if (w !== current.width || h !== current.height) {
+                    current = { ...current, taskUUID: makeUUID(), width: w, height: h };
+                    healed = true;
                 }
             }
-            const bare = { ...task, taskUUID: makeUUID() };
-            delete bare.width;
-            delete bare.height;
-            return await runwareCall([bare]);
+
+            // 2. Duration enum offered (numeric allowedValues on a duration error)
+            const durError = errs.find(
+                (e) => /duration/i.test(String(e.parameter || "") + e.code) && Array.isArray(e.allowedValues) && e.allowedValues.some((v) => typeof v === "number"),
+            );
+            if (!healed && durError && current.duration) {
+                const opts = durError.allowedValues.filter((v) => typeof v === "number");
+                const snapped = opts.reduce((a, b) => (Math.abs(b - current.duration) < Math.abs(a - current.duration) ? b : a));
+                if (snapped !== current.duration) {
+                    current = { ...current, taskUUID: makeUUID(), duration: snapped };
+                    healed = true;
+                }
+            }
+
+            // 3. Unsupported/invalid parameter → strip it (never core fields)
+            if (!healed) {
+                for (const e of errs) {
+                    const params = offendingParams(e, current).filter((p) => !CORE_TASK_FIELDS.has(p));
+                    if (params.length) {
+                        current = { ...current, taskUUID: makeUUID() };
+                        for (const p of params) delete current[p];
+                        healed = true;
+                        break;
+                    }
+                }
+            }
+
+            // 4. Dimension rejection with no usable list → same-ratio ladder,
+            //    then dimensionless (model default). One shot.
+            if (!healed && !laddered && isDimensionError(error) && current.width && current.height) {
+                laddered = true;
+                const ratio = current.width / current.height;
+                const ladder = Object.values(DIMENSION_LADDER)
+                    .find((sizes) => Math.abs(sizes[0][0] / sizes[0][1] - ratio) < 0.05) || [];
+                for (const [w, h] of ladder) {
+                    if (w === current.width && h === current.height) continue;
+                    try {
+                        return await runwareCall([{ ...current, taskUUID: makeUUID(), width: w, height: h }]);
+                    } catch (e) {
+                        if (!isDimensionError(e)) throw e;
+                    }
+                }
+                current = { ...current, taskUUID: makeUUID() };
+                delete current.width;
+                delete current.height;
+                healed = true;
+            }
+
+            if (!healed) throw error; // not a self-healable complaint
         }
-        // Unsupported optional parameter (e.g. generateAudio on a silent model):
-        // drop it and retry once.
-        const paramError = (error.runwareErrors || []).find(
-            (e) => e.code === "unsupportedParameter" && e.parameter && e.parameter in task,
-        );
-        if (paramError) {
-            const retry = { ...task, taskUUID: makeUUID() };
-            delete retry[paramError.parameter];
-            return await runwareCall([retry]);
-        }
-        throw error;
     }
+    return await runwareCall([current]); // final attempt surfaces its own error
 }
 
 async function generateVideoRunware(air, params) {
@@ -504,8 +549,11 @@ async function generateVideoRunware(air, params) {
         outputType: "URL",
         numberResults: 1,
     };
-    // Sound on/off for audio-capable families; self-heal strips it elsewhere
-    if (typeof params.__audio === "boolean" && /veo|kling|seedance|hailuo|minimax|wan/i.test(air)) {
+    // Sound on/off — only where the probe confirmed the parameter is accepted
+    // (audioParam false = probed rejection; undefined = unprobed, healer covers)
+    if (typeof params.__audio === "boolean"
+        && known?.audioParam !== false
+        && /veo|kling|seedance|hailuo|minimax|wan|ltx|gemini|grok|sora/i.test(air)) {
         task.generateAudio = params.__audio;
     }
     if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;

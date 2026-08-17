@@ -1,14 +1,17 @@
 {
  "alibaba:wan@3.0": {
+  "audioParam": true,
   "unusableT2v": "Invalid value for 'model' parameter. Model must be a string value representing a valid AIR identifier."
  },
  "google:gemini@omni-flash": {
+  "audioParam": true,
   "sizes": [
    "1280x720",
    "720x1280"
   ]
  },
  "bfl:flux@3-video": {
+  "audioParam": false,
   "sizes": [
    "1440x608",
    "2176x928",
@@ -27,6 +30,7 @@
   ]
  },
  "minimax:h3@0": {
+  "audioParam": false,
   "sizes": [
    "2560x1440",
    "1920x1440",
@@ -43,6 +47,7 @@
   ]
  },
  "alibaba:happyhorse@1.1": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -57,6 +62,7 @@
   ]
  },
  "lightricks:ltx@2.5-fast": {
+  "audioParam": false,
   "durations": [
    6,
    8,
@@ -69,6 +75,7 @@
   ]
  },
  "lightricks:ltx@2.5-pro": {
+  "audioParam": false,
   "durations": [
    6,
    8,
@@ -76,6 +83,7 @@
   ]
  },
  "bytedance:seedance@2.5": {
+  "audioParam": false,
   "sizes": [
    "854x480",
    "752x560",
@@ -92,6 +100,7 @@
   ]
  },
  "alibaba:happyhorse@1.0": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -106,6 +115,7 @@
   ]
  },
  "skywork:skyreels@v4": {
+  "audioParam": false,
   "sizes": [
    "848x480",
    "736x560",
@@ -125,6 +135,7 @@
   ]
  },
  "bytedance:seedance@2.0": {
+  "audioParam": false,
   "sizes": [
    "864x496",
    "752x560",
@@ -153,6 +164,7 @@
   ]
  },
  "alibaba:wan@2.7": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -167,6 +179,7 @@
   ]
  },
  "pixverse:1@8": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -191,6 +204,7 @@
   ]
  },
  "klingai:kling-video@o3-pro": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -198,6 +212,7 @@
   ]
  },
  "klingai:kling-video@o3-standard": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -205,6 +220,7 @@
   ]
  },
  "klingai:kling-video@3-pro": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -212,6 +228,7 @@
   ]
  },
  "xai:grok-imagine@video": {
+  "audioParam": false,
   "sizes": [
    "480x480",
    "720x720",
@@ -230,6 +247,7 @@
   ]
  },
  "google:3@3": {
+  "audioParam": false,
   "durations": [
    4,
    6,
@@ -237,6 +255,7 @@
   ]
  },
  "lightricks:2@0": {
+  "audioParam": false,
   "durations": [
    6,
    8,
@@ -244,6 +263,7 @@
   ]
  },
  "openai:3@2": {
+  "audioParam": false,
   "sizes": [
    "720x1280",
    "1280x720",
@@ -254,6 +274,7 @@
   ]
  },
  "klingai:kling-video@3.0-turbo": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "1920x1080",
@@ -264,9 +285,11 @@
   ]
  },
  "heygen:avatar@5": {
+  "audioParam": true,
   "unusableT2v": "Missing required parameter: 'inputs.avatar'."
  },
  "luma:ray@3.2": {
+  "audioParam": true,
   "sizes": [
    "360x640",
    "360x480",
@@ -295,6 +318,7 @@
   ]
  },
  "bytedance:seedance@2.0-mini": {
+  "audioParam": false,
   "sizes": [
    "864x496",
    "752x560",
@@ -311,9 +335,10 @@
   ]
  },
  "prunaai:p-video@avatar": {
-  "code": "unsupportedParameter"
+  "audioParam": true
  },
  "klingai:kling-video@o3-4k": {
+  "audioParam": false,
   "sizes": [
    "3840x2160",
    "2160x3840",
@@ -321,6 +346,7 @@
   ]
  },
  "klingai:kling-video@3-4k": {
+  "audioParam": false,
   "sizes": [
    "3840x2160",
    "2160x3840",
@@ -328,6 +354,7 @@
   ]
  },
  "bytedance:seedance@2.0-fast": {
+  "audioParam": false,
   "sizes": [
    "864x496",
    "752x560",
@@ -344,6 +371,7 @@
   ]
  },
  "google:veo@3.1-lite": {
+  "audioParam": false,
   "durations": [
    4,
    6,
@@ -351,6 +379,7 @@
   ]
  },
  "vidu:4@2": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -375,6 +404,7 @@
   ]
  },
  "klingai:kling-video@3-standard": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -382,6 +412,7 @@
   ]
  },
  "vidu:4@1": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -406,6 +437,7 @@
   ]
  },
  "pixverse:1@7": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -430,9 +462,11 @@
   ]
  },
  "klingai:kling-video@2.6-standard": {
+  "audioParam": true,
   "unusableT2v": "Unsupported parameter width/height. Use Kling 2.6 Pro for T2V or I2V requests. Kling 2.6 Standard only works in Motion C"
  },
  "lightricks:2@1": {
+  "audioParam": false,
   "durations": [
    6,
    8,
@@ -440,6 +474,7 @@
   ]
  },
  "runway:1@2": {
+  "audioParam": true,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -449,12 +484,14 @@
   ]
  },
  "minimax:4@1": {
+  "audioParam": false,
   "sizes": [
    "1366x768",
    "1920x1080"
   ]
  },
  "google:3@2": {
+  "audioParam": false,
   "durations": [
    4,
    6,
@@ -462,12 +499,14 @@
   ]
  },
  "openai:3@1": {
+  "audioParam": false,
   "sizes": [
    "720x1280",
    "1280x720"
   ]
  },
  "bytedance:2@2": {
+  "audioParam": false,
   "sizes": [
    "864x480",
    "736x544",
@@ -490,6 +529,7 @@
   ]
  },
  "klingai:6@1": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -500,12 +540,13 @@
   ]
  },
  "lightricks:ltx@2.3": {
-  "code": "invalidWidth"
+  "audioParam": false
  },
  "lightricks:ltx@2.3-fast": {
-  "code": "invalidWidth"
+  "audioParam": false
  },
  "prunaai:p-video@0": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -524,9 +565,10 @@
   ]
  },
  "heygen:video-agent@0": {
-  "code": "valueNotAllowed"
+  "audioParam": true
  },
  "bytedance:seedance@1.5-pro": {
+  "audioParam": false,
   "sizes": [
    "864x496",
    "752x560",
@@ -549,9 +591,10 @@
   ]
  },
  "lightricks:ltx@2": {
-  "code": "invalidWidth"
+  "audioParam": false
  },
  "alibaba:wan@2.6": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -566,6 +609,7 @@
   ]
  },
  "klingai:kling-video@2.6-pro": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -573,6 +617,7 @@
   ]
  },
  "klingai:kling@o1": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -580,6 +625,7 @@
   ]
  },
  "klingai:kling@o1-standard": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -587,6 +633,7 @@
   ]
  },
  "runware:201@1": {
+  "audioParam": true,
   "sizes": [
    "832x480",
    "480x832",
@@ -604,6 +651,7 @@
   ]
  },
  "pixverse:1@5-fast": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -628,6 +676,7 @@
   ]
  },
  "pixverse:1@5": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -652,12 +701,15 @@
   ]
  },
  "heygen:avatar@4": {
+  "audioParam": true,
   "unusableT2v": "Missing required parameter: 'inputs.avatar or inputs.image'."
  },
  "pixverse:lipsync@1": {
+  "audioParam": false,
   "unusableT2v": "Missing required parameter: 'referenceVideos'."
  },
  "bytedance:2@1": {
+  "audioParam": false,
   "sizes": [
    "864x480",
    "736x544",
@@ -680,9 +732,11 @@
   ]
  },
  "klingai:5@2": {
+  "audioParam": false,
   "unusableT2v": "Missing required parameter for Kling 2.1 Pro image-to-video model, Kling 2.1 Pro model only supports image-to-video gene"
  },
  "pixverse:1@6": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -707,6 +761,7 @@
   ]
  },
  "vidu:3@2": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -731,6 +786,7 @@
   ]
  },
  "vidu:3@1": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -755,9 +811,11 @@
   ]
  },
  "bytedance:5@2": {
+  "audioParam": true,
   "unusableT2v": "Missing required parameter: 'inputs'."
  },
  "klingai:5@3": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -765,9 +823,11 @@
   ]
  },
  "vidu:1@0": {
+  "audioParam": false,
   "unusableT2v": "Invalid Vidu model configuration. The selected model doesn't support this task operation please change the parameters or"
  },
  "klingai:4@3": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -775,9 +835,11 @@
   ]
  },
  "minimax:2@3": {
+  "audioParam": false,
   "unusableT2v": "Parameter 'frameImages' is required for this model architecture. Please provide a valid frame image in one of the suppor"
  },
  "pixverse:1@1": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -802,6 +864,7 @@
   ]
  },
  "pixverse:1@2": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -826,6 +889,7 @@
   ]
  },
  "klingai:3@1": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -833,6 +897,7 @@
   ]
  },
  "klingai:1@1": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
@@ -840,6 +905,7 @@
   ]
  },
  "minimax:3@1": {
+  "audioParam": false,
   "sizes": [
    "1366x768",
    "1920x1080",
@@ -847,6 +913,7 @@
   ]
  },
  "pixverse:1@3": {
+  "audioParam": false,
   "sizes": [
    "640x360",
    "480x360",
@@ -871,6 +938,7 @@
   ]
  },
  "vidu:1@1": {
+  "audioParam": false,
   "sizes": [
    "1920x1080",
    "1080x1920",
@@ -878,24 +946,28 @@
   ]
  },
  "minimax:2@1": {
+  "audioParam": false,
   "sizes": [
    "1366x768"
   ]
  },
  "vidu:2@0": {
+  "audioParam": false,
   "unusableT2v": "Invalid Vidu model configuration. The selected model doesn't support this task operation please change the parameters or"
  },
  "minimax:1@1": {
+  "audioParam": false,
   "sizes": [
    "1366x768"
   ]
  },
  "klingai:1@2": {
+  "audioParam": false,
   "sizes": [
    "1280x720",
    "720x1280",
    "720x720"
   ]
  },
- "__probedAt": "2026-08-17T01:07:59.019Z"
+ "__probedAt": "2026-08-17T01:14:52.461Z"
 }
