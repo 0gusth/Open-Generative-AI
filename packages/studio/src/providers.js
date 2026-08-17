@@ -597,36 +597,29 @@ async function generateVideoRunware(air, params) {
         applyAudioSetting(task, air, params.__audio, known?.audioParam === true);
     }
     if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;
+    // ByteDance video never accepts 'seed' (both probes' allowed lists omit
+    // it) — drop it up front instead of paying an error roundtrip.
+    if (/^bytedance:/i.test(air)) delete task.seed;
+
     // Image-to-video: first (and optionally last) frame.
     //
-    // FORMAT MATTERS AND IS PER-FAMILY. ByteDance (doc bytedance-seedance-2-5)
-    // reads inputs.frameImages [{ image, frame }] with `resolution` and
-    // FORBIDS width/height — our old top-level frameImages [{ inputImage }]
-    // passed validation but the generation pipeline never read it, which is
-    // why every animated still came back as a brand-new shot. Other families
-    // keep the generic top-level shape; the healing loop settles dimensions.
-    const isByteDance = /^bytedance:/i.test(air);
-    // ByteDance video rejects 'seed' outright (both probes' allowed-parameter
-    // lists omit it). Sending it kills the submit — and this was the real
-    // cause behind the user's "still blocked", masked by a generic message.
-    if (isByteDance) delete task.seed;
+    // ONE format for every family — the docs for both ByteDance AND Kling
+    // define it as inputs.frameImages [{ image, frame }], with dimensions
+    // inherited from the image ("cannot be set manually"). The top-level
+    // frameImages/inputImage shape was legacy: validators accepted it but
+    // pipelines ignored it (ByteDance) or rejected it (Kling). Architectures
+    // that DO want width/height with a frame get them back through the
+    // healing loop's restoreDims path.
     const frames = [];
-    if (params.image_url) frames.push(isByteDance
-        ? { image: params.image_url, frame: "first" }
-        : { inputImage: params.image_url, frame: "first" });
-    if (params.last_image) frames.push(isByteDance
-        ? { image: params.last_image, frame: "last" }
-        : { inputImage: params.last_image, frame: "last" });
+    if (params.image_url) frames.push({ image: params.image_url, frame: "first" });
+    if (params.last_image) frames.push({ image: params.last_image, frame: "last" });
     if (frames.length) {
-        if (isByteDance) {
-            task.inputs = { ...(task.inputs || {}), frameImages: frames };
-            delete task.width;
-            delete task.height;
-            const tier = String(params.resolution || "").toLowerCase();
-            task.resolution = /1080|4k|2160/.test(tier) ? "720p" : (/480/.test(tier) ? "480p" : "720p");
-        } else {
-            task.frameImages = frames;
-        }
+        task.inputs = { ...(task.inputs || {}), frameImages: frames };
+        delete task.width;
+        delete task.height;
+        delete task.seed; // frame runs: seed is refused across families
+        const tier = String(params.resolution || "").toLowerCase();
+        task.resolution = /1080|4k|2160/.test(tier) ? "720p" : (/480/.test(tier) ? "480p" : "720p");
     }
     if (!params.image_url && params.images_list?.length) {
         task.referenceImages = params.images_list;
