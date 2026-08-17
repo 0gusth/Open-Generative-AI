@@ -92,9 +92,37 @@ function modelResolutions(m) {
   const r = m?.inputs?.resolution;
   return Array.isArray(r?.enum) && r.enum.length ? r.enum : null;
 }
+// Native-audio capability: the Muapi catalog is inconsistent (kling 3.0 i2v
+// declares generate_audio, its t2v sibling doesn't), so a declared field OR
+// the known native-audio families both count (Kling 3.0/2.6, Seedance 2.x/
+// 1.5 Pro, Veo 3/3.1/4, Wan 2.5/2.7, Grok, Gemini Omni).
+const NATIVE_AUDIO_FAMILIES = /kling-v3|kling-v2\.6|seedance-2|seedance-v2|seedance-v1\.5|veo-?3|veo-4|wan2\.5|wan2\.7|grok.*video|gemini.*omni/i;
 function modelSupportsAudio(m) {
-  return !!(m?.inputs?.generate_audio || m?.inputs?.audio);
+  if (m?.inputs?.generate_audio || m?.inputs?.audio || m?.inputs?.sound || m?.inputs?.generate_audio_switch) return true;
+  return NATIVE_AUDIO_FAMILIES.test(m?.id || "");
 }
+
+// Curated favorites for Cinema Studio — the models that respond best to this
+// studio's dense cinematographic prompts (dialects, refs, performance craft).
+const CINEMA_FAVORITES = {
+  image: [
+    "seedream-5.0",              // dense prompts + reference consistency
+    "bytedance-seedream-v4.5",   // refs + in-image text
+    "nano-banana-2",             // fast pro quality
+    "nano-banana-pro",           // max fidelity, up to 14 refs
+    "flux-2-pro",                // composition/lens language
+    "gpt-image-2",               // long structured prompts
+  ],
+  video: [
+    "seedance-2.5-text-to-video",          // deep dialect, 12-asset multiref, audio
+    "seedance-v2.0-t2v",                   // Seedance 2.0
+    "kling-v3.0-standard-text-to-video",   // character/performance king
+    "kling-v2.6-pro-t2v",                  // fast character work
+    "veo3.1-text-to-video",                // environment hero, frames, audio
+    "minimax-hailuo-2.3-pro-t2v",          // physical motion/VFX
+    "wan2.7-text-to-video",                // 60fps artistic
+  ],
+};
 
 // Group a model list by provider for the picker.
 function groupByProvider(models) {
@@ -348,6 +376,14 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // Open list popovers: "model" | "aspect" | "duration" | "quality" | null
   const [openList, setOpenList] = useState(null);
   const [modelSearch, setModelSearch] = useState("");
+  // Model picker tab — favorites first (sticky choice)
+  const [modelTab, setModelTab] = useState(() => {
+    if (typeof window === "undefined") return "fav";
+    return window.localStorage.getItem("cinema_model_tab") || "fav";
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("cinema_model_tab", modelTab); } catch {}
+  }, [modelTab]);
 
   // Render telemetry for the placeholder card: which provider took the job
   // and for how long it has been running — a silent spinner reads as frozen.
@@ -957,7 +993,37 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                       autoFocus
                       className="w-full mb-2 bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-[#EF0328]/40"
                     />
-                    {groupByProvider(
+                    {!modelSearch && (
+                      <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5 mb-2">
+                        {[["fav", "Favoritos"], ["all", "Todos"]].map(([value, label]) => (
+                          <button key={value} type="button" onClick={() => setModelTab(value)}
+                            className={`flex-1 px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 ${
+                              modelTab === value ? "bg-[#636366]/90 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+                            }`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!modelSearch && modelTab === "fav" && (
+                      <PromptMenuList>
+                        {CINEMA_FAVORITES[mode]
+                          .map((id) => MODELS[mode].find((m) => m.id === id))
+                          .filter(Boolean)
+                          .map((m) => (
+                            <PromptMenuItem key={m.id} selected={modelId === m.id}
+                              onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
+                              <span className="flex items-center gap-2">
+                                {PROVIDER_LOGOS[m.provider] && (
+                                  <img src={PROVIDER_LOGOS[m.provider]} alt="" className={`w-3.5 h-3.5 object-contain ${INVERT_LOGOS.includes(m.provider) ? "invert" : ""}`} />
+                                )}
+                                {m.name}
+                              </span>
+                            </PromptMenuItem>
+                          ))}
+                      </PromptMenuList>
+                    )}
+                    {(modelSearch || modelTab === "all") && groupByProvider(
                       MODELS[mode].filter((m) => !modelSearch ||
                         m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
                         (m.provider_name || "").toLowerCase().includes(modelSearch.toLowerCase())),
