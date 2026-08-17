@@ -156,9 +156,14 @@ export function fusionInstruction(mode /* "image" | "video" */, hasStartFrame, o
     scripted ? CRAFT_SCREENPLAY : "",
     opts.continuation ? CRAFT_CONTINUATION : "",
     opts.dialect || "",
+    // NEVER cap the length here. The material arriving from the compiler is
+    // already curated (committee gear/light/grade/movement lines) and runs
+    // 100-200 words on its own; a word target turns "preserve everything"
+    // into "drop something", and the treatment is what gets dropped. The
+    // fusion integrates and repairs — it never compresses.
     scripted
-      ? "Output ONLY the final prompt, no commentary. This is a scripted scene: keep every beat and every line of dialogue — 150-350 words."
-      : `Output ONLY the final prompt, no commentary. Target ${LENGTH_TARGETS[i2v ? "i2v" : mode]}.`,
+      ? "Output ONLY the final prompt, no commentary. This is a scripted scene: keep every beat and every line of dialogue."
+      : "Output ONLY the final prompt, no commentary. The result must carry EVERY treatment phrase from the material — it is never shorter than the material it fuses. Integrate, never summarize.",
   ];
   return parts.filter(Boolean).join("\n\n");
 }

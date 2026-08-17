@@ -15,6 +15,22 @@ const COMMON_CAPITALIZED = new Set([
   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 ]);
 
+// Cinematography vocabulary — camera bodies, lenses, film stocks and colour
+// science we ship on purpose. These read as proper nouns but are the shot's
+// identity, and they are field-verified safe with ByteDance's filter (renders
+// carrying "ARRI Alexa 65", "Sony Venice", "Panavision C-Series" passed).
+// Only PEOPLE's names trip the copyright flag.
+const GEAR_VOCABULARY = new Set([
+  "ARRI", "Arri", "Arricam", "Alexa", "Panavision", "Panaflex", "Millennium",
+  "Kodak", "Vision", "Fuji", "Fujifilm", "Eterna", "Portra", "Ektachrome",
+  "Cooke", "Leica", "Summilux", "Zeiss", "Master", "Supreme", "Ultra", "Prime",
+  "Hawk", "Lite", "Anamorphic", "Angenieux", "Optimo", "Canon", "Nikon", "Sony",
+  "Venice", "Sigma", "Hasselblad", "Mamiya", "Contax", "Pentax", "Bolex",
+  "Aaton", "Moviecam", "Beaulieu", "Technicolor", "Kinoptik", "Baltar",
+  "Reveal", "Rec", "LogC", "Cine", "Vintage", "Classic", "Standard",
+  "Steadicam", "Snorricam", "Russian", "Susan", "Dutch", "Tilt",
+]);
+
 // Spans inside double quotes are DIALOGUE — untouchable, never name-scanned.
 function quotedSpans(text) {
   const spans = [];
@@ -43,7 +59,7 @@ export function detectProperNames(text) {
     if (inSpans(quotes, m.index)) continue; // dialogue is untouchable
     const possessive = /['’]s$/.test(m[0]);
     const word = m[0].replace(/['’]s$/, "");
-    if (COMMON_CAPITALIZED.has(word) || seen.has(word)) continue;
+    if (COMMON_CAPITALIZED.has(word) || GEAR_VOCABULARY.has(word) || seen.has(word)) continue;
     // A sentence-opening capital is grammatical — unless it's possessive
     // ("Dave's gaze"), which common words almost never are.
     if (sentenceStarts.has(m.index) && !possessive) continue;

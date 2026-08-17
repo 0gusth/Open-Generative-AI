@@ -22,7 +22,7 @@ MODEL DIALECT — Seedance:
 - Homograph check: if a verb has a second physical reading (tearing, shoot, bolt, drop, strike, snap), replace it with phrasing only ONE thing can look like.
 - Measurable language: speeds in km/h, atmosphere in % or meters ("fog density 40%"), white balance in Kelvin, left/right always from the camera.
 - HARD OUTPUT REQUIREMENT — ByteDance's moderation flags proper names as copyright: the final prompt must contain ZERO character names. Rename every person to a visible-marker phrase ("the man in the driver's seat", "the woman by the window") with no exception.
-- Equipment brand names (camera/lens/film marques) must NOT appear either — translate each into the optical character it produces (framing, distortion, grain, halation, color response) and drop the brand words. The look renders; the brand only trips moderation.`.trim(),
+- Equipment names (camera bodies, lenses, film stocks) STAY — they are the shot's identity and are verified safe with this filter. Keep each one verbatim AND keep the optical character described beside it (grain, halation, contrast, flare, color response), because the description is what actually renders.`.trim(),
         i2v: `
 - The source frame carries the state; your text carries ONLY the delta. When frame and text would conflict, the frame wins — so never restate it.
 - In-flight motion and timing cannot live in a still: restate camera-movement phase and open motion vectors in words.`.trim(),
