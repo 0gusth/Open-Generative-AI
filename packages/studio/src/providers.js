@@ -412,17 +412,55 @@ function closestAllowedSize(allowed, width, height) {
     return best ? [best.w, best.h] : [width, height];
 }
 
+// Same-ratio fallback ladder for architectures that reject our dimensions
+// WITHOUT telling us their allowedValues. Ordered by tier proximity; the
+// final resort drops width/height entirely (model renders at its default).
+const DIMENSION_LADDER = {
+    "16:9": [[1920, 1080], [1920, 1088], [1280, 720], [1366, 768], [1344, 768], [864, 480], [960, 540]],
+    "9:16": [[1080, 1920], [1088, 1920], [720, 1280], [768, 1366], [768, 1344], [480, 864], [540, 960]],
+    "1:1": [[1080, 1080], [1024, 1024], [960, 960], [720, 720]],
+    "4:3": [[1440, 1080], [1024, 768], [960, 720]],
+    "3:4": [[1080, 1440], [768, 1024], [720, 960]],
+    "21:9": [[2560, 1080], [1680, 720], [1344, 576]],
+};
+
+const isDimensionError = (error) =>
+    (error.runwareErrors || []).some((e) => e.code === "unsupportedModelResolution")
+    || /width\/height|width.*height.*combination|unsupported.*resolution/i.test(error.message || "");
+
 async function submitRunwareTask(task) {
     try {
         return await runwareCall([task]);
     } catch (error) {
-        // Self-heal: the API tells us which sizes this architecture accepts.
+        // Self-heal 1: the API tells us which sizes this architecture accepts.
+        // Runware uses several codes for this ("unsupportedModelResolution",
+        // "unsupportedDimensions", …) — trust the allowedValues shape, not the
+        // code string.
         const dimError = (error.runwareErrors || []).find(
-            (e) => e.code === "unsupportedModelResolution" && Array.isArray(e.allowedValues),
+            (e) => Array.isArray(e.allowedValues) && e.allowedValues.every((v) => /^\d+x\d+$/.test(String(v))),
         );
         if (dimError && task.width && task.height) {
             const [w, h] = closestAllowedSize(dimError.allowedValues, task.width, task.height);
             return await runwareCall([{ ...task, taskUUID: makeUUID(), width: w, height: h }]);
+        }
+        // Self-heal 2: dimension rejection WITHOUT allowedValues — walk a
+        // same-ratio ladder, then try dimensionless (model default).
+        if (isDimensionError(error) && task.width && task.height) {
+            const ratio = task.width / task.height;
+            const ladder = Object.values(DIMENSION_LADDER)
+                .find((sizes) => Math.abs(sizes[0][0] / sizes[0][1] - ratio) < 0.05) || [];
+            for (const [w, h] of ladder) {
+                if (w === task.width && h === task.height) continue;
+                try {
+                    return await runwareCall([{ ...task, taskUUID: makeUUID(), width: w, height: h }]);
+                } catch (e) {
+                    if (!isDimensionError(e)) throw e; // different problem — surface it
+                }
+            }
+            const bare = { ...task, taskUUID: makeUUID() };
+            delete bare.width;
+            delete bare.height;
+            return await runwareCall([bare]);
         }
         // Unsupported optional parameter (e.g. generateAudio on a silent model):
         // drop it and retry once.
