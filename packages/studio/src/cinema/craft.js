@@ -43,6 +43,16 @@ VIDEO-SPECIFIC:
 - Atmospheric micro-motion sells life: dust floating, steam rising, fabric breathing.
 `.trim();
 
+// Video craft for the SCENE enhancer: behaviour and motion only. Camera-move
+// language is excluded on purpose — the Movement catalog owns that block.
+export const CRAFT_VIDEO_EXTRA_SCENE = `
+MOTION IN THE SCENE:
+- Unidirectional motion: chain 2-3 connected actions in the SAME direction so movement fills the whole clip. A short action that finishes early gets reversed by the model.
+- Detail scale follows shot size: close framing earns micro-detail (fingers tightening, a jaw flex); wide framing earns broad arcs.
+- Beat density: 1-2 distinct action beats per 5 seconds. More than that renders as blur and morphing.
+- Atmospheric micro-motion sells life: dust floating, steam rising, fabric breathing.
+`.trim();
+
 // Audio layers — applied when the model generates native audio.
 export const CRAFT_AUDIO = `
 AUDIO (this model generates sound):

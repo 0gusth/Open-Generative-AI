@@ -9,7 +9,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import { generateImage, generateVideo, generateI2V, uploadFile } from "../muapi.js";
-import { cinemaFusePrompt } from "../providers.js";
+import { enhanceScene } from "../providers.js";
+import { dialectFor } from "../cinema/modelDialects.js";
 import { compileCinematography } from "../cinema/compiler.js";
 import { t2iModels, t2vModels, i2vModels, getMaxImagesForI2VModel } from "../models.js";
 import { PROVIDER_LOGOS, INVERT_LOGOS } from "../providerLogos.js";
@@ -692,9 +693,24 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         .map((c) => c.refUrl)
         .filter((u) => u && u !== startFrame && !refs.includes(u));
       const effRefs = [...refs, ...castRefs].slice(0, 9);
-      const material = inlineCast(compiled.prompt);
+      // ✦ improves the SCENE only, BEFORE the treatment blocks are added —
+      // the committee-curated blocks are appended afterwards and never pass
+      // through an LLM. (The old order rewrote the finished prompt, diluting
+      // the treatment and making every run different.)
+      let scene = prompt.trim();
+      if (enhanceOn) {
+        const cont = continuationRef.current;
+        scene = await enhanceScene(scene, mode, {
+          modelId,
+          hasStartFrame: !!(startFrame || effRefs.length),
+          continuation: !!cont && (startFrame === cont.url || endFrame === cont.url),
+          dialect: dialectFor(modelId, mode, mode === "video" && !!startFrame),
+        });
+      }
+      const compiledNow = compileCinematography({ ...setup, prompt: scene });
+      const material = inlineCast(compiledNow.prompt);
       // Pre-flight: proper names on ByteDance models trip copyright moderation.
-      // The fusion strips names when enhance is on; warn when it's off.
+      // The scene enhancer strips names when on; warn when it's off.
       if (isByteDanceModel(modelId) && !enhanceOn) {
         const names = detectProperNames(prompt).filter((n) => !mentionedCast.some((c) => c.name.toLowerCase() === n.toLowerCase()));
         if (names.length) {
@@ -704,18 +720,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           );
         }
       }
-      let finalPrompt = material;
-      if (enhanceOn) {
-        const cont = continuationRef.current;
-        const isContinuation = !!cont && (startFrame === cont.url || endFrame === cont.url);
-        finalPrompt = await cinemaFusePrompt(material, mode, !!(startFrame || effRefs.length), {
-          modelId,
-          continuation: isContinuation,
-          hasCharacterRefs: castRefs.length > 0,
-          characters: mentionedCast.map((c) => ({ name: c.name, identity: c.identity })),
-          audio: mode === "video" && audioOn && caps.audio,
-        });
-      }
+      const finalPrompt = material;
       let res;
       if (mode === "image") {
         const params = {
@@ -757,7 +762,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         type: mode,
         prompt: finalPrompt,
         model: modelId,
-        resolved: compiled.resolved,
+        resolved: compiledNow.resolved,
         aspect_ratio: aspect,
         timestamp: new Date().toISOString(),
       };

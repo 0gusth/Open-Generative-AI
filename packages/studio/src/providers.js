@@ -1,5 +1,5 @@
 import { addPending, removePending } from "./ledger.js";
-import { fusionInstruction, CRAFT_CORE, looksScripted } from "./cinema/craft.js";
+import { fusionInstruction, CRAFT_CORE, CRAFT_VIDEO_EXTRA_SCENE, CRAFT_SCREENPLAY, looksScripted } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
 import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
 import MODEL_CONSTRAINTS from "./modelConstraints.json";
@@ -763,6 +763,50 @@ export async function enhancePrompt(prompt, kind = "image", modelId = "") {
 // Director's fusion: merge the user's scene with the compiled cinematography
 // treatment into ONE seamless generation prompt. Equipment names, lighting,
 // palette and movement directives must survive verbatim. Fails soft.
+// Scene enhancer — the RIGHT shape for Cinema Studio's ✦.
+//
+// It improves ONLY the user's scene description (what they imagined), and
+// runs BEFORE the compiler. The treatment blocks (gear, light, grade,
+// movement — committee-curated, every phrase mapping to a visible feature)
+// are then appended verbatim and never touched by an LLM. The old fusion did
+// the opposite: it rewrote the finished prompt, diluting the curated language
+// and adding sampling variance to every run.
+export async function enhanceScene(scene, mode = "image", opts = {}) {
+    if (!scene?.trim() || !getProviderKey("runware")) return scene;
+    const scripted = looksScripted(scene);
+    const i2v = mode === "video" && opts.hasStartFrame;
+    const instruction = [
+        `You are a film director sharpening a scene description before it goes to an AI ${mode} model.`,
+        "Rewrite ONLY the scene: subject, behaviour, action, environment, atmosphere.",
+        "NEVER add camera bodies, lenses, film stocks, colour grades, lighting schemes or camera-movement directives — a separate system appends those, and duplicating them creates conflicts.",
+        "Keep the author's intent, framing choices and any named references intact. Do not invent new story events.",
+        "Write the result in ENGLISH even when the author wrote in another language — generation models are trained on English prompts. Dialogue inside quotation marks keeps its original language.",
+        CRAFT_CORE,
+        mode === "video" ? CRAFT_VIDEO_EXTRA_SCENE : "",
+        i2v ? "A start frame is provided: describe ONLY what moves, changes or animates — never re-describe what the still already shows." : "",
+        scripted ? CRAFT_SCREENPLAY : "",
+        opts.dialect || "",
+        scripted
+            ? "Output ONLY the rewritten scene, no commentary. Keep every line of dialogue verbatim."
+            : "Output ONLY the rewritten scene, no commentary. Keep it tight — this is the scene, not the full prompt.",
+    ].filter(Boolean).join("\n\n");
+    try {
+        const results = await runwareCall([
+            {
+                taskType: "textInference",
+                taskUUID: makeUUID(),
+                model: ENHANCE_MODEL,
+                messages: [{ role: "user", content: instruction + "\n\nSCENE:\n" + scene }],
+            },
+        ]);
+        const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
+        return await scrubForByteDance(text || scene, opts.modelId);
+    } catch (error) {
+        console.warn("[providers] scene enhance failed, using original scene:", error.message);
+        return scene;
+    }
+}
+
 export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartFrame = false, opts = {}) {
     if (!compiledPrompt || !getProviderKey("runware")) return compiledPrompt;
     const instruction = fusionInstruction(mode, hasStartFrame, {
