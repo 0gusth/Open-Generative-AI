@@ -468,7 +468,7 @@ function offendingParams(e, task) {
 }
 
 // Protected fields the healer must never strip — without them there is no task.
-const CORE_TASK_FIELDS = new Set(["taskType", "taskUUID", "model", "positivePrompt", "deliveryMethod", "outputType", "numberResults"]);
+const CORE_TASK_FIELDS = new Set(["taskType", "taskUUID", "model", "positivePrompt", "deliveryMethod", "outputType", "numberResults", "frameImages", "referenceImages"]);
 
 // Healing loop: submit, read the API's complaint, adapt, resubmit — until it
 // is accepted or the complaint is one we cannot fix (then surface it whole).
@@ -592,6 +592,16 @@ async function generateVideoRunware(air, params) {
     if (frames.length) task.frameImages = frames;
     if (!params.image_url && params.images_list?.length) {
         task.referenceImages = params.images_list;
+    }
+
+    // Image-to-video takes its geometry FROM the frame: models reject
+    // width/height once frameImages is present ("Unsupported use of 'width'
+    // parameter"). Sending them anyway forced the healing loop to strip them
+    // one by one — rounds where the frame could be lost, which is why an
+    // animated still came back as a brand-new shot.
+    if (task.frameImages?.length) {
+        delete task.width;
+        delete task.height;
     }
 
     const submitted = await submitRunwareTask(task);
