@@ -669,8 +669,12 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       const opts = caps.qualityAxis.options;
       setResolution(opts.includes("720p") ? "720p" : caps.qualityAxis.preferred && opts.includes(caps.qualityAxis.preferred) ? caps.qualityAxis.preferred : opts[0]);
     }
-    if (!caps.endFrame) setEndFrame(null);
-    if (!caps.startFrame) setStartFrame(null);
+    // NEVER auto-clear the frames. Switching Image→Video re-renders once with
+    // the image model still selected, and caps.startFrame is false in that
+    // instant — clearing there silently threw away the frame the user had just
+    // attached, so Direct fell through to text-to-video and produced a brand
+    // new shot. The frames are user intent; if a model truly can't take them
+    // the API says so out loud.
   }, [caps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compiled = useMemo(
@@ -837,6 +841,17 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // the i2v craft rule (never re-describe what the frame already shows).
   const animateStill = (entry) => {
     setSetup((s) => ({ ...s, mode: "video" }));
+    // Move to a video model that actually accepts a start frame, otherwise the
+    // still would ride into a text-to-video model that ignores it.
+    const videoList = models.video;
+    const canAnimate = (m) => (isAirId(m.id) ? m.rw?.i2v : true);
+    if (!videoList.some((m) => m.id === modelId && canAnimate(m))) {
+      const favorite = CINEMA_FAVORITES.video
+        .map((id) => videoList.find((m) => m.id === id))
+        .find((m) => m && canAnimate(m));
+      const fallback = favorite || videoList.find(canAnimate);
+      if (fallback) setModelId(fallback.id);
+    }
     setStartFrame(entry.url);
     setEndFrame(null);
     setRefs([]);
