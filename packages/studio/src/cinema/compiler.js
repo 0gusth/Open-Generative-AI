@@ -150,18 +150,23 @@ export function compileCinematography(setup) {
   // Named sections, then ordered by the family's profile. Rule 5's default
   // order stands; profiles only reorder what the model demonstrably reads
   // differently (see assemblyProfile).
+  // MULTI-SHOT: the subject is a SHOT envelope carrying its own per-cut
+  // framing, camera character and rhythm. The global framing/motion/pace
+  // blocks would contradict the cuts (two masters for the same axis), so
+  // they go silent — look blocks (light, gear, grade) still wrap every shot.
+  const multiShot = mode === "video" && !!setup.multiShot;
   const section = {
     subject: subject || null,
-    framing: shotSize || angle
+    framing: multiShot ? null : shotSize || angle
       ? [shotSize?.prompt, angle?.prompt].filter(Boolean).join(", ")
       : genre
         ? `${genre.name.toLowerCase()} visual language: ${mode === "image" ? stillFraming(genre.blocks.framing) : genre.blocks.framing}`
         : null,
-    genreTag: (shotSize || angle) && genre ? `${genre.name.toLowerCase()} visual language` : null,
+    genreTag: genre && (multiShot || shotSize || angle) ? `${genre.name.toLowerCase()} visual language` : null,
     light: lighting ? lighting.prompt : genre ? genre.blocks.light : null,
-    motion: mode === "video" ? (movement ? movement.prompt : genre ? genre.blocks.motion : null) : null,
+    motion: mode === "video" && !multiShot ? (movement ? movement.prompt : genre ? genre.blocks.motion : null) : null,
     vfx: mode === "video" && effect ? `VFX event: ${effect.prompt}` : null,
-    pace: mode === "video" ? (tempo ? tempo.prompt : genre ? genre.blocks.pace : null) : null,
+    pace: mode === "video" && !multiShot ? (tempo ? tempo.prompt : genre ? genre.blocks.pace : null) : null,
     gear: [camera?.prompt, lens?.prompt, aperture?.prompt, medium?.prompt, era?.prompt].filter(Boolean).join(". ") || null,
     grade: palette ? palette.prompt : genre ? genre.blocks.palette : null,
   };

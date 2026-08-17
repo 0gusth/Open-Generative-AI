@@ -18,10 +18,13 @@ function logGeneration(result, params, type) {
             id: result.id,
             url: result.url,
             prompt: params.prompt || '',
-            model: params.model || '',
+            // A moderation reroute renders on a different model — the ledger
+            // records the one that actually produced the video.
+            model: result.reroutedTo || params.model || '',
             provider: result.provider || 'muapi',
             type,
             aspect_ratio: params.aspect_ratio || null,
+            cost: typeof result.cost === 'number' ? result.cost : null,
         });
     }
     return result;
@@ -859,6 +862,7 @@ export async function runClipping(apiKey, params) {
         aspect_ratio: params.aspect_ratio || "9:16",
         return_coordinates_only: !!params.return_coordinates_only
     };
+    if (params.prompt) payload.prompt = params.prompt;
     return submitAndPoll("ai-clipping", payload, apiKey, params.onRequestId, 900);
 }
 

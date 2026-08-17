@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, AiInfluencerStudio, LayersStudio, getUserBalance, getProviderKey, setProviderKey, getProviderBalances } from 'studio';
+import { ImageStudio, VideoStudio, ClippingStudio, VibeMotionStudio, LipSyncStudio, RecastStudio, CinemaStudio, ProductionStudio, AudioStudio, MarketingStudio, WorkflowStudio, AgentStudio, AppsStudio, AiInfluencerStudio, LayersStudio, getUserBalance, getProviderKey, setProviderKey, getProviderBalances } from 'studio';
 
 const DesignAgentStudio = dynamic(() => import('studio').then(mod => mod.DesignAgentStudio), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-black flex items-center justify-center text-white/20">Loading Design Studio...</div>
 });
-import { Image as ImageIcon, Layers as LayersIcon, Clapperboard, AudioLines, Scissors, Zap, Mic, PersonStanding, Film, Megaphone, Workflow as WorkflowIcon, Bot, PenTool, LayoutGrid, Sparkles, Settings as SettingsIcon, PanelLeft, Menu as MenuIcon } from 'lucide-react';
+import { Image as ImageIcon, Layers as LayersIcon, Clapperboard, AudioLines, Scissors, Zap, Mic, PersonStanding, Film, FolderKanban, Megaphone, Workflow as WorkflowIcon, Bot, PenTool, LayoutGrid, Sparkles, Settings as SettingsIcon, PanelLeft, Menu as MenuIcon } from 'lucide-react';
 import axios from 'axios';
 import ApiKeyModal from './ApiKeyModal';
 import { Toaster } from 'react-hot-toast';
@@ -61,6 +61,11 @@ const TABS = [
     icon: <Film size={18} strokeWidth={1.75} />
   },
   {
+    id: 'production',
+    label: 'Production',
+    icon: <FolderKanban size={18} strokeWidth={1.75} />
+  },
+  {
     id: 'marketing',
     label: 'Marketing Studio',
     icon: <Megaphone size={18} strokeWidth={1.75} />
@@ -104,6 +109,12 @@ const NAVIGATION_CATEGORIES = [
     label: 'Cinema',
     tabIds: ['cinema'],
     icon: <Film size={18} strokeWidth={1.75} />
+  },
+  {
+    id: 'production-cat',
+    label: 'Production',
+    tabIds: ['production'],
+    icon: <FolderKanban size={18} strokeWidth={1.75} />
   },
   {
     id: 'video',
@@ -500,6 +511,21 @@ export default function StandaloneShell() {
     setBalance(null);
     document.cookie = "muapi_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   }, []);
+
+  // muapi.js dispatches 'muapi:auth-required' on any 401/403 from the API:
+  // the stored key is invalid or expired, so drop it and reopen the key modal.
+  // Throttled — a burst of failing requests fires many events at once.
+  const lastAuthRequiredRef = useRef(0);
+  useEffect(() => {
+    const onAuthRequired = () => {
+      const now = Date.now();
+      if (now - lastAuthRequiredRef.current < 5000) return;
+      lastAuthRequiredRef.current = now;
+      handleKeyChange();
+    };
+    window.addEventListener('muapi:auth-required', onAuthRequired);
+    return () => window.removeEventListener('muapi:auth-required', onAuthRequired);
+  }, [handleKeyChange]);
 
   // Inject API key into all outgoing Axios requests (prop-based approach)
   // We use an interceptor to be selective and NOT send the key to external domains like S3
@@ -961,6 +987,9 @@ export default function StandaloneShell() {
         </div>
         <div className={activeTab === 'cinema' ? "h-full w-full" : "hidden"}>
           <CinemaStudio apiKey={apiKey} droppedFiles={activeTab === 'cinema' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('cinema')} onGenerationEnd={makeGenerationEndCallback('cinema')} onGenerationComplete={makeSuccessCallback('cinema')} onGenerationError={makeErrorCallback('cinema')} />
+        </div>
+        <div className={activeTab === 'production' ? "h-full w-full" : "hidden"}>
+          <ProductionStudio apiKey={apiKey} onGenerationStart={makeGenerationStartCallback('production')} onGenerationEnd={makeGenerationEndCallback('production')} onGenerationComplete={makeSuccessCallback('production')} onGenerationError={makeErrorCallback('production')} />
         </div>
         <div className={activeTab === 'audio' ? "h-full w-full" : "hidden"}>
           <AudioStudio apiKey={apiKey} droppedFiles={activeTab === 'audio' ? droppedFiles : null} onFilesHandled={handleFilesHandled} onGenerationStart={makeGenerationStartCallback('audio')} onGenerationEnd={makeGenerationEndCallback('audio')} onGenerationComplete={makeSuccessCallback('audio')} onGenerationError={makeErrorCallback('audio')} />

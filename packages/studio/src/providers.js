@@ -37,6 +37,20 @@ export const PROVIDER_ROUTES = {
         t2i: { runware: { model: "google:4@3", cost: 0.069 } },
         i2i: { runware: { model: "google:4@3", cost: 0.069 } },
     },
+    // The "Edit" wrappers are separate catalog ids in this app, but on
+    // Runware editing IS the base model with referenceImages — route them
+    // to the same AIRs. (Without this the router had no static route and
+    // the dynamic name search found nothing: Image Studio's edit mode died
+    // with "not available on Runware or fal".)
+    "nano-banana-edit": {
+        i2i: {
+            runware: { model: "google:4@1", cost: 0.039 },
+            fal: { endpoint: "fal-ai/nano-banana/edit", cost: 0.039 },
+        },
+    },
+    "nano-banana-2-edit": {
+        i2i: { runware: { model: "google:4@3", cost: 0.069 } },
+    },
     "flux-schnell": {
         t2i: {
             runware: { model: "runware:100@1", cost: 0.0013 },
@@ -51,10 +65,10 @@ export const PROVIDER_ROUTES = {
     },
 };
 
-export const PROVIDER_KEY_STORAGE = {
-    runware: "provider_key_runware",
-    fal: "provider_key_fal",
-};
+// Table lives in providerKeys.js so ledger.js can share it without a cycle;
+// re-exported here to keep the public surface unchanged.
+import { PROVIDER_KEY_STORAGE } from "./providerKeys.js";
+export { PROVIDER_KEY_STORAGE };
 
 export function getProviderKey(provider) {
     if (typeof window === "undefined") return null;
@@ -238,6 +252,7 @@ async function generateImageRunware(air, params) {
         taskType: "imageInference",
         taskUUID: makeUUID(),
         model: air,
+        includeCost: true, // real billed cost comes back per task
         positivePrompt: params.prompt || "",
         width,
         height,
@@ -260,14 +275,14 @@ async function generateImageRunware(air, params) {
     // numberResults > 1 every variation comes back — surface them all.
     if (accepted?.imageURL) {
         const urls = submitted.filter((t) => t.imageURL).map((t) => t.imageURL);
-        return { url: accepted.imageURL, urls, id: accepted.taskUUID, provider: "runware" };
+        return { url: accepted.imageURL, urls, id: accepted.taskUUID, provider: "runware", cost: accepted.cost };
     }
     const pendingId = accepted?.taskUUID || task.taskUUID;
     addPending({ id: pendingId, provider: "runware", type: "image", model: params.__modelId || "", prompt: params.prompt || "" });
     try {
         const result = await pollRunwareTask(pendingId, "image");
         removePending(pendingId);
-        return { url: result.imageURL, id: result.taskUUID, provider: "runware" };
+        return { url: result.imageURL, id: result.taskUUID, provider: "runware", cost: result.cost };
     } catch (error) {
         // Task was accepted — regenerating elsewhere would double-charge.
         // It stays in the pending queue; the reconciler will deliver it.
@@ -382,6 +397,8 @@ async function pollRunwareTask(taskUUID, kind) {
                 err.definitive = true;
                 err.noFallback = true; // task was accepted — never re-generate elsewhere
                 err.runwareErrors = [fatal];
+                err.moderated = fatal.code === "invalidProviderContent";
+                err.moderationDetail = fatal.responseContent || fatal.message || "";
                 throw err;
             }
             continue; // transient poll failure — keep waiting
@@ -508,6 +525,31 @@ async function submitRunwareTask(task, restoreDims = null) {
                 }
             }
 
+            // 2b. Invalid VALUE with an enum offered (e.g. resolution must be
+            //     "1080p") → snap to the closest allowed value instead of
+            //     stripping the user's choice. Only for invalid-value codes:
+            //     unsupportedParameter ships allowedValues too, but that list
+            //     is parameter NAMES, never values to assign.
+            if (!healed) {
+                for (const e of errs) {
+                    if (!/invalid/i.test(String(e.code || "")) && !/invalid value/i.test(e.message || "")) continue;
+                    const [param] = offendingParams(e, current);
+                    const allowed = Array.isArray(e.allowedValues)
+                        ? e.allowedValues.filter((v) => typeof v === "string" || typeof v === "number")
+                        : [];
+                    if (!param || !allowed.length || CORE_TASK_FIELDS.has(param)) continue;
+                    if (allowed.some((v) => /^\d+\s*[x*:]\s*\d+/.test(String(v)))) continue; // WxH — step 1's job
+                    if (allowed.includes(current[param])) continue; // complaint is not about this value
+                    const curNum = parseFloat(current[param]);
+                    const snapped = Number.isFinite(curNum)
+                        ? allowed.reduce((a, b) => (Math.abs(parseFloat(b) - curNum) < Math.abs(parseFloat(a) - curNum) ? b : a))
+                        : allowed[0];
+                    current = { ...current, taskUUID: makeUUID(), [param]: snapped };
+                    healed = true;
+                    break;
+                }
+            }
+
             // 3a. A required parameter is missing → put it back. Video
             //     dimensions are the case that matters: some architectures
             //     demand width/height even with a start frame.
@@ -580,6 +622,7 @@ async function generateVideoRunware(air, params) {
         taskType: "videoInference",
         taskUUID: makeUUID(),
         model: air,
+        includeCost: true, // real billed cost comes back per task
         positivePrompt: params.prompt || "",
         width,
         height,
@@ -597,9 +640,9 @@ async function generateVideoRunware(air, params) {
         applyAudioSetting(task, air, params.__audio, known?.audioParam === true);
     }
     if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;
-    // ByteDance video never accepts 'seed' (both probes' allowed lists omit
-    // it) — drop it up front instead of paying an error roundtrip.
-    if (/^bytedance:/i.test(air)) delete task.seed;
+    // ByteDance and Kling video never accept 'seed' (probes and the failure
+    // ledger agree) — drop it up front instead of paying an error roundtrip.
+    if (/^(bytedance|klingai):/i.test(air)) delete task.seed;
 
     // Image-to-video: first (and optionally last) frame.
     //
@@ -618,8 +661,10 @@ async function generateVideoRunware(air, params) {
         delete task.width;
         delete task.height;
         delete task.seed; // frame runs: seed is refused across families
+        // Honor the user's tier. Models that only take one value (Kling 3 Pro
+        // is 1080p-only) get snapped by the healing loop's enum step.
         const tier = String(params.resolution || "").toLowerCase();
-        task.resolution = /1080|4k|2160/.test(tier) ? "720p" : (/480/.test(tier) ? "480p" : "720p");
+        task.resolution = /4k|2160|1080/.test(tier) ? "1080p" : /480/.test(tier) ? "480p" : "720p";
     }
     if (!params.image_url && params.images_list?.length) {
         task.referenceImages = params.images_list;
@@ -644,13 +689,25 @@ async function generateVideoRunware(air, params) {
         try {
             const result = await pollRunwareTask(taskUUID, "video");
             removePending(taskUUID);
-            return { url: result.videoURL, id: taskUUID, provider: "runware" };
+            return { url: result.videoURL, id: taskUUID, provider: "runware", cost: result.cost };
         } catch (error) {
-            const moderated = (error.runwareErrors || []).some((e) => e.code === "invalidProviderContent");
-            if (moderated && take === 0) {
+            const modErr = (error.runwareErrors || []).find((e) => e.code === "invalidProviderContent");
+            const detail = modErr ? (modErr.responseContent || modErr.message || "") : "";
+            // INPUT verdicts ("input image may contain real person") are
+            // deterministic: the same frame fails every take. Re-rolling only
+            // burns minutes — skip straight to the router, which can move the
+            // job to a family that accepts the frame. OUTPUT verdicts stay
+            // probabilistic and keep the one re-roll.
+            const inputFlagged = /input (image|video)|contain(s)? (a )?real person/i.test(detail);
+            if (modErr && !inputFlagged && take === 0) {
                 removePending(taskUUID);
                 announceRoute("runware", air); // card keeps breathing during the re-roll
                 continue;
+            }
+            if (modErr) {
+                removePending(taskUUID); // rejected by moderation — nothing will ever deliver
+                error.moderated = true;
+                error.moderationDetail = detail;
             }
             error.timedOutAfterAccept = true;
             throw error;
@@ -670,6 +727,25 @@ export async function tryProviderVideo(modelId, params, displayName) {
     try {
         return await generateVideoRunware(air, params);
     } catch (error) {
+        // ByteDance's moderation consistently blocks i2v frames with
+        // photorealistic faces ("input image may contain real person") —
+        // platform policy, deterministic per frame. Kling accepts the same
+        // frames, so move the job there instead of failing the user.
+        // Moderation-rejected submits are never charged, so this reroute
+        // cannot double-bill — it is a different provider's honest attempt.
+        if (error.moderated && /^bytedance:/i.test(air) && params.image_url) {
+            const fallbackAir = /1080|4k|2160/i.test(String(params.resolution || ""))
+                ? "klingai:kling-video@3-pro"       // 1080p-class Kling
+                : "klingai:kling-video@3-standard"; // 720p-class Kling
+            announceRoute("runware", fallbackAir);
+            try {
+                const res = await generateVideoRunware(fallbackAir, params);
+                return { ...res, reroutedFrom: air, reroutedTo: fallbackAir, moderationDetail: error.moderationDetail };
+            } catch (fallbackError) {
+                console.warn(`[providers] moderation reroute to ${fallbackAir} failed:`, fallbackError.message);
+                throw error; // surface the ORIGINAL verdict, not the fallback's
+            }
+        }
         if (error.timedOutAfterAccept && !error.definitive) {
             throw new Error(
                 "The provider accepted this video but it is still rendering. " +
@@ -701,17 +777,32 @@ async function getRunwareBalance() {
 }
 
 let falBalanceCache = { at: 0, value: null };
+let falBalanceInflight = null;
 
 async function getFalBalance() {
     const key = getProviderKey("fal");
     if (!key) return null;
     // fal rate-limits the billing endpoint — cache for 60s
     if (Date.now() - falBalanceCache.at < 60000) return falBalanceCache.value;
+    // Single-flight: every studio asks for the balance on mount, and all of
+    // those calls land BEFORE the first response can fill the cache. Share
+    // one request instead of letting the burst trip fal's rate limit.
+    if (falBalanceInflight) return falBalanceInflight;
+    falBalanceInflight = fetchFalBalance(key).finally(() => { falBalanceInflight = null; });
+    return falBalanceInflight;
+}
+
+async function fetchFalBalance(key) {
     try {
         const response = await fetch("/api/providers/fal-billing", {
             headers: { "x-provider-key": key },
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+            // Cache the failure too — fal answers 429 exactly when we retry
+            // eagerly, so an uncached miss turns into a request storm.
+            falBalanceCache = { at: Date.now(), value: falBalanceCache.value };
+            return falBalanceCache.value;
+        }
         const data = await response.json();
         const balance = data?.credits?.current_balance;
         const value = typeof balance === "number" ? balance : parseFloat(balance) || null;
@@ -788,6 +879,66 @@ export async function scrubForByteDance(prompt, modelId, mode = "video") {
         }).join("");
     }
     return prompt;
+}
+
+// Auto-découpage: turn a prose scene into timed cuts for multi-shot mode.
+// Returns [{action, size, move, secs}] with catalog ids, durations summing
+// EXACTLY to targetSecs (last cut absorbs drift). Null on any failure —
+// the caller keeps the cards untouched.
+export async function decoupageScene(scene, { duration = 15, catalogs } = {}) {
+    if (!scene?.trim() || !getProviderKey("runware")) return null;
+    const instruction = [
+        `You are a film editor doing découpage: split the scene below into timed cuts for ONE ${duration}-second clip.`,
+        "THIS IS SEGMENTATION, NOT REWRITING. The author's scene is the film:",
+        "- Use ONLY events, actions, characters and places that exist in the scene, in the scene's own order. NEVER invent new story events, locations, props or business.",
+        "- Every line of dialogue is sacred: carry it VERBATIM (in quotes) inside the action of the cut where it is spoken. Never drop, merge or paraphrase dialogue.",
+        `- If the scene holds more material than ${duration}s can breathe, keep the strongest CONSECUTIVE stretch from the start and stop — do not compress the whole scene into invented summary action.`,
+        "Cutting doctrine on top of that:",
+        "- 1-2 story beats per 5 seconds; a typical cut runs 3-6s. Never more cuts than the clip can breathe.",
+        "- The money moment gets the LONGEST hold of the list (the hero hold).",
+        "- Double contrast between adjacent cuts: change frame size AND camera character together.",
+        "- Each cut's action is ONE line of observable behavior from the scene, present tense, no camera words inside the action (frame size and movement are separate fields).",
+        `- Durations are integers in seconds and MUST sum to exactly ${duration}.`,
+        `Frame size ids: ${catalogs?.sizes || ""}`,
+        `Movement ids: ${catalogs?.moves || ""}`,
+        'Output ONLY a JSON array, no commentary: [{"action": "...", "size": "<size id>", "move": "<movement id>", "secs": <int>}, ...]',
+        "\nSCENE:\n" + scene,
+    ].join("\n");
+    try {
+        const results = await runwareCall([
+            {
+                taskType: "textInference",
+                taskUUID: makeUUID(),
+                model: ENHANCE_MODEL,
+                messages: [{ role: "user", content: instruction }],
+            },
+        ]);
+        const text = results.find((t) => t.taskType === "textInference")?.text || "";
+        const match = text.match(/\[[\s\S]*\]/);
+        if (!match) return null;
+        const raw = JSON.parse(match[0]);
+        if (!Array.isArray(raw) || !raw.length) return null;
+        const cuts = raw
+            .filter((c) => c && typeof c.action === "string" && c.action.trim())
+            .map((c) => ({
+                action: c.action.trim(),
+                size: typeof c.size === "string" ? c.size : "auto",
+                move: typeof c.move === "string" ? c.move : "auto",
+                secs: Math.max(1, Math.round(Number(c.secs) || 3)),
+            }));
+        if (!cuts.length) return null;
+        // Arithmetic law: the sum must close exactly — drift lands on the
+        // longest cut (the hero hold can flex, a 1s insert cannot).
+        const total = cuts.reduce((s, c) => s + c.secs, 0);
+        if (total !== duration) {
+            const longest = cuts.reduce((a, b) => (b.secs > a.secs ? b : a));
+            longest.secs = Math.max(1, longest.secs + (duration - total));
+        }
+        return cuts;
+    } catch (error) {
+        console.warn("[providers] découpage failed:", error.message);
+        return null;
+    }
 }
 
 export async function enhancePrompt(prompt, kind = "image", modelId = "") {

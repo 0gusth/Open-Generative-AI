@@ -53,6 +53,7 @@ import { fetchRunwareVideoCatalog, mergeVideoCatalogs, i2vVideoCatalog, isAirId 
 import { truthFor } from "../modelTruth.js";
 import MODEL_CONSTRAINTS from "../modelConstraints.json";
 import { hasAudioControl } from "../providerSettings.js";
+import { seekPosterFrame } from "../utils/videoPoster.js";
 
 // ── Runware-native capability readers ─────────────────────────────────────────
 // Priority: probed constraints (free validation-error harvest) → truth layer
@@ -677,7 +678,12 @@ export default function VideoStudio({
         merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         return merged.slice(0, 100);
       });
-      setPendingRenders(pending.filter((p) => p.type === "video"));
+      setPendingRenders((prev) => {
+        const next = pending.filter((p) => p.type === "video");
+        // Identity-stable when unchanged: a fresh array every 15s re-rendered
+        // this whole studio (grid, videos and all) even with nothing new.
+        return JSON.stringify(next) === JSON.stringify(prev) ? prev : next;
+      });
     };
     sync();
     const interval = setInterval(async () => {
@@ -1449,6 +1455,13 @@ export default function VideoStudio({
       }
     }
 
+    // Money guard: an app error message pasted into the prompt box once
+    // became a paid render of the words "Generation failed".
+    if (/generation failed|unsupported use of '|invalid value for '/i.test(trimmedPrompt)) {
+      toast.error("This looks like an app error message, not a prompt. Clear it and describe the video.");
+      return;
+    }
+
     // Pre-flight: proper names on ByteDance models get flagged as copyright by
     // their moderation — warn before burning the render (Enhance rewrites them).
     if (isByteDanceModel(currentModel?.id) && !enhanceOn && trimmedPrompt) {
@@ -1554,6 +1567,12 @@ export default function VideoStudio({
 
         res = await generateI2V(apiKey, i2vParams);
         if (!res?.url) throw new Error("No video URL returned by API");
+        if (res.reroutedTo) {
+          toast(
+            `A moderação da ByteDance vetou o frame (rosto realista). Gerado automaticamente no ${res.reroutedTo.includes("3-pro") ? "Kling 3 Pro" : "Kling 3 Standard"} — sem cobrança dupla.`,
+            { duration: 9000, icon: "🔀" },
+          );
+        }
 
         const genId = res.id || Date.now().toString();
         if (selectedModel === "seedance-v2.0-i2v") {
@@ -1567,7 +1586,8 @@ export default function VideoStudio({
           id: genId,
           url: res.url,
           prompt: trimmedPrompt,
-          model: selectedModel,
+          model: res.reroutedTo || selectedModel,
+          cost: typeof res.cost === "number" ? res.cost : null,
           aspect_ratio: selectedAr,
           duration: selectedDuration,
           timestamp: new Date().toISOString(),
@@ -1627,6 +1647,7 @@ export default function VideoStudio({
           url: res.url,
           prompt: trimmedPrompt,
           model: selectedModel,
+          cost: typeof res.cost === "number" ? res.cost : null,
           aspect_ratio: selectedAr,
           duration: selectedDuration,
           timestamp: new Date().toISOString(),
@@ -1798,6 +1819,7 @@ export default function VideoStudio({
                 >
                   <video
                     src={entry.url}
+                    onLoadedMetadata={seekPosterFrame}
                     className="w-full aspect-video object-cover bg-black/40 hover:opacity-80 transition-opacity"
                     controls={false}
                     loop

@@ -9,9 +9,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import { generateImage, generateI2I, generateVideo, generateI2V, uploadFile } from "../muapi.js";
-import { enhanceScene, scrubForByteDance } from "../providers.js";
+import { enhanceScene, scrubForByteDance, decoupageScene } from "../providers.js";
 import { dialectFor } from "../cinema/modelDialects.js";
 import { compileCinematography } from "../cinema/compiler.js";
+import { makeCut, cutsTotal, buildShotEnvelope, monotonyAudit, contrastAudit, decoupageCatalogs } from "../cinema/multiShot.js";
 import { t2iModels, t2vModels, i2vModels, getMaxImagesForI2VModel } from "../models.js";
 import { PROVIDER_LOGOS, INVERT_LOGOS } from "../providerLogos.js";
 import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, APERTURES, mediaForCamera } from "../cinema/gear.js";
@@ -56,6 +57,7 @@ import {
 } from "./prompt/PromptComposer.jsx";
 import Lightbox, { downloadMedia } from "./Lightbox.jsx";
 import { formatErrorMessage } from "../utils/formatError.js";
+import { seekPosterFrame } from "../utils/videoPoster.js";
 import { detectProperNames, needsNameScrub } from "../utils/preflight.js";
 
 const SETUP_KEY = "cinema_setup_v2";
@@ -420,6 +422,42 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     return next;
   });
   const [highBitrate, setHighBitrate] = useState(true); // cinema default: high
+  // Multi-shot: découpage inside one clip. Cuts are the video-mode script;
+  // "single" keeps the classic one-prompt flow untouched.
+  const [shotMode, setShotMode] = useState("single"); // "single" | "multi"
+  const [cuts, setCuts] = useState([]);
+  const [decoupaging, setDecoupaging] = useState(false);
+  const updateCut = (id, patch) => setCuts((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  const removeCut = (id) => setCuts((prev) => prev.filter((c) => c.id !== id));
+  // Hand the assembled look to the Production tab: treatment blocks only
+  // (no subject), compiled deterministically from the current setup.
+  const saveStylePrefix = () => {
+    const prefix = compileCinematography({ ...setup, prompt: "", seedText: prompt.trim(), modelId }).prompt;
+    if (!prefix) { toast.error("Monte um look primeiro (Film / Camera / Look / Movement)."); return; }
+    try {
+      localStorage.setItem("cinema_style_prefix_pending", JSON.stringify({
+        text: prefix,
+        resolved: compiled.resolved,
+        at: new Date().toISOString(),
+      }));
+      toast.success("Look salvo — aplique na aba Production como prefixo de estilo.");
+    } catch { toast.error("Não consegui salvar o prefixo."); }
+  };
+  const autoDecoupage = async () => {
+    if (!prompt.trim()) { toast.error("Escreva a cena em prosa primeiro — o ✦ propõe os cortes."); return; }
+    setDecoupaging(true);
+    try {
+      const proposed = await decoupageScene(prompt.trim(), { duration, catalogs: decoupageCatalogs() });
+      if (proposed?.length) {
+        setCuts(proposed.map((c) => makeCut(c)));
+        toast.success(`${proposed.length} cortes propostos — tudo editável.`);
+      } else {
+        toast.error("A decupagem não voltou cortes utilizáveis — tenta detalhar a cena.");
+      }
+    } finally {
+      setDecoupaging(false);
+    }
+  };
   // Image mode controls — quality tier and how many variations per Direct.
   // Image-first workflow lives on cheap iteration: 4 takes, pick one, animate.
   const [imageTier, setImageTier] = useState("2k"); // 1K makes flagship models look dated
@@ -690,8 +728,27 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     // hold the studio hostage. Each Direct opens its own job with its own
     // placeholder card; results land as they finish.
     const jobId = makeJobId();
-    const jobLabel = prompt.trim().slice(0, 60);
-    if (!prompt.trim()) { toast.error("Describe your scene first."); return; }
+    const multiShot = mode === "video" && shotMode === "multi";
+    const filledCuts = multiShot ? cuts : [];
+    const jobLabel = (multiShot ? filledCuts[0]?.action || "multi-shot" : prompt.trim()).slice(0, 60);
+    if (!multiShot && !prompt.trim()) { toast.error("Describe your scene first."); return; }
+    if (multiShot) {
+      if (filledCuts.length < 2) { toast.error("Multi-shot pede pelo menos 2 cortes."); return; }
+      const emptyIdx = filledCuts.findIndex((c) => !c.action.trim());
+      if (emptyIdx !== -1) { toast.error(`CUT ${emptyIdx + 1} está sem ação — descreva o que acontece ou remova o corte.`); return; }
+      const total = cutsTotal(filledCuts);
+      if (total !== duration) {
+        // The arithmetic law: a wrong sum is dead air or an impossible cut.
+        toast.error(`Os cortes somam ${total}s mas o clipe tem ${duration}s — feche a aritmética antes do Direct.`);
+        return;
+      }
+    }
+    // Money guard: an app error message pasted (or carried) into the prompt
+    // box once became a paid render of the words "Generation failed".
+    if (/generation failed|unsupported use of '|invalid value for '/i.test(prompt)) {
+      toast.error("This looks like an app error message, not a scene. Clear the prompt and describe the shot.");
+      return;
+    }
     onGenerationStart?.();
     setJobs((prev) => [...prev, { id: jobId, label: jobLabel, mode, aspect, startedAt: Date.now() }]);
     try {
@@ -710,7 +767,12 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       // through an LLM. (The old order rewrote the finished prompt, diluting
       // the treatment and making every run different.)
       let scene = prompt.trim();
-      if (enhanceOn) {
+      if (multiShot) {
+        // The envelope IS the script — timed shots with their own framing and
+        // camera character. No LLM pass here: paraphrase would break the
+        // timings and the double-contrast the cards encode.
+        scene = buildShotEnvelope(filledCuts);
+      } else if (enhanceOn) {
         const cont = continuationRef.current;
         scene = await enhanceScene(scene, mode, {
           modelId,
@@ -721,7 +783,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       }
       // seedText = the author's own words: keeps Auto gear identical whether
       // ✦ is on or off, and across re-runs of the same scene.
-      const compiledNow = compileCinematography({ ...setup, prompt: scene, seedText: prompt.trim(), modelId, hasStartFrame: !!startFrame });
+      const compiledNow = compileCinematography({ ...setup, prompt: scene, seedText: multiShot ? (filledCuts[0]?.action || scene) : prompt.trim(), modelId, hasStartFrame: !!startFrame, multiShot });
       let material = inlineCast(compiledNow.prompt);
       // ByteDance video moderation flags person names as copyright. Warning
       // the user was not a fix — the render still died. Scrub automatically:
@@ -766,12 +828,19 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         res = await generateVideo(apiKey, params);
       }
       if (!res?.url) throw new Error("No result returned");
+      if (res.reroutedTo) {
+        toast(
+          `A moderação da ByteDance vetou o frame (rosto realista). Gerado automaticamente no ${res.reroutedTo.includes("3-pro") ? "Kling 3 Pro" : "Kling 3 Standard"} — sem cobrança dupla.`,
+          { duration: 9000, icon: "🔀" },
+        );
+      }
       const entry = {
         id: res.id || Math.random().toString(36).slice(2),
         url: res.url,
         type: mode,
         prompt: finalPrompt,
-        model: modelId,
+        model: res.reroutedTo || modelId,
+        cost: typeof res.cost === "number" ? res.cost : null,
         resolved: compiledNow.resolved,
         seed: usedSeed,
         aspect_ratio: aspect,
@@ -959,6 +1028,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 {entry.type === "video" ? (
                   <div className="relative">
                     <video src={entry.url} muted loop playsInline
+                      onLoadedMetadata={seekPosterFrame}
                       onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
                       onMouseLeave={(e) => e.currentTarget.pause()}
                       className="w-full aspect-video object-cover bg-black/40" />
@@ -995,6 +1065,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 <div className="p-3.5">
                   <p className="text-white/65 text-[12px] line-clamp-2 leading-relaxed" title={entry.prompt}>{entry.prompt}</p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {typeof entry.cost === "number" && (
+                      <span className="text-[10px] font-semibold text-white/40" title="Custo real cobrado pelo provedor">${entry.cost.toFixed(3)}</span>
+                    )}
                     {[...new Set([entry.resolved?.camera, entry.resolved?.lens, entry.resolved?.palette].filter(Boolean))].slice(0, 3).map((chip, ci) => (
                       <span key={`${ci}-${chip}`} className="text-[9px] font-medium text-white/50 px-1.5 py-0.5 bg-white/[0.06] rounded-full border border-white/[0.07] truncate max-w-[140px]">
                         {chip}
@@ -1186,13 +1259,109 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
             >✦</button>
           </div>
 
+          {/* Single | Multi-shot — video-mode découpage selector */}
+          {mode === "video" && (
+            <div className="flex items-center gap-1.5 -mb-1">
+              {["single", "multi"].map((m) => (
+                <button key={m} type="button"
+                  onClick={() => {
+                    setShotMode(m);
+                    if (m === "multi" && cuts.length === 0) {
+                      setCuts([
+                        makeCut({ secs: Math.max(1, Math.floor(duration / 2)) }),
+                        makeCut({ secs: Math.max(1, Math.ceil(duration / 2)) }),
+                      ]);
+                    }
+                  }}
+                  className={`pressable h-7 px-2.5 rounded-full border text-[11px] font-semibold transition-colors duration-150 ${
+                    shotMode === m
+                      ? "text-white bg-[#EF0328] border-[#EF0328]"
+                      : "text-white/45 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
+                  }`}>
+                  {m === "single" ? "Single shot" : "Multi-shot"}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Prompt — @Name mentions resolve to saved cast, @imgN to refs */}
           <PromptMentionTextarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             mentions={promptMentions}
-            placeholder="Describe your scene — the system directs the rest…"
+            placeholder={mode === "video" && shotMode === "multi"
+              ? "Escreva a cena em prosa — ✦ Decupar propõe os cortes (ou monte os cards à mão)…"
+              : "Describe your scene — the system directs the rest…"}
           />
+
+          {/* Multi-shot: cut cards + live arithmetic + audits */}
+          {mode === "video" && shotMode === "multi" && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={autoDecoupage} disabled={decoupaging}
+                  className="pressable h-7 px-2.5 rounded-full border text-[11px] font-semibold text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30 disabled:opacity-50">
+                  {decoupaging ? "Decupando…" : "✦ Decupar"}
+                </button>
+                <span className="text-[10px] text-white/35">1-2 beats por 5s · hold mais longo no money moment · duplo contraste entre cortes</span>
+              </div>
+              {/* Capped stack: many cuts scroll INSIDE the composer instead of
+                  growing it over the gallery. */}
+              <div className="flex flex-col gap-1.5 max-h-[30vh] overflow-y-auto overscroll-contain pr-0.5">
+              {cuts.map((cut, i) => (
+                <div key={cut.id} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold tracking-wide text-white/50 w-12 shrink-0">CUT {i + 1}</span>
+                    <select value={cut.size} onChange={(e) => updateCut(cut.id, { size: e.target.value })}
+                      className="h-6 rounded-md bg-[#212123] border border-white/[0.08] text-[10px] text-white/70 px-1 max-w-[130px]">
+                      <option value="auto">Tamanho: auto</option>
+                      {SHOT_SIZES.map((sz) => <option key={sz.id} value={sz.id}>{sz.name}</option>)}
+                    </select>
+                    <select value={cut.move} onChange={(e) => updateCut(cut.id, { move: e.target.value })}
+                      className="h-6 rounded-md bg-[#212123] border border-white/[0.08] text-[10px] text-white/70 px-1 max-w-[150px]">
+                      <option value="auto">Movimento: auto</option>
+                      {MOVEMENTS.map((mv) => <option key={mv.id} value={mv.id}>{mv.name}</option>)}
+                    </select>
+                    <div className="flex items-center gap-0.5 ml-auto">
+                      <input type="number" min={1} max={duration} value={cut.secs}
+                        onChange={(e) => updateCut(cut.id, { secs: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                        className="w-11 h-6 rounded-md bg-[#212123] border border-white/[0.08] text-[11px] text-white/80 text-center" />
+                      <span className="text-[10px] text-white/40">s</span>
+                      <button type="button" onClick={() => removeCut(cut.id)} title="Remover corte"
+                        className="pressable w-6 h-6 ml-1 rounded-md text-white/35 hover:text-white/80 hover:bg-white/[0.06] text-[12px]">×</button>
+                    </div>
+                  </div>
+                  <input value={cut.action} onChange={(e) => updateCut(cut.id, { action: e.target.value })}
+                    placeholder="ação em uma linha — o que acontece neste corte"
+                    className="w-full bg-transparent text-[13px] text-white/85 placeholder-white/25 outline-none" />
+                </div>
+              ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button type="button" onClick={() => setCuts((prev) => [...prev, makeCut({ secs: Math.max(1, duration - cutsTotal(prev)) || 3 })])}
+                  className="pressable h-7 px-2.5 rounded-full border border-white/[0.08] bg-white/[0.04] text-[11px] font-semibold text-white/60 hover:text-white/85">
+                  + Cut
+                </button>
+                {(() => {
+                  const total = cutsTotal(cuts);
+                  const ok = total === duration;
+                  return (
+                    <span className={`text-[11px] font-semibold ${ok ? "text-white/55" : "text-amber-400"}`}>
+                      {total}s / {duration}s {ok ? "✓" : "— a soma precisa fechar com o clipe"}
+                    </span>
+                  );
+                })()}
+              </div>
+              {(() => {
+                const filled = cuts.filter((c) => c.action.trim());
+                const warns = [monotonyAudit(filled), contrastAudit(filled)].filter(Boolean);
+                return warns.length ? (
+                  <div className="flex flex-col gap-0.5">
+                    {warns.map((w, i) => <span key={i} className="text-[10px] text-amber-400/90">{w}</span>)}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          )}
 
           {/* Resolved preview */}
           {resolvedChips.length > 0 && prompt.trim() && (
@@ -1203,6 +1372,11 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   {chip}
                 </span>
               ))}
+              <button type="button" onClick={saveStylePrefix}
+                title="Usar este look como prefixo de estilo de uma produção"
+                className="pressable text-[10px] text-white/50 hover:text-white/85 px-1.5 py-0.5 bg-white/[0.04] rounded-full border border-white/[0.06]">
+                → prefixo da produção
+              </button>
             </div>
           )}
 
