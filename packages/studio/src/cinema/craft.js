@@ -86,6 +86,29 @@ CHARACTER REFERENCES ATTACHED:
 - If the scene must change something the reference shows (a different outfit, an injury), state the change explicitly as a delta; otherwise stay silent about appearance.
 `.trim();
 
+// Production regime — scripted multi-beat scenes (dialogue, several
+// characters) are NEVER compressed into the short-form single-moment shape.
+// Corpus law: production dialogue prompts run 150-400+ words and no reaction
+// arc is ever truncated to be neat.
+export const CRAFT_SCREENPLAY = `
+SCRIPTED SCENE (the material contains dialogue lines / multiple characters):
+- PRESERVE EVERY LINE OF DIALOGUE VERBATIM, in double quotes, each with its speaker as a visible-marker phrase and delivery tone: The woman at the wheel sighs, voice flat: "Three and a half minutes."
+- Text inside quotation marks is UNTOUCHABLE — never reword, never substitute, never drop a line.
+- Keep every character DISTINCT with a short visible marker and a stable position in the car/room (who sits where, who faces whom). Never collapse people into "the group" or "the team" doing things vaguely.
+- Keep every beat of the scene in order — the pause, the interruption, the reveal. Structure longer scenes as CUT 1 / CUT 2 blocks when beats change framing.
+- Reactions are staggered, never synchronized; the reveal beat gets its own camera attention.
+- Length follows the scene: a scripted scene runs 150-350 words. Never compress it to fit a word target.
+`.trim();
+
+// Cheap structural check: screenplay-style material (NAME: dialogue cues or
+// multiple quoted lines) needs the production regime.
+export function looksScripted(text) {
+  if (!text) return false;
+  const cueLines = (text.match(/^\s*[A-ZÀ-Ü][A-ZÀ-Ü .]{1,24}(\s*\([^)]*\))?\s*:/gm) || []).length;
+  const quotedLines = (text.match(/["“][^"“”]{2,}["”]/g) || []).length;
+  return cueLines >= 2 || quotedLines >= 3;
+}
+
 // Continuation discipline (sequel/prequel from an extracted frame). Distilled
 // from the five-rule continuation formula: extend, never loop.
 export const CRAFT_CONTINUATION = `
@@ -110,6 +133,7 @@ export const LENGTH_TARGETS = {
 //         characters — resolved saved characters [{name, identity}] in scene }
 export function fusionInstruction(mode /* "image" | "video" */, hasStartFrame, opts = {}) {
   const i2v = mode === "video" && hasStartFrame;
+  const scripted = !!opts.scripted;
   const characterLines = (opts.characters || [])
     .map((c) => `Character @${c.name}: ${c.identity}`)
     .join("\n");
@@ -129,9 +153,12 @@ export function fusionInstruction(mode /* "image" | "video" */, hasStartFrame, o
     characterLines
       ? "SAVED CHARACTERS IN THIS SCENE (their reference images are attached — keep their @tags OUT of the final prompt, refer to each by their visible markers below, and never re-describe beyond these markers):\n" + characterLines
       : "",
+    scripted ? CRAFT_SCREENPLAY : "",
     opts.continuation ? CRAFT_CONTINUATION : "",
     opts.dialect || "",
-    `Output ONLY the final prompt, no commentary. Target ${LENGTH_TARGETS[i2v ? "i2v" : mode]}.`,
+    scripted
+      ? "Output ONLY the final prompt, no commentary. This is a scripted scene: keep every beat and every line of dialogue — 150-350 words."
+      : `Output ONLY the final prompt, no commentary. Target ${LENGTH_TARGETS[i2v ? "i2v" : mode]}.`,
   ];
   return parts.filter(Boolean).join("\n\n");
 }

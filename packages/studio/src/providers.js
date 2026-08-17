@@ -1,5 +1,5 @@
 import { addPending, removePending } from "./ledger.js";
-import { fusionInstruction, CRAFT_CORE } from "./cinema/craft.js";
+import { fusionInstruction, CRAFT_CORE, looksScripted } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
 import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
 import MODEL_CONSTRAINTS from "./modelConstraints.json";
@@ -678,19 +678,28 @@ export async function scrubForByteDance(prompt, modelId) {
                 messages: [{
                     role: "user",
                     content:
-                        `Rewrite the prompt below changing ONE thing only: remove every proper name (people, brands, trademarks). A person's name becomes a short visible description of that person ("the man at the wheel"). A camera/lens/film brand becomes the IMAGE character that equipment produces — grain, halation, contrast, flare, color response ("anamorphic glass with gentle horizontal flares", "tungsten-balanced stock with soft halation in the highlights") — never a description of the physical object. Keep every other word, rhythm and detail identical. Output ONLY the rewritten prompt.\n\nNames found: ${names.join(", ")}\n\nPROMPT:\n${prompt}`,
+                        `Rewrite the prompt below changing ONE thing only: remove every proper name (people, brands, trademarks) OUTSIDE quotation marks. A person's name becomes a short visible description of that person ("the man at the wheel"). A camera/lens/film brand becomes the IMAGE character that equipment produces — grain, halation, contrast, flare, color response ("anamorphic glass with gentle horizontal flares", "tungsten-balanced stock with soft halation in the highlights") — never a description of the physical object. TEXT INSIDE QUOTATION MARKS IS DIALOGUE — copy it through verbatim, never reword it. Keep every other word, rhythm and detail identical. Output ONLY the rewritten prompt.\n\nNames found: ${names.join(", ")}\n\nPROMPT:\n${prompt}`,
                 }],
             },
         ]);
         const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
         if (text) prompt = text;
     } catch { /* fall through to mechanical scrub */ }
-    // Verify — and mechanically neutralize anything that survived.
+    // Verify — and mechanically neutralize anything that survived, WITHOUT
+    // ever touching quoted dialogue.
     names = detectProperNames(prompt);
-    for (const name of names) {
-        prompt = prompt
-            .replace(new RegExp(`\\b${name}['’]s\\b`, "g"), "their")
-            .replace(new RegExp(`\\b${name}\\b`, "g"), "the character");
+    if (names.length) {
+        const parts = prompt.split(/(["“][^"“”]*["”])/);
+        prompt = parts.map((part, i) => {
+            if (i % 2 === 1) return part; // quoted span — untouchable
+            let out = part;
+            for (const name of names) {
+                out = out
+                    .replace(new RegExp(`\\b${name}['’]s\\b`, "g"), "their")
+                    .replace(new RegExp(`\\b${name}\\b`, "g"), "the character");
+            }
+            return out;
+        }).join("");
     }
     return prompt;
 }
@@ -736,6 +745,7 @@ export async function cinemaFusePrompt(compiledPrompt, mode = "image", hasStartF
         hasCharacterRefs: !!opts.hasCharacterRefs,
         characters: opts.characters || [],
         audio: !!opts.audio,
+        scripted: looksScripted(compiledPrompt),
     });
     try {
         const results = await runwareCall([
