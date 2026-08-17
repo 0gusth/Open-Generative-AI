@@ -269,6 +269,31 @@ function PickerSection({ label, category, items, value, onSelect }) {
   );
 }
 
+// Per-job elapsed clock: each concurrent render owns its own timer, so one
+// card finishing never resets another's.
+function JobClock({ startedAt, route }) {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const tick = () => setSecs(Math.floor((Date.now() - startedAt) / 1000));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [startedAt]);
+  if (secs < 2) return null;
+  const label = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+  const provider = route === "muapi" ? "Muapi" : route === "fal" ? "fal" : "Runware";
+  return (
+    <>
+      <span className="text-[11px] tabular-nums text-white/40">via {provider} · {label}</span>
+      {secs >= 25 && (
+        <span className="text-[11px] text-white/30 leading-relaxed">
+          Renders levam de 1 a 15 min conforme a qualidade. Está vivo — pode gerar outros.
+        </span>
+      )}
+    </>
+  );
+}
+
 // ── Cast panel — saved characters (@name) ───────────────────────────────────
 
 function CastPanel({ cast, apiKey, onChanged }) {
@@ -403,7 +428,11 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const startFrameInputRef = useRef(null);
   const endFrameInputRef = useRef(null);
   const [openPanel, setOpenPanel] = useState(null); // "film" | "camera" | "look" | "movement"
-  const [generating, setGenerating] = useState(false);
+  // In-flight generations. Several can run at once — each carries its own
+  // placeholder card, elapsed clock and provider route.
+  const [jobs, setJobs] = useState([]);
+  const generating = jobs.length > 0;
+  const makeJobId = () => `job-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const [history, setHistory] = useState(() => {
     if (typeof window === "undefined") return [];
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
@@ -641,10 +670,14 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const activeCount = (keys) => keys.filter((k) => setup[k] && setup[k] !== "auto").length;
 
   const handleGenerate = async () => {
-    if (generating) return;
+    // Concurrent by design: a video render runs for minutes and must never
+    // hold the studio hostage. Each Direct opens its own job with its own
+    // placeholder card; results land as they finish.
+    const jobId = makeJobId();
+    const jobLabel = prompt.trim().slice(0, 60);
     if (!prompt.trim()) { toast.error("Describe your scene first."); return; }
     onGenerationStart?.();
-    setGenerating(true);
+    setJobs((prev) => [...prev, { id: jobId, label: jobLabel, mode, aspect, startedAt: Date.now() }]);
     try {
       // Saved characters: attach their reference images and resolve @tags to
       // visible markers (the reference owns identity, the text owns action).
@@ -733,7 +766,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       const msg = formatErrorMessage(e, "Cinema generation failed");
       if (onGenerationError) onGenerationError(msg); else toast.error(msg);
     } finally {
-      setGenerating(false);
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
       onGenerationEnd?.();
     }
   };
@@ -817,32 +850,23 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       <div className="flex-1 w-full max-w-7xl mx-auto overflow-y-auto custom-scrollbar pb-48 lg:pb-40 px-2">
         {history.length > 0 || generating ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 w-full pt-4 animate-fade-in-up">
-            {generating && (
+            {jobs.map((job) => (
               <div
+                key={job.id}
                 className="relative rounded-2xl overflow-hidden border border-white/[0.07] bg-[#171719] animate-fade-in-up"
-                style={{ aspectRatio: aspect === "9:16" ? "9/16" : "16/9" }}
+                style={{ aspectRatio: job.aspect === "9:16" ? "9/16" : "16/9" }}
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-white/[0.02] to-white/[0.05] animate-pulse" style={{ filter: "blur(24px)" }} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
                   <div className="w-6 h-6 rounded-full border-2 border-white/15 border-t-white/70 animate-spin" />
                   <span className="text-[13px] font-medium text-white/60">Directing…</span>
-                  {renderElapsed >= 2 && (
-                    <span className="text-[11px] tabular-nums text-white/40">
-                      {renderRoute ? `via ${renderRoute === "muapi" ? "Muapi" : renderRoute === "fal" ? "fal" : "Runware"} · ` : ""}{elapsedLabel}
-                    </span>
+                  {job.label && (
+                    <span className="text-[11px] text-white/40 line-clamp-2">{job.label}</span>
                   )}
-                  {renderElapsed >= 20 && (
-                    <span className="text-[11px] text-white/35 text-center px-6">
-                      {renderRoute === "muapi"
-                        ? "Modelo fechado — no Muapi um render leva 2–5 min. Está vivo, pode navegar."
-                        : /4k|1080/i.test(resolution || "")
-                          ? "Alta qualidade leva 5–15 min de GPU — normal em qualquer plataforma. Está vivo, pode navegar."
-                          : "Está vivo — renders levam de 1 a 3 min neste nível. Pode navegar."}
-                    </span>
-                  )}
+                  <JobClock startedAt={job.startedAt} route={renderRoute} />
                 </div>
               </div>
-            )}
+            ))}
             {history.map((entry, idx) => (
               <div
                 key={entry.id}
@@ -1334,12 +1358,14 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                 </div>
               )}
             </PromptControls>
-            <PromptAction onClick={handleGenerate} disabled={generating}>
-              {generating ? (
-                <><span className="animate-spin inline-block">◌</span> Directing…</>
-              ) : (
-                <>Direct ✦</>
-              )}
+            {/* Never disabled while rendering — jobs run in parallel. The
+                badge shows how many are in flight. */}
+            <PromptAction onClick={handleGenerate}>
+              <>Direct ✦{jobs.length > 0 && (
+                <span className="ml-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-black/25 text-[10px] font-bold inline-flex items-center justify-center tabular-nums">
+                  {jobs.length}
+                </span>
+              )}</>
             </PromptAction>
           </PromptFooter>
         </div>
