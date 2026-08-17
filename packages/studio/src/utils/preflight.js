@@ -31,6 +31,24 @@ const GEAR_VOCABULARY = new Set([
   "Steadicam", "Snorricam", "Russian", "Susan", "Dutch", "Tilt",
 ]);
 
+// Person names taken from screenplay cue lines ("BRIDGET:", "DAVE (Sighs):")
+// — the one signal that is CERTAINLY a person, unlike mid-sentence capitals
+// which may be places or titles.
+export function cueNames(text) {
+  const names = [];
+  const seen = new Set();
+  // Cues open a line in a script, but users paste screenplays as flowing
+  // text — so also match after sentence-enders and closing parens.
+  for (const m of (text || "").matchAll(/(?:^|[.!?…)\]]\s+)([A-ZÀ-Ü]{2,15})(?:\s*\([^)]*\))?\s*:/gm)) {
+    const cue = m[1].charAt(0) + m[1].slice(1).toLowerCase();
+    if (!COMMON_CAPITALIZED.has(cue) && !GEAR_VOCABULARY.has(cue) && !seen.has(cue)) {
+      seen.add(cue);
+      names.push(cue);
+    }
+  }
+  return names;
+}
+
 // Spans inside double quotes are DIALOGUE — untouchable, never name-scanned.
 function quotedSpans(text) {
   const spans = [];
@@ -58,7 +76,7 @@ export function detectProperNames(text) {
   // Screenplay cue lines name people in ALL CAPS ("BRIDGET:", "DAVE (Sighs):")
   // — the capitalized-word regex below never sees them, and they are the most
   // reliable person-name signal a scene can carry.
-  for (const m of text.matchAll(/^\s*([A-ZÀ-Ü]{2,15})(?:\s*\([^)]*\))?\s*:/gm)) {
+  for (const m of text.matchAll(/(?:^|[.!?…)\]]\s+)([A-ZÀ-Ü]{2,15})(?:\s*\([^)]*\))?\s*:/gm)) {
     const cue = m[1].charAt(0) + m[1].slice(1).toLowerCase();
     if (!COMMON_CAPITALIZED.has(cue) && !GEAR_VOCABULARY.has(cue) && !seen.has(cue)) {
       seen.add(cue);

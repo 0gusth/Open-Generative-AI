@@ -1,7 +1,7 @@
 import { addPending, removePending } from "./ledger.js";
 import { fusionInstruction, CRAFT_CORE, CRAFT_CORE_SCENE, CRAFT_VIDEO_EXTRA_SCENE, CRAFT_SCREENPLAY, looksScripted } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
-import { detectProperNames, isByteDanceModel, needsNameScrub } from "./utils/preflight.js";
+import { detectProperNames, cueNames, isByteDanceModel, needsNameScrub } from "./utils/preflight.js";
 import MODEL_CONSTRAINTS from "./modelConstraints.json";
 import { applyAudioSetting } from "./providerSettings.js";
 
@@ -755,19 +755,24 @@ export async function scrubForByteDance(prompt, modelId, mode = "video") {
         const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
         if (text) prompt = text;
     } catch { /* fall through to mechanical scrub */ }
-    // Verify — and mechanically neutralize anything that survived, WITHOUT
-    // ever touching quoted dialogue.
-    names = detectProperNames(prompt);
-    if (names.length) {
+    // Mechanical backstop — ONLY for names we are CERTAIN are people (from
+    // screenplay cue lines), case-insensitively (cues are ALL-CAPS), never
+    // inside quoted dialogue. Generic mid-sentence capitals stay with the
+    // LLM's judgement: nuking them mechanically turned location titles into
+    // "the character the character the character".
+    const people = cueNames(prompt);
+    if (people.length) {
+        const marker = (i) => ["the first colleague", "the second colleague", "the third colleague", "the fourth colleague", "the fifth colleague"][i] || "another colleague";
         const parts = prompt.split(/(["“][^"“”]*["”])/);
-        prompt = parts.map((part, i) => {
-            if (i % 2 === 1) return part; // quoted span — untouchable
+        prompt = parts.map((part, pi) => {
+            if (pi % 2 === 1) return part; // quoted span — untouchable
             let out = part;
-            for (const name of names) {
+            people.forEach((name, i) => {
                 out = out
-                    .replace(new RegExp(`\\b${name}['’]s\\b`, "g"), "their")
-                    .replace(new RegExp(`\\b${name}\\b`, "g"), "the character");
-            }
+                    .replace(new RegExp(`\\b${name}['’]s\\b`, "gi"), `${marker(i)}'s`)
+                    .replace(new RegExp(`\\b${name}\\b\\s*(\\([^)]*\\))?\\s*:`, "gi"), `${marker(i)} says:`)
+                    .replace(new RegExp(`\\b${name}\\b`, "gi"), marker(i));
+            });
             return out;
         }).join("");
     }

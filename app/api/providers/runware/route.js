@@ -13,6 +13,15 @@ export async function POST(request) {
     let body;
     try {
         body = await request.text();
+        // TEMP DEBUG: record every videoInference task so failures can be
+        // diagnosed from the exact payload (remove after i2v is stable)
+        try {
+            if (body.includes('videoInference')) {
+                const { appendFileSync } = require('fs');
+                appendFileSync(process.cwd() + '/.data/debug-video-tasks.log',
+                    new Date().toISOString() + ' ' + body + '\n---\n');
+            }
+        } catch { /* debug only */ }
     } catch {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
