@@ -69,5 +69,12 @@ export function detectProperNames(text) {
   return names;
 }
 
-// True when the model routes to ByteDance's backend (strict moderation).
+// ByteDance backends. Moderation is NOT equally strict across them: every
+// copyright rejection we hit came from VIDEO ("the output video may be
+// related to copyright"), while Seedream image renders carrying character
+// names and brand props ("Bridget", "Apple Watch") went through untouched.
+// So the name scrub is scoped to video — scrubbing images was interference
+// that cost fidelity without buying safety.
 export const isByteDanceModel = (modelId) => /seedance|seedream/i.test(modelId || "");
+export const needsNameScrub = (modelId, mode) =>
+    mode === "video" && /seedance|bytedance/i.test(modelId || "");

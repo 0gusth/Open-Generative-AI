@@ -56,7 +56,7 @@ import {
 } from "./prompt/PromptComposer.jsx";
 import Lightbox, { downloadMedia } from "./Lightbox.jsx";
 import { formatErrorMessage } from "../utils/formatError.js";
-import { detectProperNames, isByteDanceModel } from "../utils/preflight.js";
+import { detectProperNames, needsNameScrub } from "../utils/preflight.js";
 
 const SETUP_KEY = "cinema_setup_v2";
 const HISTORY_KEY = "cinema_history_v2";
@@ -721,7 +721,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       const material = inlineCast(compiledNow.prompt);
       // Pre-flight: proper names on ByteDance models trip copyright moderation.
       // The scene enhancer strips names when on; warn when it's off.
-      if (isByteDanceModel(modelId) && !enhanceOn) {
+      if (needsNameScrub(modelId, mode) && !enhanceOn) {
         const names = detectProperNames(prompt).filter((n) => !mentionedCast.some((c) => c.name.toLowerCase() === n.toLowerCase()));
         if (names.length) {
           toast(

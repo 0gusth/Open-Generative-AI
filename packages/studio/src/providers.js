@@ -1,7 +1,7 @@
 import { addPending, removePending } from "./ledger.js";
 import { fusionInstruction, CRAFT_CORE, CRAFT_CORE_SCENE, CRAFT_VIDEO_EXTRA_SCENE, CRAFT_SCREENPLAY, looksScripted } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
-import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
+import { detectProperNames, isByteDanceModel, needsNameScrub } from "./utils/preflight.js";
 import MODEL_CONSTRAINTS from "./modelConstraints.json";
 import { applyAudioSetting } from "./providerSettings.js";
 
@@ -692,8 +692,8 @@ const ENHANCE_MODEL = "deepseek:v4@flash";
 // probabilistic — this enforces it. Chain: detect → targeted LLM scrub →
 // re-check → mechanical replacement as last resort. Returns a prompt with
 // zero detectable proper names, or the original for non-ByteDance models.
-export async function scrubForByteDance(prompt, modelId) {
-    if (!isByteDanceModel(modelId) || !prompt) return prompt;
+export async function scrubForByteDance(prompt, modelId, mode = "video") {
+    if (!needsNameScrub(modelId, mode) || !prompt) return prompt;
     let names = detectProperNames(prompt);
     if (!names.length) return prompt;
     // Targeted rewrite: one job only, high compliance.
@@ -803,7 +803,7 @@ export async function enhanceScene(scene, mode = "image", opts = {}) {
             },
         ]);
         const text = results.find((t) => t.taskType === "textInference")?.text?.trim();
-        return await scrubForByteDance(text || scene, opts.modelId);
+        return await scrubForByteDance(text || scene, opts.modelId, mode);
     } catch (error) {
         console.warn("[providers] scene enhance failed, using original scene:", error.message);
         return scene;
