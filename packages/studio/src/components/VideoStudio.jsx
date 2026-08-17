@@ -2371,6 +2371,9 @@ export default function VideoStudio({
                       selectedModel={selectedModel}
                       onSelect={handleModelSelect}
                       onClose={() => setOpenDropdown(null)}
+                      t2v={catalogT2v}
+                      i2v={catalogI2v}
+                      v2v={v2vModels}
                     />
                   </PromptPopover>
                 )}
