@@ -468,7 +468,7 @@ function offendingParams(e, task) {
 }
 
 // Protected fields the healer must never strip — without them there is no task.
-const CORE_TASK_FIELDS = new Set(["taskType", "taskUUID", "model", "positivePrompt", "deliveryMethod", "outputType", "numberResults", "frameImages", "referenceImages"]);
+const CORE_TASK_FIELDS = new Set(["taskType", "taskUUID", "model", "positivePrompt", "deliveryMethod", "outputType", "numberResults", "frameImages", "referenceImages", "inputs"]);
 
 // Healing loop: submit, read the API's complaint, adapt, resubmit — until it
 // is accepted or the complaint is one we cannot fix (then surface it whole).
@@ -597,11 +597,33 @@ async function generateVideoRunware(air, params) {
         applyAudioSetting(task, air, params.__audio, known?.audioParam === true);
     }
     if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;
-    // Image-to-video: first (and optionally last) frame
+    // Image-to-video: first (and optionally last) frame.
+    //
+    // FORMAT MATTERS AND IS PER-FAMILY. ByteDance (doc bytedance-seedance-2-5)
+    // reads inputs.frameImages [{ image, frame }] with `resolution` and
+    // FORBIDS width/height — our old top-level frameImages [{ inputImage }]
+    // passed validation but the generation pipeline never read it, which is
+    // why every animated still came back as a brand-new shot. Other families
+    // keep the generic top-level shape; the healing loop settles dimensions.
+    const isByteDance = /^bytedance:/i.test(air);
     const frames = [];
-    if (params.image_url) frames.push({ inputImage: params.image_url, frame: "first" });
-    if (params.last_image) frames.push({ inputImage: params.last_image, frame: "last" });
-    if (frames.length) task.frameImages = frames;
+    if (params.image_url) frames.push(isByteDance
+        ? { image: params.image_url, frame: "first" }
+        : { inputImage: params.image_url, frame: "first" });
+    if (params.last_image) frames.push(isByteDance
+        ? { image: params.last_image, frame: "last" }
+        : { inputImage: params.last_image, frame: "last" });
+    if (frames.length) {
+        if (isByteDance) {
+            task.inputs = { ...(task.inputs || {}), frameImages: frames };
+            delete task.width;
+            delete task.height;
+            const tier = String(params.resolution || "").toLowerCase();
+            task.resolution = /1080|4k|2160/.test(tier) ? "720p" : (/480/.test(tier) ? "480p" : "720p");
+        } else {
+            task.frameImages = frames;
+        }
+    }
     if (!params.image_url && params.images_list?.length) {
         task.referenceImages = params.images_list;
     }
