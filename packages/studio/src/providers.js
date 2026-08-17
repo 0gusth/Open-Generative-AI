@@ -1,5 +1,5 @@
 import { addPending, removePending } from "./ledger.js";
-import { fusionInstruction, CRAFT_CORE, CRAFT_VIDEO_EXTRA_SCENE, CRAFT_SCREENPLAY, looksScripted } from "./cinema/craft.js";
+import { fusionInstruction, CRAFT_CORE, CRAFT_CORE_SCENE, CRAFT_VIDEO_EXTRA_SCENE, CRAFT_SCREENPLAY, looksScripted } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
 import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
 import MODEL_CONSTRAINTS from "./modelConstraints.json";
@@ -779,9 +779,10 @@ export async function enhanceScene(scene, mode = "image", opts = {}) {
     const i2v = mode === "video" && opts.hasStartFrame;
     const instruction = [
         `You are a film director sharpening a scene description before it goes to an AI ${mode} model.`,
-        "Rewrite ONLY the scene: subject, behaviour, action, environment, atmosphere.",
-        "NEVER add camera bodies, lenses, film stocks, colour grades, lighting schemes or camera-movement directives — a separate system appends those, and duplicating them creates conflicts.",
-        "Keep the author's intent, framing choices and any named references intact. Do not invent new story events.",
+        "Rewrite ONLY the scene: who is present, what they do, where they are, and the physical state of things.",
+        "NEVER add camera bodies, lenses, film stocks, colour grades, lighting schemes, focus/bokeh/depth-of-field notes or camera-movement directives — a separate system appends all of that, and duplicating it makes the model obey two contradictory instructions. You MAY name practical sources that exist in the world (a lamp, a window, a screen) but never describe how they render.",
+        "Character names: replace each one with a SHORT visible-marker phrase and then use that SAME phrase for every later mention — never mix the name and the description in one text, or the model reads them as two different people.",
+        "Keep the author's intent and framing choices. Do not invent new story events.",
         "Write the result in ENGLISH even when the author wrote in another language — generation models are trained on English prompts. Dialogue inside quotation marks keeps its original language.",
         CRAFT_CORE,
         mode === "video" ? CRAFT_VIDEO_EXTRA_SCENE : "",

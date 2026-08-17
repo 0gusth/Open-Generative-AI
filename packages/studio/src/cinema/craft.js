@@ -28,6 +28,15 @@ CRAFT RULES (production-tested):
 - Describe a SCENE, not a subject: setting, light and visual purpose must be legible even in a short prompt.
 `.trim();
 
+
+// CRAFT_CORE minus the rules that belong to the treatment blocks. The scene
+// enhancer must not write depth of field, focus or image-quality language:
+// aperture, lens and grade blocks own that, and two sources = contradiction.
+export const CRAFT_CORE_SCENE = CRAFT_CORE
+  .split("\n")
+  .filter((line) => !/depth of field|sharp focus|bokeh|image quality stays sharp/i.test(line))
+  .join("\n");
+
 export const CRAFT_VIDEO_EXTRA = `
 VIDEO-SPECIFIC:
 - One primary camera move per shot + at most one texture modifier ("slow dolly in, slightly handheld"); never two opposing or stacked moves.

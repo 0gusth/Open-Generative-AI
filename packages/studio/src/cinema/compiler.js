@@ -77,7 +77,7 @@ export function assemblyProfile(modelId = "", mode = "image") {
 // }
 export function compileCinematography(setup) {
   const mode = setup.mode === "video" ? "video" : "image";
-  const subject = (setup.prompt || "").trim();
+  const subject = (setup.prompt || "").trim().replace(/[.\s]+$/, "");
   const genre = setup.genre && setup.genre !== "auto" ? genreById(setup.genre) : null;
   const era = setup.era && setup.era !== "auto" ? eraById(setup.era) : null;
   // Auto picks are seeded by the AUTHOR'S text, never by the enhanced scene.
