@@ -473,7 +473,7 @@ const CORE_TASK_FIELDS = new Set(["taskType", "taskUUID", "model", "positiveProm
 // Healing loop: submit, read the API's complaint, adapt, resubmit — until it
 // is accepted or the complaint is one we cannot fix (then surface it whole).
 // Each iteration removes one class of problem, so it converges fast.
-async function submitRunwareTask(task) {
+async function submitRunwareTask(task, restoreDims = null) {
     let current = { ...task };
     let laddered = false;
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -504,6 +504,18 @@ async function submitRunwareTask(task) {
                 const snapped = opts.reduce((a, b) => (Math.abs(b - current.duration) < Math.abs(a - current.duration) ? b : a));
                 if (snapped !== current.duration) {
                     current = { ...current, taskUUID: makeUUID(), duration: snapped };
+                    healed = true;
+                }
+            }
+
+            // 3a. A required parameter is missing → put it back. Video
+            //     dimensions are the case that matters: some architectures
+            //     demand width/height even with a start frame.
+            if (!healed) {
+                const missing = errs.find((e) => /required/i.test((e.message || "") + e.code));
+                const wantsDims = missing && /width|height/i.test(missing.message || "");
+                if (wantsDims && !current.width && restoreDims) {
+                    current = { ...current, taskUUID: makeUUID(), width: restoreDims[0], height: restoreDims[1] };
                     healed = true;
                 }
             }
@@ -594,17 +606,12 @@ async function generateVideoRunware(air, params) {
         task.referenceImages = params.images_list;
     }
 
-    // Image-to-video takes its geometry FROM the frame: models reject
-    // width/height once frameImages is present ("Unsupported use of 'width'
-    // parameter"). Sending them anyway forced the healing loop to strip them
-    // one by one — rounds where the frame could be lost, which is why an
-    // animated still came back as a brand-new shot.
-    if (task.frameImages?.length) {
-        delete task.width;
-        delete task.height;
-    }
-
-    const submitted = await submitRunwareTask(task);
+    // Architectures disagree about dimensions in image-to-video: Seedance
+    // rejects width/height once frameImages is present, others REQUIRE them.
+    // So we keep sending them and let the healing loop settle it in whichever
+    // direction this model asks — removing them unconditionally just traded
+    // one error for the opposite one.
+    const submitted = await submitRunwareTask(task, [width, height]);
     const accepted = submitted.find((t) => t.taskType === "videoInference");
     const taskUUID = accepted?.taskUUID || task.taskUUID;
     addPending({ id: taskUUID, provider: "runware", type: "video", model: params.__modelId || "", prompt: params.prompt || "" });
