@@ -582,7 +582,11 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           : rw
             ? { field: "resolution", options: rw.fourK ? ["720p", "1080p", "4k"] : ["480p", "720p", "1080p"] }
             : catalogQuality,
-      bitrate: !!truth?.bitrate,
+      // Bitrate: `high_bitrate` was a Muapi-only field — the Runware path
+      // never read it, so the switch was decoration. Hidden until a real
+      // mechanism is verified in Runware's docs (same rule as audio: no
+      // verified control, no toggle).
+      bitrate: false,
       // Sound switch only where a REAL control exists (documented provider
       // mechanism or probed top-level param) — never a toggle the API ignores.
       audio: mode === "video" && (air
