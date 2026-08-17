@@ -22,6 +22,22 @@ import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import { EFFECTS } from "../cinema/effects.js";
 import { truthFor } from "../modelTruth.js";
 import { fetchRunwareVideoCatalog, mergeVideoCatalogs, isAirId } from "../runwareCatalog.js";
+import MODEL_CONSTRAINTS from "../modelConstraints.json";
+
+// Quality tiers actually reachable by a probed architecture, from its exact
+// allowed sizes (shortest side decides the tier).
+function tiersFromSizes(sizes) {
+  const tiers = new Set();
+  for (const s of sizes) {
+    const [w, h] = String(s).split("x").map(Number);
+    const short = Math.min(w, h);
+    if (short >= 2160) tiers.add("4k");
+    else if (short >= 1080) tiers.add("1080p");
+    else if (short >= 720) tiers.add("720p");
+    else tiers.add("480p");
+  }
+  return ["480p", "720p", "1080p", "4k"].filter((t) => tiers.has(t));
+}
 import {
   PromptComposer,
   PromptTextarea,
@@ -551,14 +567,20 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     // high/basic + 5/10/15; the real model: 480p→4K, 4–15s, bitrate).
     const truth = mode === "video" ? truthFor(`${modelId} ${modelObj?.name || ""}`) : null;
     const catalogQuality = mode === "video" ? modelQualityAxis(modelObj) : null;
+    // Probed facts outrank everything: exact sizes/durations harvested from
+    // the API's own validation errors, per architecture.
+    const probed = mode === "video" ? MODEL_CONSTRAINTS[modelId] : null;
+    const probedTiers = probed?.sizes?.length ? tiersFromSizes(probed.sizes) : null;
     return {
       aspects: truth?.aspects || modelAspects(modelObj),
-      durations: truth?.durations || (rw ? [4, 5, 6, 7, 8, 9, 10] : modelDurations(modelObj)),
-      qualityAxis: truth?.qualities
-        ? { field: "resolution", options: truth.qualities }
-        : rw
-          ? { field: "resolution", options: rw.fourK ? ["720p", "1080p", "4k"] : ["480p", "720p", "1080p"] }
-          : catalogQuality,
+      durations: probed?.durations || truth?.durations || (rw ? [4, 5, 6, 7, 8, 9, 10] : modelDurations(modelObj)),
+      qualityAxis: probedTiers
+        ? { field: "resolution", options: probedTiers }
+        : truth?.qualities
+          ? { field: "resolution", options: truth.qualities }
+          : rw
+            ? { field: "resolution", options: rw.fourK ? ["720p", "1080p", "4k"] : ["480p", "720p", "1080p"] }
+            : catalogQuality,
       bitrate: !!truth?.bitrate,
       audio: mode === "video" && (truth ? !!truth.audio : rw ? rw.audio : modelSupportsAudio(modelObj)),
       startFrame: mode === "video" && (air ? !!rw?.i2v : !!sib),

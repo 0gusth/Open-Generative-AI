@@ -5,6 +5,7 @@
 // remain only for models Runware doesn't carry.
 
 import { getProviderKey } from "./providers.js";
+import MODEL_CONSTRAINTS from "./modelConstraints.json";
 
 const CACHE_KEY = "runware_video_catalog_v1";
 const CACHE_TTL = 24 * 3600 * 1000;
@@ -72,7 +73,9 @@ const normalizeName = (n) => (n || "").toLowerCase().replace(/[^a-z0-9.]+/g, "")
 export function mergeVideoCatalogs(runwareModels, wrapperModels) {
   if (!runwareModels.length) return wrapperModels;
   const have = new Set(runwareModels.map((m) => normalizeName(m.name)));
-  const t2vOnly = runwareModels.filter((m) => m.rw.t2v);
+  // Probe-verified: drop models whose t2v tag lied (avatar/lipsync endpoints,
+  // frame-required models, broken configs) — they can't run from a prompt.
+  const t2vOnly = runwareModels.filter((m) => m.rw.t2v && !MODEL_CONSTRAINTS[m.id]?.unusableT2v);
   const extras = wrapperModels.filter((m) => !have.has(normalizeName(m.name)));
   return [...t2vOnly, ...extras];
 }

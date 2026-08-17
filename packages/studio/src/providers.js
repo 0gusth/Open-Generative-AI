@@ -2,6 +2,7 @@ import { addPending, removePending } from "./ledger.js";
 import { fusionInstruction, CRAFT_CORE } from "./cinema/craft.js";
 import { dialectFor } from "./cinema/modelDialects.js";
 import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
+import MODEL_CONSTRAINTS from "./modelConstraints.json";
 
 // Multi-provider router — Muapi is the LAST resort, not the default.
 //
@@ -478,7 +479,20 @@ async function submitRunwareTask(task) {
 
 async function generateVideoRunware(air, params) {
     announceRoute("runware", air);
-    const [width, height] = videoDimensions(params);
+    let [width, height] = videoDimensions(params);
+    // Probed constraints (free harvest from validation errors): snap to this
+    // architecture's exact sizes/durations BEFORE submitting — right on the
+    // first try, no error roundtrip. Self-heal remains the backstop.
+    const known = MODEL_CONSTRAINTS[air];
+    if (known?.sizes?.length) {
+        [width, height] = closestAllowedSize(known.sizes, width, height);
+    }
+    if (known?.durations?.length && params.duration) {
+        const target = Number(params.duration);
+        if (!known.durations.includes(target)) {
+            params = { ...params, duration: known.durations.reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a)) };
+        }
+    }
     const task = {
         taskType: "videoInference",
         taskUUID: makeUUID(),
