@@ -714,6 +714,20 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     }
   };
 
+  // Image → video bridge: the production path is image-first (approve the
+  // frame cheaply, then animate). Carries the still into the start-frame slot
+  // with the SAME treatment, and leaves the prompt describing only motion —
+  // the i2v craft rule (never re-describe what the frame already shows).
+  const animateStill = (entry) => {
+    setSetup((s) => ({ ...s, mode: "video" }));
+    setStartFrame(entry.url);
+    setEndFrame(null);
+    setRefs([]);
+    continuationRef.current = null; // a still is not a continuation
+    setPrompt("");
+    toast.success("Frame carregado. Descreva só o que se move e clique Direct.", { duration: 6000 });
+  };
+
   // Sequel: last frame becomes the START reference of the next clip.
   // Prequel: first frame becomes the END frame the new clip must land on.
   const [extracting, setExtracting] = useState(null); // entry id while working
@@ -849,7 +863,17 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                     </div>
                   </div>
                 ) : (
-                  <img src={entry.url} alt="" className="w-full aspect-video object-cover bg-black/40 group-hover:scale-[1.02] transition-transform duration-350 ease-apple" />
+                  <div className="relative">
+                    <img src={entry.url} alt="" className="w-full aspect-video object-cover bg-black/40 group-hover:scale-[1.02] transition-transform duration-350 ease-apple" />
+                    <div className="absolute bottom-2 right-2 hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                      <button type="button"
+                        title="Animar — usa esta imagem como frame inicial do vídeo, mantendo o tratamento"
+                        onClick={(e) => { e.stopPropagation(); animateStill(entry); }}
+                        className="pressable h-7 px-2.5 rounded-full bg-black/70 backdrop-blur-md border border-white/[0.12] text-[10px] font-semibold text-white/85 hover:bg-black/90">
+                        ▶ Animar
+                      </button>
+                    </div>
+                  </div>
                 )}
                 <div className="p-3.5">
                   <p className="text-white/65 text-[12px] line-clamp-2 leading-relaxed" title={entry.prompt}>{entry.prompt}</p>
