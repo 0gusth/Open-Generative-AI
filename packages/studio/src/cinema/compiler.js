@@ -80,7 +80,12 @@ export function compileCinematography(setup) {
   const subject = (setup.prompt || "").trim();
   const genre = setup.genre && setup.genre !== "auto" ? genreById(setup.genre) : null;
   const era = setup.era && setup.era !== "auto" ? eraById(setup.era) : null;
-  const seed = `${subject}|${setup.genre}|${setup.era}`;
+  // Auto picks are seeded by the AUTHOR'S text, never by the enhanced scene.
+  // The scene an LLM rewrites differs on every run, and seeding from it made
+  // the camera/lens/stock roulette on each click — the setup has to be stable
+  // even when only the wording changes. seedText is the raw prompt the user
+  // typed; it stays the shot's identity.
+  const seed = `${setup.seedText ?? subject}|${setup.genre}|${setup.era}`;
 
   // ── Gear resolution (era + genre coherent Auto) ──
   const cameraPool = mode === "video" ? CINEMA_CAMERAS : [...CINEMA_CAMERAS, ...PHOTO_CAMERAS];

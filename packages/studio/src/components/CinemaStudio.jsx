@@ -707,7 +707,9 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           dialect: dialectFor(modelId, mode, mode === "video" && !!startFrame),
         });
       }
-      const compiledNow = compileCinematography({ ...setup, prompt: scene, modelId });
+      // seedText = the author's own words: keeps Auto gear identical whether
+      // ✦ is on or off, and across re-runs of the same scene.
+      const compiledNow = compileCinematography({ ...setup, prompt: scene, seedText: prompt.trim(), modelId });
       const material = inlineCast(compiledNow.prompt);
       // Pre-flight: proper names on ByteDance models trip copyright moderation.
       // The scene enhancer strips names when on; warn when it's off.
