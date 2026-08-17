@@ -423,6 +423,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // Image mode controls — quality tier and how many variations per Direct.
   // Image-first workflow lives on cheap iteration: 4 takes, pick one, animate.
   const [imageTier, setImageTier] = useState("2k"); // 1K makes flagship models look dated
+  // Seed: null = fresh randomness per run. Locking one lets you iterate
+  // variations OF a frame instead of restarting from scratch every click.
+  const [seed, setSeed] = useState(null);
+  const [lastSeed, setLastSeed] = useState(null);
   const [variations, setVariations] = useState(1);
   const [startFrame, setStartFrame] = useState(null);
   const [endFrame, setEndFrame] = useState(null);
@@ -693,6 +697,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         .map((c) => c.refUrl)
         .filter((u) => u && u !== startFrame && !refs.includes(u));
       const effRefs = [...refs, ...castRefs].slice(0, 9);
+      // Always send a seed we know: locked when the user pinned one, fresh
+      // otherwise — so every result can be reproduced from its history entry.
+      const usedSeed = seed ?? Math.floor(Math.random() * 2147483647);
+      setLastSeed(usedSeed);
       // ✦ improves the SCENE only, BEFORE the treatment blocks are added —
       // the committee-curated blocks are appended afterwards and never pass
       // through an LLM. (The old order rewrote the finished prompt, diluting
@@ -731,6 +739,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           aspect_ratio: aspect,
           quality_tier: imageTier,
           numberResults: variations,
+          seed: usedSeed,
         };
         if (effRefs.length) params.images_list = effRefs;
         res = await generateImage(apiKey, params);
@@ -749,10 +758,11 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         if (allImages.length > 1) params.images_list = allImages;
         if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
         if (caps.bitrate) params.high_bitrate = highBitrate;
+        params.seed = usedSeed;
         if (endFrame) params.last_image = endFrame;
         res = await generateI2V(apiKey, params);
       } else {
-        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn };
+        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn, seed: usedSeed };
         if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
         if (caps.bitrate) params.high_bitrate = highBitrate;
         res = await generateVideo(apiKey, params);
@@ -765,6 +775,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         prompt: finalPrompt,
         model: modelId,
         resolved: compiledNow.resolved,
+        seed: usedSeed,
         aspect_ratio: aspect,
         timestamp: new Date().toISOString(),
       };
@@ -1297,6 +1308,41 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </div>
                 </>
               )}
+
+              {/* Seed — random by default; lock one to iterate variations of
+                  the same frame instead of restarting each click */}
+              <div className="relative">
+                <button type="button"
+                  onClick={() => setOpenList(openList === "seed" ? null : "seed")}
+                  className={promptControlClassName({ compact: true, active: openList === "seed" || seed !== null })}
+                  title={seed !== null ? `Seed fixa: ${seed}` : "Seed aleatória a cada geração"}>
+                  <span className="text-xs font-semibold tabular-nums">{seed !== null ? String(seed).slice(0, 7) : "Seed"}</span>
+                  <PromptChevronIcon />
+                </button>
+                {openList === "seed" && (
+                  <PromptPopover className="min-w-[210px]">
+                    <PromptMenuList>
+                      <PromptMenuItem selected={seed === null}
+                        onClick={() => { setSeed(null); setOpenList(null); }}>
+                        Aleatória a cada geração
+                      </PromptMenuItem>
+                      {lastSeed !== null && (
+                        <PromptMenuItem selected={seed === lastSeed}
+                          onClick={() => { setSeed(lastSeed); setOpenList(null); }}>
+                          Fixar a última ({lastSeed})
+                        </PromptMenuItem>
+                      )}
+                    </PromptMenuList>
+                    <input
+                      type="number"
+                      value={seed ?? ""}
+                      onChange={(e) => setSeed(e.target.value === "" ? null : Math.abs(parseInt(e.target.value, 10) || 0))}
+                      placeholder="Seed manual…"
+                      className="w-full mt-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[12px] tabular-nums text-white placeholder:text-white/25 outline-none focus:border-[#EF0328]/60"
+                    />
+                  </PromptPopover>
+                )}
+              </div>
 
               {/* Audio — discreet switch (only when the model generates sound) */}
               {caps.audio && (

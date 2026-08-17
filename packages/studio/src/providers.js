@@ -242,6 +242,7 @@ async function generateImageRunware(air, params) {
         width,
         height,
         numberResults: Math.min(4, Math.max(1, parseInt(params.numberResults, 10) || 1)),
+        ...(params.seed ? { seed: Number(params.seed) } : {}),
         outputType: "URL",
         outputFormat: "PNG",
         deliveryMethod: "async",
@@ -573,6 +574,7 @@ async function generateVideoRunware(air, params) {
         deliveryMethod: "async",
         outputType: "URL",
         numberResults: 1,
+        ...(params.seed ? { seed: Number(params.seed) } : {}),
     };
     // Sound on/off in the shape THIS provider actually accepts: Kling reads
     // providerSettings.klingai.sound, Seedance reads settings.audio, Veo reads
