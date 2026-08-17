@@ -27,6 +27,17 @@ export async function POST(request) {
             body,
         });
         const data = await response.json();
+        // Submit ledger: every video submit (frame + prompt), success or not,
+        // so a failing render can always be matched to its exact input.
+        try {
+            if (/videoInference/.test(body)) {
+                const { appendFileSync } = require('fs');
+                const tasks = JSON.parse(body);
+                const t = tasks.find((x) => x.taskType === 'videoInference');
+                if (t) appendFileSync(process.cwd() + '/.data/video-submits.log',
+                    JSON.stringify({ at: new Date().toISOString(), model: t.model, frame: t.inputs?.frameImages?.[0]?.image || t.frameImages?.[0]?.inputImage || null, prompt: (t.positivePrompt || '').slice(0, 200) }) + '\n');
+            }
+        } catch { /* logging never breaks the proxy */ }
         // Permanent failure ledger: whenever the upstream rejects a
         // generation, keep the EXACT payload + verdict. Debugging "it still
         // blocks" from theory cost days; from this file it takes seconds.
