@@ -23,9 +23,14 @@ export async function downloadMedia(url, filename) {
 
 // Gallery lightbox: fullscreen viewer over the whole creation set.
 // ← → navigate, Esc closes, backdrop click closes. Works for images and videos.
-export default function Lightbox({ items, index, onClose, onNavigate }) {
+export default function Lightbox({ items, index, onClose, onNavigate, onAdjust }) {
   const item = items[index];
   const [copied, setCopied] = useState(false);
+  // Inline retouch: describe the change, the image is edited in place by an
+  // image-to-image model. Only offered for stills.
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustText, setAdjustText] = useState("");
+  const [sending, setSending] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const go = useCallback(
@@ -119,6 +124,15 @@ export default function Lightbox({ items, index, onClose, onNavigate }) {
                   {copied ? "✓ Copiado" : "Copiar prompt"}
                 </button>
               )}
+              {onAdjust && item.type !== "video" && (
+                <button
+                  type="button"
+                  onClick={() => setAdjusting((v) => !v)}
+                  className="pressable h-8 px-3 rounded-full bg-[#1d1d1f]/80 backdrop-blur-xl border border-white/[0.12] text-[11px] font-medium text-white/80 hover:text-white flex items-center gap-1.5"
+                >
+                  ✎ Ajustar
+                </button>
+              )}
               <button
                 type="button"
                 disabled={downloading}
@@ -135,6 +149,35 @@ export default function Lightbox({ items, index, onClose, onNavigate }) {
                 {downloading ? "Baixando…" : "⬇ Baixar"}
               </button>
             </div>
+            {adjusting && onAdjust && item.type !== "video" && (
+              <form
+                className="mt-3 flex items-center gap-2 w-full max-w-xl mx-auto"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!adjustText.trim() || sending) return;
+                  setSending(true);
+                  try {
+                    await onAdjust(item, adjustText.trim());
+                    setAdjustText("");
+                    setAdjusting(false);
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              >
+                <input
+                  autoFocus
+                  value={adjustText}
+                  onChange={(e) => setAdjustText(e.target.value)}
+                  placeholder="O que ajustar? ex.: tira o reflexo do vidro, deixa a luz mais quente…"
+                  className="flex-1 h-9 px-3 rounded-full bg-[#1d1d1f]/85 backdrop-blur-xl border border-white/[0.12] text-[12px] text-white placeholder:text-white/30 outline-none focus:border-[#EF0328]/60"
+                />
+                <button type="submit" disabled={sending || !adjustText.trim()}
+                  className="pressable h-9 px-4 rounded-full bg-[#EF0328] text-white text-[12px] font-semibold disabled:opacity-40">
+                  {sending ? "Ajustando…" : "Ajustar"}
+                </button>
+              </form>
+            )}
             <p className="text-[11px] text-white/35 tabular-nums">
               {item.model}{items.length > 1 ? ` · ${index + 1} / ${items.length}` : ""}
             </p>

@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
-import { generateImage, generateVideo, generateI2V, uploadFile } from "../muapi.js";
+import { generateImage, generateI2I, generateVideo, generateI2V, uploadFile } from "../muapi.js";
 import { enhanceScene } from "../providers.js";
 import { dialectFor } from "../cinema/modelDialects.js";
 import { compileCinematography } from "../cinema/compiler.js";
@@ -796,6 +796,41 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     }
   };
 
+  // Lightbox retouch: describe a change, the still is edited in place by an
+  // image-to-image model (Nano Banana 2 — strong instruction following on
+  // edits). The original stays in history; the fix lands as a new entry.
+  const adjustImage = async (entry, instruction) => {
+    const jobId = makeJobId();
+    setJobs((prev) => [...prev, { id: jobId, label: `ajuste: ${instruction.slice(0, 48)}`, mode: "image", aspect: entry.aspect_ratio || aspect, startedAt: Date.now() }]);
+    try {
+      const res = await generateI2I(apiKey, {
+        model: "google:4@3", // Nano Banana 2
+        prompt: instruction,
+        image_url: entry.url,
+        images_list: [entry.url],
+        aspect_ratio: entry.aspect_ratio || aspect,
+        quality_tier: imageTier,
+      });
+      if (!res?.url) throw new Error("Sem resultado");
+      setHistory((prev) => [{
+        id: res.id || `${entry.id}-adj-${Date.now()}`,
+        url: res.url,
+        type: "image",
+        prompt: `${entry.prompt || ""}\n[ajuste] ${instruction}`,
+        model: "google:4@3",
+        resolved: entry.resolved,
+        aspect_ratio: entry.aspect_ratio || aspect,
+        timestamp: new Date().toISOString(),
+      }, ...prev]);
+      setLightboxIdx(0);
+      toast.success("Ajuste pronto.");
+    } catch (e) {
+      toast.error(formatErrorMessage(e, "Não consegui ajustar"));
+    } finally {
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    }
+  };
+
   // Image → video bridge: the production path is image-first (approve the
   // frame cheaply, then animate). Carries the still into the start-frame slot
   // with the SAME treatment, and leaves the prompt describing only motion —
@@ -973,7 +1008,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       </div>
 
       {lightboxIdx !== null && (
-        <Lightbox items={history} index={Math.min(lightboxIdx, history.length - 1)} onClose={() => setLightboxIdx(null)} onNavigate={setLightboxIdx} />
+        <Lightbox items={history} index={Math.min(lightboxIdx, history.length - 1)} onClose={() => setLightboxIdx(null)} onNavigate={setLightboxIdx} onAdjust={adjustImage} />
       )}
 
       {/* ── PROMPT BAR ── */}
