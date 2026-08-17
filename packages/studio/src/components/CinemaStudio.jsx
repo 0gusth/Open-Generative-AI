@@ -21,7 +21,7 @@ import { MOVEMENTS } from "../cinema/movement.js";
 import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import { EFFECTS } from "../cinema/effects.js";
 import { truthFor } from "../modelTruth.js";
-import { fetchRunwareVideoCatalog, mergeVideoCatalogs, isAirId } from "../runwareCatalog.js";
+import { fetchRunwareVideoCatalog, fetchRunwareImageCatalog, mergeVideoCatalogs, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
 import MODEL_CONSTRAINTS from "../modelConstraints.json";
 import { hasAudioControl } from "../providerSettings.js";
 
@@ -131,14 +131,20 @@ function modelSupportsAudio(m) {
 // Curated favorites for Cinema Studio — the models that respond best to this
 // studio's dense cinematographic prompts (dialects, refs, performance craft).
 const CINEMA_FAVORITES = {
+  // Runware-native AIRs (fall back to wrapper ids when the native catalog
+  // hasn't loaded — the picker skips whatever isn't present).
   image: [
-    "seedream-5.0",                        // dense prompts + reference consistency
-    "bytedance-seedream-v4.5",             // refs + in-image text
-    "nano-banana-2",                       // fast pro quality
-    "nano-banana-pro",                     // max fidelity, up to 14 refs
-    "flux-2-pro",                          // composition/lens language
-    "gpt-image-2",                         // long structured prompts
-    "grok-imagine-text-to-image-quality",  // text/logo rendering, multi-image compositing
+    "bytedance:seedream@5.0-pro",   // dense prompts + reference consistency
+    "google:4@3",                   // Nano Banana 2 — fast pro quality
+    "google:nano-banana@2-lite",    // rascunho barato
+    "ideogram:4@0",                 // tipografia e texto na imagem
+    "xai:grok-imagine@image-2.0",   // composição multi-imagem
+    "alibaba:qwen-image@3.0-pro",   // prompts longos e estruturados
+    "reve:2@1",                     // fotografia estilizada
+    "seedream-5.0",                 // fallbacks do catálogo antigo
+    "nano-banana-2",
+    "flux-2-pro",
+    "gpt-image-2",
   ],
   // Runware-native AIRs first (fast primary route); wrapper ids only where
   // Runware lacks the model.
@@ -521,11 +527,13 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // Runware-native video catalog (primary source); wrapper models only where
   // Runware doesn't carry an equivalent.
   const [rwCatalog, setRwCatalog] = useState([]);
+  const [rwImages, setRwImages] = useState([]);
   useEffect(() => { fetchRunwareVideoCatalog().then(setRwCatalog); }, []);
+  useEffect(() => { fetchRunwareImageCatalog().then(setRwImages); }, []);
   const models = useMemo(() => ({
-    image: t2iModels,
+    image: mergeImageCatalogs(rwImages, t2iModels),
     video: mergeVideoCatalogs(rwCatalog, t2vModels),
-  }), [rwCatalog]);
+  }), [rwCatalog, rwImages]);
 
   // Model list follows mode. DEFAULT_MODEL holds legacy wrapper ids that no
   // longer exist in the Runware-native catalog, so fall back through:
