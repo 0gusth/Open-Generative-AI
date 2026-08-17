@@ -49,6 +49,46 @@ import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 import Lightbox from "./Lightbox.jsx";
 import { enhancePrompt } from "../providers.js";
+import { fetchRunwareVideoCatalog, mergeVideoCatalogs, i2vVideoCatalog, isAirId } from "../runwareCatalog.js";
+import { truthFor } from "../modelTruth.js";
+import MODEL_CONSTRAINTS from "../modelConstraints.json";
+import { hasAudioControl } from "../providerSettings.js";
+
+// ── Runware-native capability readers ─────────────────────────────────────────
+// Priority: probed constraints (free validation-error harvest) → truth layer
+// (official specs) → catalog capability tags. Muapi metadata plays no part.
+
+const AIR_ASPECTS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
+
+function tiersFromSizes(sizes) {
+  const tiers = new Set();
+  for (const s of sizes) {
+    const [w, h] = String(s).split("x").map(Number);
+    const short = Math.min(w, h);
+    if (short >= 2160) tiers.add("4k");
+    else if (short >= 1080) tiers.add("1080p");
+    else if (short >= 720) tiers.add("720p");
+    else tiers.add("480p");
+  }
+  return ["480p", "720p", "1080p", "4k"].filter((t) => tiers.has(t));
+}
+
+function airVideoCaps(id, entry) {
+  const probed = MODEL_CONSTRAINTS[id] || null;
+  const truth = truthFor(`${id} ${entry?.name || ""}`);
+  const rw = entry?.rw || {};
+  const probedTiers = probed?.sizes?.length ? tiersFromSizes(probed.sizes) : null;
+  return {
+    aspects: (truth?.aspects || AIR_ASPECTS).filter((a) => a !== "auto"),
+    durations: probed?.durations || truth?.durations || [4, 5, 6, 7, 8, 9, 10],
+    resolutions:
+      probedTiers
+      || truth?.qualities
+      || (rw.fourK ? ["720p", "1080p", "4k"] : ["480p", "720p", "1080p"]),
+    lastImage: !!rw.firstLast,
+    i2v: !!rw.i2v,
+  };
+}
 
 // Guards against re-processing the same dropped/pasted batch when effects
 // re-fire (dependency identity churn + React StrictMode double-invoke).
@@ -155,32 +195,32 @@ const PROVIDER_LOGOS = {
 
 const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
-function ModelDropdown({ selectedModel, onSelect, onClose }) {
+function ModelDropdown({ selectedModel, onSelect, onClose, t2v, i2v, v2v }) {
   const [search, setSearch] = useState("");
   const modelCategories = [
     {
       id: "all",
       label: "All",
       entries: [
-        ...t2vModels.map((model) => ({ model, category: "t2v" })),
-        ...i2vModels.map((model) => ({ model, category: "i2v" })),
-        ...v2vModels.map((model) => ({ model, category: "v2v" })),
+        ...t2v.map((model) => ({ model, category: "t2v" })),
+        ...i2v.filter((m) => !t2v.some((t) => t.id === m.id)).map((model) => ({ model, category: "i2v" })),
+        ...v2v.map((model) => ({ model, category: "v2v" })),
       ],
     },
     {
       id: "t2v",
       label: "Text to Video",
-      entries: t2vModels.map((model) => ({ model, category: "t2v" })),
+      entries: t2v.map((model) => ({ model, category: "t2v" })),
     },
     {
       id: "i2v",
       label: "Image to Video",
-      entries: i2vModels.map((model) => ({ model, category: "i2v" })),
+      entries: i2v.map((model) => ({ model, category: "i2v" })),
     },
     {
       id: "v2v",
       label: "Video Tools",
-      entries: v2vModels.map((model) => ({ model, category: "v2v" })),
+      entries: v2v.map((model) => ({ model, category: "v2v" })),
     },
   ];
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -242,7 +282,7 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
     const pName = m.provider_name || 'Muapi';
     if (!seenProviders.has(pId)) {
       seenProviders.add(pId);
-      availableProviders.push({ id: pId, name: pName });
+      availableProviders.push({ id: pId, name: pName, logo: m.logoUrl || PROVIDER_LOGOS[pId] || null, invert: !m.logoUrl && invertLogos.includes(pId) });
     }
   });
 
@@ -286,12 +326,12 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
       }}
     >
       <div className="flex items-center gap-3.5">
-        {PROVIDER_LOGOS[m.provider] ? (
+        {(m.logoUrl || PROVIDER_LOGOS[m.provider]) ? (
           <div className="w-8 h-8 rounded-xl border border-white/5 overflow-hidden shrink-0 flex items-center justify-center bg-white/[0.02]">
             <img
-              src={PROVIDER_LOGOS[m.provider]}
+              src={m.logoUrl || PROVIDER_LOGOS[m.provider]}
               alt={m.provider_name}
-              className={`w-full h-full object-contain p-1 ${invertLogos.includes(m.provider) ? "invert" : ""}`}
+              className={`w-full h-full object-contain p-1 ${!m.logoUrl && invertLogos.includes(m.provider) ? "invert" : ""}`}
             />
           </div>
         ) : (
@@ -333,8 +373,6 @@ function ModelDropdown({ selectedModel, onSelect, onClose }) {
     </div>
     );
   };
-
-  const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
   return (
     <div className="flex gap-4 h-full max-h-[70vh] min-h-[350px]">
@@ -691,31 +729,71 @@ export default function VideoStudio({
     }
   }, [historyItems, onDeleteHistoryItem]);
 
+  // Runware-native catalog — the single source of generation models. The
+  // wrapper lists survive only while no catalog exists (no key yet); v2v
+  // tools remain wrapper-based accessories.
+  const [rwCatalog, setRwCatalog] = useState([]);
+  useEffect(() => { fetchRunwareVideoCatalog().then(setRwCatalog); }, []);
+  const catalogT2v = useMemo(() => mergeVideoCatalogs(rwCatalog, t2vModels), [rwCatalog]);
+  const catalogI2v = useMemo(() => i2vVideoCatalog(rwCatalog, i2vModels), [rwCatalog]);
+  const airEntry = useCallback(
+    (id) => (isAirId(id) ? rwCatalog.find((m) => m.id === id) || null : null),
+    [rwCatalog],
+  );
+
   const getCurrentModels = useCallback(() => {
     if (v2vMode) return v2vModels;
-    return imageMode ? i2vModels : t2vModels;
-  }, [imageMode, v2vMode]);
+    return imageMode ? catalogI2v : catalogT2v;
+  }, [imageMode, v2vMode, catalogT2v, catalogI2v]);
 
   const getCurrentAspectRatios = useCallback(
     (id) =>
-      imageMode
-        ? getAspectRatiosForI2VModel(id)
-        : getAspectRatiosForVideoModel(id),
-    [imageMode],
+      isAirId(id)
+        ? airVideoCaps(id, airEntry(id)).aspects
+        : imageMode
+          ? getAspectRatiosForI2VModel(id)
+          : getAspectRatiosForVideoModel(id),
+    [imageMode, airEntry],
   );
 
   const getCurrentDurations = useCallback(
     (id) =>
-      imageMode ? getDurationsForI2VModel(id) : getDurationsForModel(id),
-    [imageMode],
+      isAirId(id)
+        ? airVideoCaps(id, airEntry(id)).durations
+        : imageMode
+          ? getDurationsForI2VModel(id)
+          : getDurationsForModel(id),
+    [imageMode, airEntry],
   );
 
   const getCurrentResolutions = useCallback(
     (id) =>
-      imageMode
-        ? getResolutionsForI2VModel(id)
-        : getResolutionsForVideoModel(id),
-    [imageMode],
+      isAirId(id)
+        ? airVideoCaps(id, airEntry(id)).resolutions
+        : imageMode
+          ? getResolutionsForI2VModel(id)
+          : getResolutionsForVideoModel(id),
+    [imageMode, airEntry],
+  );
+
+  // First+last frame and multi-image ceilings, source-of-truth aware
+  const supportsLastImage = useCallback(
+    (id) => (isAirId(id) ? !!airEntry(id)?.rw?.firstLast : !!i2vModels.find((m) => m.id === id)?.lastImageField),
+    [airEntry],
+  );
+  const maxImagesFor = useCallback(
+    (id) => (isAirId(id) ? 1 : getMaxImagesForI2VModel(id)),
+    [],
+  );
+
+  // Real sound control? (documented provider mechanism or probed top-level
+  // param). A switch the API ignores is worse than no switch — Kling shipped
+  // mute videos that way.
+  const audioControl = useMemo(
+    () => (isAirId(selectedModel)
+      ? hasAudioControl(selectedModel, MODEL_CONSTRAINTS[selectedModel]?.audioParam === true)
+      : true),
+    [selectedModel],
   );
 
   const getCurrentModel = useCallback(
@@ -741,6 +819,25 @@ export default function VideoStudio({
         setShowResolution(false);
         setShowQuality(false);
         setShowMode(false);
+        setShowEffect(false);
+        return;
+      }
+
+      // Runware AIR: capabilities come from probe → truth → catalog tags.
+      // No quality/mode/effect axes — dimensions and duration are the API.
+      if (isAirId(modelId)) {
+        const caps = airVideoCaps(modelId, airEntry(modelId));
+        setSelectedAr(caps.aspects[0]);
+        setShowAr(true);
+        setSelectedDuration(caps.durations.includes(5) ? 5 : caps.durations[0]);
+        setShowDuration(true);
+        setSelectedResolution(caps.resolutions.includes("720p") ? "720p" : caps.resolutions[0]);
+        setShowResolution(true);
+        setSelectedQuality("");
+        setShowQuality(false);
+        setSelectedMode("");
+        setShowMode(false);
+        setSelectedEffect("");
         setShowEffect(false);
         return;
       }
@@ -805,7 +902,7 @@ export default function VideoStudio({
         setShowEffect(false);
       }
     },
-    [],
+    [airEntry],
   );
 
   // ── Persistence: Load ────────────────────────────────────────────────────
@@ -911,6 +1008,24 @@ export default function VideoStudio({
         return;
       }
 
+      // Runware AIR: the same model usually handles i2v — keep it and flip
+      // to image mode; otherwise fall to the first i2v-capable catalog model.
+      if (isAirId(selectedModel)) {
+        const entry = airEntry(selectedModel);
+        const target = entry?.rw?.i2v ? entry : catalogI2v[0];
+        if (!target) return;
+        setUploadedVideoUrl(null);
+        setUploadedVideoName(null);
+        setV2vMode(false);
+        setImageMode(true);
+        setSelectedModel(target.id);
+        setSelectedModelName(target.name);
+        applyControlsForModel(target.id, true, false);
+        setUploadedImageUrls([url]);
+        setPromptDisabled(false);
+        return;
+      }
+
       const currentT2V = t2vModels.find((model) => model.id === selectedModel);
 
       // Models with native image inputs stay in their current mode.
@@ -961,6 +1076,8 @@ export default function VideoStudio({
       isMotionControlSelection,
       selectedModel,
       v2vMode,
+      airEntry,
+      catalogI2v,
     ],
   );
 
@@ -1065,6 +1182,21 @@ export default function VideoStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Once the Runware catalog arrives, retire any selection that no longer
+  // exists in it (restored wrapper ids from older sessions) — they cannot
+  // generate anywhere anymore.
+  useEffect(() => {
+    if (!rwCatalog.length || v2vMode) return;
+    const list = imageMode ? catalogI2v : catalogT2v;
+    if (list.some((m) => m.id === selectedModel)) return;
+    const first = list[0];
+    if (!first) return;
+    setSelectedModel(first.id);
+    setSelectedModelName(first.name);
+    applyControlsForModel(first.id, imageMode, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rwCatalog, v2vMode, imageMode, selectedModel, catalogT2v, catalogI2v]);
+
   // ── close dropdown on outside click ─────────────────────────────────────
   useEffect(() => {
     if (!openDropdown) return;
@@ -1098,10 +1230,17 @@ export default function VideoStudio({
     setUploadedEndImageUrl(null);
     // Motion-control v2v or model with inputs.images_list: keep model, just drop the image
     if (isMotionControlSelection(selectedModel, v2vMode)) return;
+    // AIR that also does t2v: stay on the same model, back to text mode
+    if (isAirId(selectedModel) && airEntry(selectedModel)?.rw?.t2v) {
+      setImageMode(false);
+      applyControlsForModel(selectedModel, false, false);
+      setPromptDisabled(false);
+      return;
+    }
     const currentT2V = t2vModels.find((m) => m.id === selectedModel);
     if (currentT2V?.inputs?.images_list) return;
     setImageMode(false);
-    const first = t2vModels[0];
+    const first = catalogT2v[0] || t2vModels[0];
     setSelectedModel(first.id);
     setSelectedModelName(first.name);
     applyControlsForModel(first.id, false, false);
@@ -1115,8 +1254,14 @@ export default function VideoStudio({
       setUploadedImageUrl(null);
       // Reset to text-to-video if empty list
       if (isMotionControlSelection(selectedModel, v2vMode)) return;
+      if (isAirId(selectedModel) && airEntry(selectedModel)?.rw?.t2v) {
+        setImageMode(false);
+        applyControlsForModel(selectedModel, false, false);
+        setPromptDisabled(false);
+        return;
+      }
       setImageMode(false);
-      const first = t2vModels[0];
+      const first = catalogT2v[0] || t2vModels[0];
       setSelectedModel(first.id);
       setSelectedModelName(first.name);
       applyControlsForModel(first.id, false, false);
@@ -1207,7 +1352,7 @@ export default function VideoStudio({
     setUploadedVideoUrl(null);
     setUploadedVideoName(null);
     setV2vMode(false);
-    const first = t2vModels[0];
+    const first = catalogT2v[0] || t2vModels[0];
     setSelectedModel(first.id);
     setSelectedModelName(first.name);
     applyControlsForModel(first.id, false, false);
@@ -1274,24 +1419,10 @@ export default function VideoStudio({
   // ── generate ──────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
     const currentModel = getCurrentModel();
-    const isExtendMode = currentModel?.requiresRequestId;
     let trimmedPrompt = prompt.trim();
-    // Pre-flight: proper names on ByteDance models get flagged as copyright by
-    // their moderation — warn before burning the render (Enhance rewrites them).
-    if (isByteDanceModel(currentModel?.id) && !enhanceOn && trimmedPrompt) {
-      const names = detectProperNames(trimmedPrompt);
-      if (names.length) {
-        toast(
-          `⚠ Nomes próprios no prompt (${names.slice(0, 4).join(", ")}) — a moderação da ByteDance costuma bloquear por copyright. Ative o Enhance ✦ para convertê-los em descrições visuais.`,
-          { duration: 9000, id: "preflight-names" },
-        );
-      }
-    }
-    if (enhanceOn && trimmedPrompt) {
-      setGenerating(true); // placeholder appears while the prompt is enriched
-      trimmedPrompt = await enhancePrompt(trimmedPrompt, "video", currentModel?.id);
-    }
 
+    // Validate BEFORE any async work — an early return after setGenerating
+    // would strand the placeholder spinner forever.
     if (v2vMode) {
       if (!uploadedVideoUrl) {
         alert("Please upload a video first.");
@@ -1305,25 +1436,11 @@ export default function VideoStudio({
         alert("Please describe the motion you want.");
         return;
       }
-    } else if (isExtendMode) {
-      if (!lastGenerationId) {
-        alert(
-          "No Seedance 2.0 generation found to extend. Generate a video first.",
-        );
-        return;
-      }
     } else if (imageMode) {
-      const maxImgs = getMaxImagesForI2VModel(selectedModel);
-      if (maxImgs > 2) {
-        if (uploadedImageUrls.length === 0) {
-          alert("Please upload at least one reference image first.");
-          return;
-        }
-      } else {
-        if (!uploadedImageUrl) {
-          alert("Please upload a start frame image first.");
-          return;
-        }
+      const maxImgs = maxImagesFor(selectedModel);
+      if (maxImgs > 2 ? uploadedImageUrls.length === 0 : !uploadedImageUrl) {
+        alert("Please upload a start frame image first.");
+        return;
       }
     } else {
       if (!trimmedPrompt) {
@@ -1332,9 +1449,26 @@ export default function VideoStudio({
       }
     }
 
+    // Pre-flight: proper names on ByteDance models get flagged as copyright by
+    // their moderation — warn before burning the render (Enhance rewrites them).
+    if (isByteDanceModel(currentModel?.id) && !enhanceOn && trimmedPrompt) {
+      const names = detectProperNames(trimmedPrompt);
+      if (names.length) {
+        toast(
+          `⚠ Nomes próprios no prompt (${names.slice(0, 4).join(", ")}) — a moderação da ByteDance costuma bloquear por copyright. Ative o Enhance ✦ para convertê-los em descrições visuais.`,
+          { duration: 9000, id: "preflight-names" },
+        );
+      }
+    }
+
     onGenerationStart?.();
     setGenerating(true);
     setGenerateError(null);
+
+    if (enhanceOn && trimmedPrompt) {
+      // placeholder is already visible while the prompt is enriched
+      trimmedPrompt = await enhancePrompt(trimmedPrompt, "video", currentModel?.id);
+    }
 
     let hadError = false;
 
@@ -1557,7 +1691,7 @@ export default function VideoStudio({
     setUploadedVideoUrl(null);
     setUploadedVideoName(null);
     setV2vMode(false);
-    const first = t2vModels[0];
+    const first = catalogT2v[0] || t2vModels[0];
     setSelectedModel(first.id);
     setSelectedModelName(first.name);
     applyControlsForModel(first.id, false, false);
@@ -2164,7 +2298,8 @@ export default function VideoStudio({
           {/* Bottom row: controls + generate */}
           <PromptFooter>
             <PromptControls ref={dropdownRef}>
-              {/* Audio — discreet icon + mini switch */}
+              {/* Audio — only when this model exposes a real sound control */}
+              {audioControl && (
               <button
                 type="button"
                 onClick={toggleAudio}
@@ -2180,6 +2315,7 @@ export default function VideoStudio({
                   <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${audioOn ? "left-[14px]" : "left-[2px]"}`} />
                 </span>
               </button>
+              )}
 
               {/* Enhance — discreet icon toggle (sticky) */}
               <button

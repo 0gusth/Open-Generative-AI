@@ -23,6 +23,7 @@ import { EFFECTS } from "../cinema/effects.js";
 import { truthFor } from "../modelTruth.js";
 import { fetchRunwareVideoCatalog, mergeVideoCatalogs, isAirId } from "../runwareCatalog.js";
 import MODEL_CONSTRAINTS from "../modelConstraints.json";
+import { hasAudioControl } from "../providerSettings.js";
 
 // Quality tiers actually reachable by a probed architecture, from its exact
 // allowed sizes (shortest side decides the tier).
@@ -582,7 +583,11 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
             ? { field: "resolution", options: rw.fourK ? ["720p", "1080p", "4k"] : ["480p", "720p", "1080p"] }
             : catalogQuality,
       bitrate: !!truth?.bitrate,
-      audio: mode === "video" && (truth ? !!truth.audio : rw ? rw.audio : modelSupportsAudio(modelObj)),
+      // Sound switch only where a REAL control exists (documented provider
+      // mechanism or probed top-level param) — never a toggle the API ignores.
+      audio: mode === "video" && (air
+        ? hasAudioControl(modelId, probed?.audioParam === true)
+        : modelSupportsAudio(modelObj)),
       startFrame: mode === "video" && (air ? !!rw?.i2v : !!sib),
       endFrame: mode === "video" && (air ? !!rw?.firstLast : !!sib?.lastImageField),
       multiRef: mode === "video" ? (air ? !!rw?.i2v : !!omniSibling(modelId)) : true,

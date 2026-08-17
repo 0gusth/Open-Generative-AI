@@ -3,6 +3,7 @@ import { fusionInstruction, CRAFT_CORE, looksScripted } from "./cinema/craft.js"
 import { dialectFor } from "./cinema/modelDialects.js";
 import { detectProperNames, isByteDanceModel } from "./utils/preflight.js";
 import MODEL_CONSTRAINTS from "./modelConstraints.json";
+import { applyAudioSetting } from "./providerSettings.js";
 
 // Multi-provider router — Muapi is the LAST resort, not the default.
 //
@@ -557,12 +558,13 @@ async function generateVideoRunware(air, params) {
         outputType: "URL",
         numberResults: 1,
     };
-    // Sound on/off — only where the probe confirmed the parameter is accepted
-    // (audioParam false = probed rejection; undefined = unprobed, healer covers)
-    if (typeof params.__audio === "boolean"
-        && known?.audioParam !== false
-        && /veo|kling|seedance|hailuo|minimax|wan|ltx|gemini|grok|sora/i.test(air)) {
-        task.generateAudio = params.__audio;
+    // Sound on/off in the shape THIS provider actually accepts: Kling reads
+    // providerSettings.klingai.sound, Seedance reads settings.audio, Veo reads
+    // providerSettings.google.generateAudio, and a probed minority takes the
+    // top-level generateAudio. Wrong shape = silently mute video (Kling) or a
+    // rejected submit — so unknown families get nothing.
+    if (typeof params.__audio === "boolean") {
+        applyAudioSetting(task, air, params.__audio, known?.audioParam === true);
     }
     if (params.duration) task.duration = parseInt(params.duration, 10) || undefined;
     // Image-to-video: first (and optionally last) frame

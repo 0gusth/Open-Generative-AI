@@ -35,8 +35,8 @@ export function formatErrorMessage(err, fallback = "Generation failed") {
   }
 
   // Handle common HTTP error codes
-  if (message.includes('402') || message.includes('INSUFFICIENT_CREDITS') || message.toLowerCase().includes('insufficient credits')) {
-    return "Insufficient credits. Please top up your wallet.";
+  if (message.includes('402') || /insufficient_?\s?credits/i.test(message)) {
+    return "Saldo insuficiente no provedor para este render. Recarregue a conta (ou escolha um modelo/qualidade mais barato) e tente de novo — nada foi cobrado.";
   }
   if (message.includes('401') || message.includes('403')) {
     return "Authentication failed. Please check your account session or API key.";

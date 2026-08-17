@@ -66,16 +66,19 @@ export async function fetchRunwareVideoCatalog() {
   return usable;
 }
 
-const normalizeName = (n) => (n || "").toLowerCase().replace(/[^a-z0-9.]+/g, "");
-
-// Merge: Runware catalog first; wrapper models appended only when Runware
-// doesn't carry an equivalent (matched by normalized display name).
+// Generation is Runware-only: when the native catalog is loaded, it IS the
+// model list — wrapper entries are never appended (they would route nowhere).
+// The wrapper list survives only as a browse fallback while no Runware key /
+// catalog exists; generating from it surfaces the "configure your key" error.
 export function mergeVideoCatalogs(runwareModels, wrapperModels) {
   if (!runwareModels.length) return wrapperModels;
-  const have = new Set(runwareModels.map((m) => normalizeName(m.name)));
   // Probe-verified: drop models whose t2v tag lied (avatar/lipsync endpoints,
   // frame-required models, broken configs) — they can't run from a prompt.
-  const t2vOnly = runwareModels.filter((m) => m.rw.t2v && !MODEL_CONSTRAINTS[m.id]?.unusableT2v);
-  const extras = wrapperModels.filter((m) => !have.has(normalizeName(m.name)));
-  return [...t2vOnly, ...extras];
+  return runwareModels.filter((m) => m.rw.t2v && !MODEL_CONSTRAINTS[m.id]?.unusableT2v);
+}
+
+// Image-to-video slice of the native catalog (same fallback contract).
+export function i2vVideoCatalog(runwareModels, wrapperModels) {
+  if (!runwareModels.length) return wrapperModels;
+  return runwareModels.filter((m) => m.rw.i2v);
 }
