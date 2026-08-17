@@ -446,7 +446,14 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   // Director's enhance — fuses scene + treatment via LLM (sticky)
   const [enhanceOn, setEnhanceOn] = useState(() => {
     if (typeof window === "undefined") return true;
-    return window.localStorage.getItem("cinema_enhance_on") !== "0";
+    // OFF by default. The compiled prompt is the product: committee-curated
+    // phrases where every word maps to a visible feature. Handing it to an
+    // LLM to "improve" adds sampling variance (different result every run)
+    // and paraphrases precise language into generic prose — measurably worse
+    // in both modes, and worst on image models, which want dense declarative
+    // attributes rather than flowing narration. Turn it on deliberately, for
+    // messy scene text or dialogue scenes.
+    return window.localStorage.getItem("cinema_enhance_on") === "1";
   });
   const toggleEnhance = () => setEnhanceOn((v) => {
     const next = !v;
