@@ -55,6 +55,16 @@ export function detectProperNames(text) {
     sentenceStarts.add(m.index + m[0].length);
   }
   const quotes = quotedSpans(text);
+  // Screenplay cue lines name people in ALL CAPS ("BRIDGET:", "DAVE (Sighs):")
+  // — the capitalized-word regex below never sees them, and they are the most
+  // reliable person-name signal a scene can carry.
+  for (const m of text.matchAll(/^\s*([A-ZÀ-Ü]{2,15})(?:\s*\([^)]*\))?\s*:/gm)) {
+    const cue = m[1].charAt(0) + m[1].slice(1).toLowerCase();
+    if (!COMMON_CAPITALIZED.has(cue) && !GEAR_VOCABULARY.has(cue) && !seen.has(cue)) {
+      seen.add(cue);
+      names.push(cue);
+    }
+  }
   for (const m of text.matchAll(/\b[A-Z][a-zà-ÿ]{2,}(?:['’]s)?\b/g)) {
     if (inSpans(quotes, m.index)) continue; // dialogue is untouchable
     const possessive = /['’]s$/.test(m[0]);

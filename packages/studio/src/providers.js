@@ -734,7 +734,10 @@ const ENHANCE_MODEL = "deepseek:v4@flash";
 export async function scrubForByteDance(prompt, modelId, mode = "video") {
     if (!needsNameScrub(modelId, mode) || !prompt) return prompt;
     let names = detectProperNames(prompt);
-    if (!names.length) return prompt;
+    // Scripted material always goes through the LLM pass: screenplay cues and
+    // sentence-opening names slip past the detector, and skipping here was
+    // exactly how named prompts kept reaching ByteDance's moderation.
+    if (!names.length && !looksScripted(prompt)) return prompt;
     // Targeted rewrite: one job only, high compliance.
     try {
         const results = await runwareCall([
