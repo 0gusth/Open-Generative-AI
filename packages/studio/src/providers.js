@@ -606,6 +606,10 @@ async function generateVideoRunware(air, params) {
     // why every animated still came back as a brand-new shot. Other families
     // keep the generic top-level shape; the healing loop settles dimensions.
     const isByteDance = /^bytedance:/i.test(air);
+    // ByteDance video rejects 'seed' outright (both probes' allowed-parameter
+    // lists omit it). Sending it kills the submit — and this was the real
+    // cause behind the user's "still blocked", masked by a generic message.
+    if (isByteDance) delete task.seed;
     const frames = [];
     if (params.image_url) frames.push(isByteDance
         ? { image: params.image_url, frame: "first" }
@@ -633,17 +637,31 @@ async function generateVideoRunware(air, params) {
     // So we keep sending them and let the healing loop settle it in whichever
     // direction this model asks — removing them unconditionally just traded
     // one error for the opposite one.
-    const submitted = await submitRunwareTask(task, [width, height]);
-    const accepted = submitted.find((t) => t.taskType === "videoInference");
-    const taskUUID = accepted?.taskUUID || task.taskUUID;
-    addPending({ id: taskUUID, provider: "runware", type: "video", model: params.__modelId || "", prompt: params.prompt || "" });
-    try {
-        const result = await pollRunwareTask(taskUUID, "video");
-        removePending(taskUUID);
-        return { url: result.videoURL, id: taskUUID, provider: "runware" };
-    } catch (error) {
-        error.timedOutAfterAccept = true;
-        throw error;
+    // ByteDance's OUTPUT moderation is probabilistic: the same clean input
+    // can pass one run and get flagged the next ("may be related to
+    // copyright"). One automatic re-roll absorbs most of that noise before
+    // the user ever sees a scary verdict. Rejected renders are not kept
+    // charges, so the retry costs a wait, not money.
+    for (let take = 0; take < 2; take++) {
+        const attempt = take === 0 ? task : { ...task, taskUUID: makeUUID() };
+        const submitted = await submitRunwareTask(attempt, [width, height]);
+        const accepted = submitted.find((t) => t.taskType === "videoInference");
+        const taskUUID = accepted?.taskUUID || attempt.taskUUID;
+        addPending({ id: taskUUID, provider: "runware", type: "video", model: params.__modelId || "", prompt: params.prompt || "" });
+        try {
+            const result = await pollRunwareTask(taskUUID, "video");
+            removePending(taskUUID);
+            return { url: result.videoURL, id: taskUUID, provider: "runware" };
+        } catch (error) {
+            const moderated = (error.runwareErrors || []).some((e) => e.code === "invalidProviderContent");
+            if (moderated && take === 0) {
+                removePending(taskUUID);
+                announceRoute("runware", air); // card keeps breathing during the re-roll
+                continue;
+            }
+            error.timedOutAfterAccept = true;
+            throw error;
+        }
     }
 }
 

@@ -31,7 +31,7 @@ export async function POST(request) {
         // generation, keep the EXACT payload + verdict. Debugging "it still
         // blocks" from theory cost days; from this file it takes seconds.
         try {
-            if (data?.errors?.length && /videoInference|imageInference/.test(body)) {
+            if (data?.errors?.length && /videoInference|imageInference|getResponse/.test(body)) {
                 const { appendFileSync } = require('fs');
                 appendFileSync(process.cwd() + '/.data/provider-failures.log',
                     JSON.stringify({ at: new Date().toISOString(), errors: data.errors, request: JSON.parse(body) }) + '\n');
