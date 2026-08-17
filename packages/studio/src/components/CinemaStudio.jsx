@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import { generateImage, generateI2I, generateVideo, generateI2V, uploadFile } from "../muapi.js";
-import { enhanceScene } from "../providers.js";
+import { enhanceScene, scrubForByteDance } from "../providers.js";
 import { dialectFor } from "../cinema/modelDialects.js";
 import { compileCinematography } from "../cinema/compiler.js";
 import { t2iModels, t2vModels, i2vModels, getMaxImagesForI2VModel } from "../models.js";
@@ -722,18 +722,12 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
       // seedText = the author's own words: keeps Auto gear identical whether
       // ✦ is on or off, and across re-runs of the same scene.
       const compiledNow = compileCinematography({ ...setup, prompt: scene, seedText: prompt.trim(), modelId, hasStartFrame: !!startFrame });
-      const material = inlineCast(compiledNow.prompt);
-      // Pre-flight: proper names on ByteDance models trip copyright moderation.
-      // The scene enhancer strips names when on; warn when it's off.
-      if (needsNameScrub(modelId, mode) && !enhanceOn) {
-        const names = detectProperNames(prompt).filter((n) => !mentionedCast.some((c) => c.name.toLowerCase() === n.toLowerCase()));
-        if (names.length) {
-          toast(
-            `⚠ Nomes próprios no prompt (${names.slice(0, 4).join(", ")}) — a moderação da ByteDance costuma bloquear por copyright. Ative o Director's enhance ✦ para convertê-los em descrições visuais.`,
-            { duration: 9000, id: "preflight-names" },
-          );
-        }
-      }
+      let material = inlineCast(compiledNow.prompt);
+      // ByteDance video moderation flags person names as copyright. Warning
+      // the user was not a fix — the render still died. Scrub automatically:
+      // names become visible markers, dialogue in quotes and gear names stay
+      // untouched (scrubForByteDance no-ops outside the ByteDance video path).
+      material = await scrubForByteDance(material, modelId, mode);
       const finalPrompt = material;
       let res;
       if (mode === "image") {
