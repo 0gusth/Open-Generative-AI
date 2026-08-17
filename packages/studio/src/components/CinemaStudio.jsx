@@ -88,9 +88,15 @@ function modelDurations(m) {
   }
   return [5, 10];
 }
-function modelResolutions(m) {
+// Quality axis: the catalog names it `resolution` (98 models) OR `quality`
+// (22 models, e.g. Seedance 2.0's high/basic) — read either and remember
+// which field to send back.
+function modelQualityAxis(m) {
   const r = m?.inputs?.resolution;
-  return Array.isArray(r?.enum) && r.enum.length ? r.enum : null;
+  if (Array.isArray(r?.enum) && r.enum.length) return { field: "resolution", options: r.enum, preferred: r.default };
+  const q = m?.inputs?.quality;
+  if (Array.isArray(q?.enum) && q.enum.length) return { field: "quality", options: q.enum, preferred: q.default };
+  return null;
 }
 // Native-audio capability: the Muapi catalog is inconsistent (kling 3.0 i2v
 // declares generate_audio, its t2v sibling doesn't), so a declared field OR
@@ -106,12 +112,13 @@ function modelSupportsAudio(m) {
 // studio's dense cinematographic prompts (dialects, refs, performance craft).
 const CINEMA_FAVORITES = {
   image: [
-    "seedream-5.0",              // dense prompts + reference consistency
-    "bytedance-seedream-v4.5",   // refs + in-image text
-    "nano-banana-2",             // fast pro quality
-    "nano-banana-pro",           // max fidelity, up to 14 refs
-    "flux-2-pro",                // composition/lens language
-    "gpt-image-2",               // long structured prompts
+    "seedream-5.0",                        // dense prompts + reference consistency
+    "bytedance-seedream-v4.5",             // refs + in-image text
+    "nano-banana-2",                       // fast pro quality
+    "nano-banana-pro",                     // max fidelity, up to 14 refs
+    "flux-2-pro",                          // composition/lens language
+    "gpt-image-2",                         // long structured prompts
+    "grok-imagine-text-to-image-quality",  // text/logo rendering, multi-image compositing
   ],
   video: [
     "seedance-2.5-text-to-video",          // deep dialect, 12-asset multiref, audio
@@ -120,7 +127,10 @@ const CINEMA_FAVORITES = {
     "kling-v2.6-pro-t2v",                  // fast character work
     "veo3.1-text-to-video",                // environment hero, frames, audio
     "minimax-hailuo-2.3-pro-t2v",          // physical motion/VFX
+    "minimax-h3-text-to-video",            // MiniMax flagship, reference-driven
     "wan2.7-text-to-video",                // 60fps artistic
+    "grok-imagine-text-to-video",          // editing chains + animate stills
+    "gemini-omni-text-to-video",           // reference-driven with native audio
   ],
 };
 
@@ -514,7 +524,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     return {
       aspects: modelAspects(modelObj),
       durations: modelDurations(modelObj),
-      resolutions: mode === "video" ? modelResolutions(modelObj) : null,
+      qualityAxis: mode === "video" ? modelQualityAxis(modelObj) : null,
       audio: mode === "video" && modelSupportsAudio(modelObj),
       startFrame: mode === "video" && !!sib,
       endFrame: mode === "video" && !!sib?.lastImageField,
@@ -527,7 +537,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   useEffect(() => {
     if (!caps.aspects.includes(aspect)) setAspect(caps.aspects[0]);
     if (mode === "video" && !caps.durations.includes(duration)) setDuration(caps.durations[0]);
-    if (caps.resolutions && !caps.resolutions.includes(resolution)) setResolution(caps.resolutions.includes("720p") ? "720p" : caps.resolutions[0]);
+    if (caps.qualityAxis && !caps.qualityAxis.options.includes(resolution)) {
+      const opts = caps.qualityAxis.options;
+      setResolution(opts.includes("720p") ? "720p" : caps.qualityAxis.preferred && opts.includes(caps.qualityAxis.preferred) ? caps.qualityAxis.preferred : opts[0]);
+    }
     if (!caps.endFrame) setEndFrame(null);
     if (!caps.startFrame) setStartFrame(null);
   }, [caps]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -594,12 +607,12 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           generate_audio: audioOn,
         };
         if (allImages.length > 1) params.images_list = allImages;
-        if (caps.resolutions) params.resolution = resolution;
+        if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
         if (endFrame) params.last_image = endFrame;
         res = await generateI2V(apiKey, params);
       } else {
         const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn };
-        if (caps.resolutions) params.resolution = resolution;
+        if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
         res = await generateVideo(apiKey, params);
       }
       if (!res?.url) throw new Error("No result returned");
@@ -1084,8 +1097,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </span>
                 </button>
               )}
-              {/* Quality — list (video) */}
-              {caps.resolutions && (
+              {/* Quality — list (video); catalog field may be resolution or quality */}
+              {caps.qualityAxis && (
                 <div className="relative">
                   <button type="button"
                     onClick={() => setOpenList(openList === "quality" ? null : "quality")}
@@ -1097,7 +1110,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   {openList === "quality" && (
                     <PromptPopover>
                       <PromptMenuList>
-                        {caps.resolutions.map((r) => (
+                        {caps.qualityAxis.options.map((r) => (
                           <PromptMenuItem key={r} selected={resolution === r}
                             onClick={() => { setResolution(r); setOpenList(null); }}>
                             {r}
