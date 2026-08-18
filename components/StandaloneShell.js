@@ -230,6 +230,10 @@ export default function StandaloneShell() {
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
+  const [pickingFolder, setPickingFolder] = useState(false);
+  // What this server can do with folders (local Mac: everything; cloud:
+  // projects are logical groupings — no disk, no native picker).
+  const [projectCaps, setProjectCaps] = useState({ folders: true, picker: false });
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -237,6 +241,7 @@ export default function StandaloneShell() {
       const data = await r.json();
       setProjects(data.projects || []);
       setActiveProjectId(data.activeId || null);
+      if (data.capabilities) setProjectCaps(data.capabilities);
     } catch { /* server offline — projects unavailable */ }
   }, []);
 
@@ -1165,7 +1170,9 @@ export default function StandaloneShell() {
           <div className="bg-[#171719] border border-white/10 rounded-xl p-8 w-full max-w-md shadow-2xl">
             <h2 className="text-white font-semibold text-lg mb-1">Novo projeto</h2>
             <p className="text-white/40 text-[13px] mb-6">
-              Toda criação feita com este projeto ativo é salva automaticamente na pasta escolhida.
+              {projectCaps.folders
+                ? 'Toda criação feita com este projeto ativo é salva automaticamente na pasta escolhida.'
+                : 'Toda criação feita com este projeto ativo fica agrupada no histórico — filtre pelo seletor Projeto no topo.'}
             </p>
             <div className="space-y-4 mb-6">
               <div>
@@ -1180,27 +1187,39 @@ export default function StandaloneShell() {
                   className="w-full bg-white/[0.06] border border-white/[0.09] rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[#EF0328]/40 focus:border-[#EF0328]/40 transition-[border-color,box-shadow] duration-150"
                 />
               </div>
+              {projectCaps.folders && (
               <div>
                 <label className="block text-xs font-medium text-white/40 mb-1.5">Pasta no computador</label>
                 <div className="flex items-center gap-2">
+                  {projectCaps.picker && (
                   <button
                     type="button"
+                    disabled={pickingFolder}
                     onClick={async () => {
+                      if (pickingFolder) return;
+                      setPickingFolder(true);
                       try {
                         const r = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pick-folder' }) });
                         const data = await r.json();
                         if (data.ok && data.path) setNewProjectPath(data.path);
-                      } catch { /* picker unavailable */ }
+                        else if (!data.canceled) alert(data.error || 'O seletor de pasta não respondeu — verifique a janela do Finder.');
+                      } catch {
+                        alert('Não consegui abrir o seletor de pasta.');
+                      } finally {
+                        setPickingFolder(false);
+                      }
                     }}
-                    className="pressable shrink-0 h-11 px-4 rounded-lg bg-white/[0.08] border border-white/[0.1] text-[13px] font-medium text-white/85 hover:bg-white/[0.12]"
+                    className="pressable shrink-0 h-11 px-4 rounded-lg bg-white/[0.08] border border-white/[0.1] text-[13px] font-medium text-white/85 hover:bg-white/[0.12] disabled:opacity-50"
                   >
-                    Escolher pasta…
+                    {pickingFolder ? 'Escolhendo… (veja o Finder)' : 'Escolher pasta…'}
                   </button>
+                  )}
                   <div className="flex-1 min-w-0 h-11 px-3 flex items-center rounded-lg bg-white/[0.04] border border-white/[0.06] text-[12px] font-mono text-white/50 truncate">
                     {newProjectPath || `~/Documents/OpenGenerativeAI/${newProjectName.trim() || '…'}`}
                   </div>
                 </div>
               </div>
+              )}
             </div>
             <div className="flex gap-3">
               <button

@@ -20,7 +20,18 @@ function expandHome(p) {
 }
 
 export async function GET() {
-    return NextResponse.json(await readRegistry());
+    const registry = await readRegistry();
+    // The client adapts the project UI to what THIS server can actually do:
+    // folder copies need a real filesystem (local/Docker), the native picker
+    // additionally needs macOS. On serverless both are off and a project is
+    // a logical grouping over the ledger.
+    return NextResponse.json({
+        ...registry,
+        capabilities: {
+            folders: !usingRedis,
+            picker: !usingRedis && process.platform === 'darwin',
+        },
+    });
 }
 
 export async function POST(request) {
@@ -62,9 +73,12 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Native picker only on macOS' }, { status: 501 });
         }
         try {
+            // Run the chooser inside Finder and activate it first — a bare
+            // osascript dialog opens BEHIND the browser window, which reads
+            // as "the button does nothing".
             const { stdout } = await execFileAsync('osascript', [
                 '-e',
-                'POSIX path of (choose folder with prompt "Escolha a pasta do projeto")',
+                'tell application "Finder"\nactivate\nset chosen to POSIX path of (choose folder with prompt "Escolha a pasta do projeto")\nend tell\nchosen',
             ], { timeout: 120000 });
             return NextResponse.json({ ok: true, path: stdout.trim().replace(/\/$/, '') });
         } catch (error) {
