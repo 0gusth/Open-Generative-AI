@@ -1,25 +1,11 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { readDoc, writeDoc } from '../../../lib/serverStore';
 
 // Saved characters registry — cross-browser, like projects and the ledger.
 // Each character: { id, name (the @tag, no spaces), identity (visible-marker
 // block, age-blind), refUrl (hosted reference image), createdAt }.
-const DATA_DIR = path.join(process.cwd(), '.data');
-const FILE = path.join(DATA_DIR, 'characters.json');
-
-async function readAll() {
-    try {
-        return JSON.parse(await fs.readFile(FILE, 'utf8'));
-    } catch {
-        return { characters: [] };
-    }
-}
-
-async function writeAll(data) {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, JSON.stringify(data, null, 2));
-}
+const readAll = () => readDoc('characters', { characters: [] });
+const writeAll = (data) => writeDoc('characters', data);
 
 const slugName = (name) => (name || '').trim().replace(/\s+/g, '').replace(/[^\p{L}\p{N}_-]/gu, '');
 

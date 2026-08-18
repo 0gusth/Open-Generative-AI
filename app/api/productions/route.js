@@ -1,27 +1,13 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { readDoc, writeDoc } from '../../../lib/serverStore';
 
 // Productions — connected multi-scene projects, cross-browser like the
 // ledger. Each production: { id, name, stylePrefix: {text, resolved, at},
 // glossary: [{id, tag, kind, note, refUrl}], scenes: [{id, prompt,
 // continuity, modelId, duration, aspect, accepted, lastTake}], createdAt,
 // updatedAt }.
-const DATA_DIR = path.join(process.cwd(), '.data');
-const FILE = path.join(DATA_DIR, 'productions.json');
-
-async function readAll() {
-    try {
-        return JSON.parse(await fs.readFile(FILE, 'utf8'));
-    } catch {
-        return { productions: [] };
-    }
-}
-
-async function writeAll(data) {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILE, JSON.stringify(data, null, 2));
-}
+const readAll = () => readDoc('productions', { productions: [] });
+const writeAll = (data) => writeDoc('productions', data);
 
 export async function GET() {
     return NextResponse.json(await readAll());

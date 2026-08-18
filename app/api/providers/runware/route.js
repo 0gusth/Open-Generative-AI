@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { appendLog } from '../../../../lib/serverStore';
 
 const RUNWARE_URL = 'https://api.runware.ai/v1';
 
@@ -50,11 +51,10 @@ export async function POST(request) {
         // so a failing render can always be matched to its exact input.
         try {
             if (/videoInference/.test(body)) {
-                const { appendFileSync } = require('fs');
                 const tasks = JSON.parse(body);
                 const t = tasks.find((x) => x.taskType === 'videoInference');
-                if (t) appendFileSync(process.cwd() + '/.data/video-submits.log',
-                    JSON.stringify({ at: new Date().toISOString(), model: t.model, frame: t.inputs?.frameImages?.[0]?.image || t.frameImages?.[0]?.inputImage || null, prompt: (t.positivePrompt || '').slice(0, 200) }) + '\n');
+                if (t) await appendLog('video-submits',
+                    JSON.stringify({ at: new Date().toISOString(), model: t.model, frame: t.inputs?.frameImages?.[0]?.image || t.frameImages?.[0]?.inputImage || null, prompt: (t.positivePrompt || '').slice(0, 200) }));
             }
         } catch { /* logging never breaks the proxy */ }
         // Permanent failure ledger: whenever the upstream rejects a
@@ -62,9 +62,8 @@ export async function POST(request) {
         // blocks" from theory cost days; from this file it takes seconds.
         try {
             if (data?.errors?.length && /videoInference|imageInference|getResponse/.test(body)) {
-                const { appendFileSync } = require('fs');
-                appendFileSync(process.cwd() + '/.data/provider-failures.log',
-                    JSON.stringify({ at: new Date().toISOString(), errors: data.errors, request: JSON.parse(body) }) + '\n');
+                await appendLog('provider-failures',
+                    JSON.stringify({ at: new Date().toISOString(), errors: data.errors, request: JSON.parse(body) }));
             }
         } catch { /* never break the proxy for logging */ }
         return NextResponse.json(data, { status: response.status });

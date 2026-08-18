@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
+import { readDoc, writeDoc, usingRedis } from '../../../lib/serverStore';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
@@ -10,21 +11,8 @@ const execFileAsync = promisify(execFile);
 // Project registry: each project owns a folder on disk where every creation
 // is saved. Registry lives in .data/projects.json; the active project id is
 // part of the registry so every browser shares it.
-const DATA_DIR = path.join(process.cwd(), '.data');
-const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
-
-async function readRegistry() {
-    try {
-        return JSON.parse(await fs.readFile(PROJECTS_FILE, 'utf8'));
-    } catch {
-        return { projects: [], activeId: null };
-    }
-}
-
-async function writeRegistry(registry) {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(PROJECTS_FILE, JSON.stringify(registry, null, 2));
-}
+const readRegistry = () => readDoc('projects', { projects: [], activeId: null });
+const writeRegistry = (registry) => writeDoc('projects', registry);
 
 function expandHome(p) {
     if (!p) return p;
@@ -43,12 +31,17 @@ export async function POST(request) {
     if (body.action === 'create') {
         const name = (body.name || '').trim();
         if (!name) return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
-        const folder = expandHome((body.path || '').trim()) ||
-            path.join(os.homedir(), 'Documents', 'OpenGenerativeAI', name);
-        try {
-            await fs.mkdir(folder, { recursive: true });
-        } catch (error) {
-            return NextResponse.json({ error: `Could not create folder: ${error.message}` }, { status: 400 });
+        // Serverless has no folders: the project is a logical grouping and
+        // generations stay tagged by projectId in the ledger.
+        let folder = null;
+        if (!usingRedis) {
+            folder = expandHome((body.path || '').trim()) ||
+                path.join(os.homedir(), 'Documents', 'OpenGenerativeAI', name);
+            try {
+                await fs.mkdir(folder, { recursive: true });
+            } catch (error) {
+                return NextResponse.json({ error: `Could not create folder: ${error.message}` }, { status: 400 });
+            }
         }
         const project = {
             id: Math.random().toString(36).slice(2, 10),

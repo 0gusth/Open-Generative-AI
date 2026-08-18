@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build:packages && npm run build",
+  "build": {
+    "env": {
+      "ELECTRON_SKIP_BINARY_DOWNLOAD": "1"
+    }
+  },
+  "functions": {
+    "app/api/**/route.js": {
+      "maxDuration": 60
+    }
+  }
+}

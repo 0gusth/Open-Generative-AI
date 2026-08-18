@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-
-const PROJECTS_FILE = path.join(process.cwd(), '.data', 'projects.json');
+import { readDoc, writeDoc } from '../../../lib/serverStore';
 
 async function activeProject() {
     try {
-        const registry = JSON.parse(await fs.readFile(PROJECTS_FILE, 'utf8'));
+        const registry = await readDoc('projects', { projects: [], activeId: null });
         return registry.projects.find((p) => p.id === registry.activeId) || null;
     } catch {
         return null;
@@ -16,6 +15,10 @@ async function activeProject() {
 // Download a generated media URL into the project folder (best-effort — the
 // ledger entry is the source of truth even if the file copy fails).
 async function saveToProject(project, entry) {
+    // Folder copies only exist where there IS a folder (local/Docker).
+    // Serverless projects are logical groupings — the ledger still tags
+    // entries with projectId.
+    if (!project?.path) return null;
     try {
         const res = await fetch(entry.url);
         if (!res.ok) return null;
@@ -38,23 +41,12 @@ async function saveToProject(project, entry) {
 
 // Server-side generation ledger + pending render queue, stored on disk so
 // every browser pointed at this server sees the same history.
-const DATA_DIR = path.join(process.cwd(), '.data');
-const LEDGER_FILE = path.join(DATA_DIR, 'generations.json');
-const PENDING_FILE = path.join(DATA_DIR, 'pending.json');
+const LEDGER_FILE = 'generations';
+const PENDING_FILE = 'pending';
 const LEDGER_CAP = 500;
 
-async function readJson(file, fallback) {
-    try {
-        return JSON.parse(await fs.readFile(file, 'utf8'));
-    } catch {
-        return fallback;
-    }
-}
-
-async function writeJson(file, value) {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(file, JSON.stringify(value, null, 2));
-}
+const readJson = (doc, fallback) => readDoc(doc, fallback);
+const writeJson = (doc, value) => writeDoc(doc, value);
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
