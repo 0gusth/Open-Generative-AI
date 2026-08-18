@@ -12,7 +12,8 @@ const DesignAgentStudio = dynamic(() => import('studio').then(mod => mod.DesignA
 import { Image as ImageIcon, Layers as LayersIcon, Clapperboard, AudioLines, Scissors, Zap, Mic, PersonStanding, Film, FolderKanban, Megaphone, Workflow as WorkflowIcon, Bot, PenTool, LayoutGrid, Sparkles, Settings as SettingsIcon, PanelLeft, Menu as MenuIcon } from 'lucide-react';
 import axios from 'axios';
 import ApiKeyModal from './ApiKeyModal';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
+import { folderSyncSupported, saveFolderHandle, removeFolderHandle, folderStatus, syncProjectFolder } from './localFolderSync';
 
 const TABS = [
   {
@@ -247,12 +248,87 @@ export default function StandaloneShell() {
 
   useEffect(() => { refreshProjects(); }, [refreshProjects]);
 
+  // Catch-up sync on open: generations made on OTHER devices land in this
+  // browser's linked folder too. Silent when permission would need a click.
+  useEffect(() => {
+    if (!folderSyncSupported() || !activeProjectId) return;
+    syncProjectFolder(activeProjectId).catch(() => {});
+  }, [activeProjectId]);
+
   const selectProject = useCallback(async (id) => {
     setShowProjectMenu(false);
     setActiveProjectId(id);
     try {
       await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-active', id }) });
     } catch { /* best-effort */ }
+  }, []);
+
+  // Inline rename (double-click) and per-project browser folder sync state
+  const [editingProject, setEditingProject] = useState(null); // { id, value }
+  const [folderStates, setFolderStates] = useState({}); // projectId -> 'granted'|'prompt'|'none'
+  const [syncingProject, setSyncingProject] = useState(null);
+
+  const refreshFolderStates = useCallback(async (list) => {
+    if (!folderSyncSupported()) return;
+    const next = {};
+    for (const p of list) next[p.id] = await folderStatus(p.id);
+    setFolderStates(next);
+  }, []);
+
+  const renameProject = useCallback(async (id, name) => {
+    const trimmed = (name || '').trim();
+    setEditingProject(null);
+    if (!trimmed) return;
+    try {
+      const r = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename', id, name: trimmed }) });
+      if (!r.ok) throw new Error();
+      setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, name: trimmed } : p)));
+    } catch {
+      toast.error('Não consegui renomear o projeto.');
+    }
+  }, []);
+
+  const deleteProject = useCallback(async (project) => {
+    if (!window.confirm(`Excluir o projeto "${project.name}"?
+
+As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no computador não é apagada' : ''}.`)) return;
+    try {
+      const r = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: project.id }) });
+      if (!r.ok) throw new Error();
+      removeFolderHandle(project.id);
+      if (activeProjectId === project.id) setActiveProjectId(null);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } catch {
+      toast.error('Não consegui excluir o projeto.');
+    }
+  }, [activeProjectId]);
+
+  // Browser-owned local folder (online app): pick once, then every
+  // generation of the project lands in the folder — including ones made on
+  // other devices, on the next visit from this browser.
+  const linkProjectFolder = useCallback(async (project) => {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await saveFolderHandle(project.id, handle);
+      setFolderStates((prev) => ({ ...prev, [project.id]: 'granted' }));
+      setSyncingProject(project.id);
+      const res = await syncProjectFolder(project.id, { interactive: true });
+      setSyncingProject(null);
+      if (res?.denied) { toast.error('Sem permissão na pasta.'); return; }
+      toast.success(`Pasta "${handle.name}" conectada — ${res?.saved || 0} arquivo(s) baixado(s)${res?.skipped ? `, ${res.skipped} já existiam` : ''}.`);
+    } catch (e) {
+      setSyncingProject(null);
+      if (e?.name !== 'AbortError') toast.error('Não consegui conectar a pasta.');
+    }
+  }, []);
+
+  const resyncProjectFolder = useCallback(async (project) => {
+    setSyncingProject(project.id);
+    const res = await syncProjectFolder(project.id, { interactive: true });
+    setSyncingProject(null);
+    setFolderStates((prev) => ({ ...prev, [project.id]: res?.denied || res?.needsPermission ? 'prompt' : 'granted' }));
+    if (res?.saved || res?.skipped) toast.success(`Pasta em dia — ${res.saved} novo(s), ${res.skipped} já existiam.`);
+    else if (res?.denied) toast.error('Sem permissão na pasta — escolha de novo.');
   }, []);
 
   const createProject = useCallback(async () => {
@@ -378,7 +454,13 @@ export default function StandaloneShell() {
       label: tab?.label || tabId,
       resultUrl: data?.url || null,
     });
-  }, [pushNotification]);
+    // Linked local folder (online app): pull the fresh delivery in as soon
+    // as the server ledger has it. Silent — skips when permission needs a
+    // click (the amber folder icon in the menu is the recovery path).
+    if (folderSyncSupported() && activeProjectId) {
+      setTimeout(() => { syncProjectFolder(activeProjectId).catch(() => {}); }, 4000);
+    }
+  }, [pushNotification, activeProjectId]);
 
   const makeErrorCallback = useCallback((tabId) => (errorOrMessage) => {
     const tab = TABS.find(t => t.id === tabId);
@@ -517,20 +599,22 @@ export default function StandaloneShell() {
     document.cookie = "muapi_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   }, []);
 
-  // muapi.js dispatches 'muapi:auth-required' on any 401/403 from the API:
-  // the stored key is invalid or expired, so drop it and reopen the key modal.
-  // Throttled — a burst of failing requests fires many events at once.
+  // muapi.js dispatches 'muapi:auth-required' on any 401/403 from the API.
+  // The Muapi key is LEGACY (generation runs on Runware/fal): background
+  // calls failing must never log the user out of the whole studio — warn
+  // once and keep the session. Throttled hard: a burst of failing startup
+  // requests fires many events at once.
   const lastAuthRequiredRef = useRef(0);
   useEffect(() => {
     const onAuthRequired = () => {
       const now = Date.now();
-      if (now - lastAuthRequiredRef.current < 5000) return;
+      if (now - lastAuthRequiredRef.current < 120000) return;
       lastAuthRequiredRef.current = now;
-      handleKeyChange();
+      toast('Sua chave Muapi parece inválida — uploads e templates podem falhar. Atualize em Settings (a geração via Runware continua normal).', { icon: '🔑', duration: 8000 });
     };
     window.addEventListener('muapi:auth-required', onAuthRequired);
     return () => window.removeEventListener('muapi:auth-required', onAuthRequired);
-  }, [handleKeyChange]);
+  }, []);
 
   // Inject API key into all outgoing Axios requests (prop-based approach)
   // We use an interceptor to be selective and NOT send the key to external domains like S3
@@ -725,7 +809,7 @@ export default function StandaloneShell() {
           {/* Project switcher */}
           <div className="relative">
             <button
-              onClick={() => setShowProjectMenu((v) => !v)}
+              onClick={() => { setShowProjectMenu((v) => !v); if (!showProjectMenu) refreshFolderStates(projects); }}
               className="pressable flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs text-white/60 hover:bg-white/[0.08] hover:text-white"
             >
               <span className={`w-1.5 h-1.5 rounded-full ${activeProjectId ? 'bg-[#EF0328]' : 'bg-white/40'}`} />
@@ -743,14 +827,55 @@ export default function StandaloneShell() {
                   Sem projeto
                 </button>
                 {projects.map((p) => (
-                  <button
+                  <div
                     key={p.id}
-                    onClick={() => selectProject(p.id)}
-                    title={p.path}
-                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[13px] transition-colors duration-100 ${activeProjectId === p.id ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'}`}
+                    className={`group w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[13px] transition-colors duration-100 ${activeProjectId === p.id ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'}`}
                   >
-                    <span className="truncate">{p.name}</span>
-                  </button>
+                    {editingProject?.id === p.id ? (
+                      <input
+                        autoFocus
+                        value={editingProject.value}
+                        onChange={(e) => setEditingProject({ id: p.id, value: e.target.value })}
+                        onBlur={() => renameProject(p.id, editingProject.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') renameProject(p.id, editingProject.value);
+                          if (e.key === 'Escape') setEditingProject(null);
+                        }}
+                        className="flex-1 min-w-0 bg-[#212123] border border-[#EF0328]/40 rounded px-1.5 py-0.5 text-[13px] text-white outline-none"
+                      />
+                    ) : (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => selectProject(p.id)}
+                        onDoubleClick={(e) => { e.stopPropagation(); setEditingProject({ id: p.id, value: p.name }); }}
+                        title={p.path || 'Duplo clique para renomear'}
+                        className="flex-1 min-w-0 truncate cursor-pointer"
+                      >
+                        {p.name}
+                      </span>
+                    )}
+                    {!projectCaps.folders && folderSyncSupported() && editingProject?.id !== p.id && (
+                      <button
+                        type="button"
+                        title={folderStates[p.id] === 'granted' ? 'Pasta conectada — clique para sincronizar agora' : folderStates[p.id] === 'prompt' ? 'Reconectar pasta local' : 'Conectar uma pasta local — as gerações deste projeto baixam sozinhas nela'}
+                        onClick={(e) => { e.stopPropagation(); folderStates[p.id] === 'none' || !folderStates[p.id] ? linkProjectFolder(p) : resyncProjectFolder(p); }}
+                        className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-md transition-colors duration-100 ${syncingProject === p.id ? 'text-white/80 animate-pulse' : folderStates[p.id] === 'granted' ? 'text-white/70 hover:text-white' : folderStates[p.id] === 'prompt' ? 'text-amber-400/80 hover:text-amber-300' : 'text-white/30 hover:text-white/70 opacity-0 group-hover:opacity-100'}`}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>{folderStates[p.id] === 'granted' && <path d="M9 13l2 2 4-4"/>}</svg>
+                      </button>
+                    )}
+                    {editingProject?.id !== p.id && (
+                      <button
+                        type="button"
+                        title="Excluir projeto"
+                        onClick={(e) => { e.stopPropagation(); deleteProject(p); }}
+                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-white/30 hover:text-red-400 hover:bg-white/[0.06] opacity-0 group-hover:opacity-100 transition-colors duration-100"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
+                    )}
+                  </div>
                 ))}
                 <div className="h-px bg-white/[0.08] my-1" />
                 <button

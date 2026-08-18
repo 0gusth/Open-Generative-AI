@@ -87,6 +87,28 @@ export async function POST(request) {
         }
     }
 
+    if (body.action === 'rename') {
+        const project = registry.projects.find((p) => p.id === body.id);
+        if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        const name = (body.name || '').trim();
+        if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 });
+        project.name = name;
+        await writeRegistry(registry);
+        return NextResponse.json({ ok: true, project });
+    }
+
+    if (body.action === 'delete') {
+        // Removes the project from the registry only: generations stay in the
+        // ledger (under Geral) and the folder on disk is NEVER touched.
+        if (!registry.projects.some((p) => p.id === body.id)) {
+            return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
+        registry.projects = registry.projects.filter((p) => p.id !== body.id);
+        if (registry.activeId === body.id) registry.activeId = null;
+        await writeRegistry(registry);
+        return NextResponse.json({ ok: true, activeId: registry.activeId });
+    }
+
     if (body.action === 'set-active') {
         // null = "Geral" (no project): creations still land in the ledger only
         registry.activeId = body.id ?? null;
