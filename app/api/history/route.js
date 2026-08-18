@@ -91,6 +91,7 @@ export async function POST(request) {
                 provider: entry.provider || 'muapi',
                 type: entry.type || 'image',
                 aspect_ratio: entry.aspect_ratio || null,
+                cost: typeof entry.cost === 'number' ? entry.cost : null,
                 projectId: project?.id || null,
                 localFile,
                 timestamp: entry.timestamp || new Date().toISOString(),
