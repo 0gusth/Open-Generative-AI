@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import { generateImage, generateI2I, generateVideo, generateI2V, uploadFile } from "../muapi.js";
 import { enhanceScene, scrubForByteDance, decoupageScene } from "../providers.js";
+import { fetchLedger, reconcilePending } from "../ledger.js";
 import { dialectFor } from "../cinema/modelDialects.js";
 import { compileCinematography } from "../cinema/compiler.js";
 import { makeCut, cutsTotal, buildShotEnvelope, monotonyAudit, contrastAudit, decoupageCatalogs } from "../cinema/multiShot.js";
@@ -480,6 +481,29 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
     if (typeof window === "undefined") return [];
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
   });
+  // The gallery was localStorage-only: the same work looked lost on the site
+  // and on the phone. Merge the shared server ledger in, keeping the local
+  // copy of an entry when both exist (it carries the gear chips and seed).
+  // Entries with no `studio` tag are pre-tagging history and count as ours.
+  useEffect(() => {
+    let alive = true;
+    const sync = async () => {
+      const ledger = await fetchLedger();
+      if (!alive) return;
+      const mine = ledger.filter((e) => e.url && (!e.studio || e.studio === "cinema"));
+      setHistory((prev) => {
+        const known = new Set(prev.map((e) => e.url));
+        const fresh = mine.filter((e) => !known.has(e.url));
+        if (fresh.length === 0) return prev;
+        return [...prev, ...fresh]
+          .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          .slice(0, 200);
+      });
+    };
+    sync();
+    const timer = setInterval(async () => { await reconcilePending(); sync(); }, 15000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const panelRef = useRef(null);
   // References (up to 9 — Seedance-class ceiling)
@@ -800,6 +824,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           quality_tier: imageTier,
           numberResults: variations,
           seed: usedSeed,
+          __studio: "cinema",
+          __resolved: compiledNow.resolved,
         };
         if (effRefs.length) params.images_list = effRefs;
         res = await generateImage(apiKey, params);
@@ -814,6 +840,8 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
           duration,
           __audio: audioOn,
           generate_audio: audioOn,
+          __studio: "cinema",
+          __resolved: compiledNow.resolved,
         };
         if (allImages.length > 1) params.images_list = allImages;
         if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
@@ -822,7 +850,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
         if (endFrame) params.last_image = endFrame;
         res = await generateI2V(apiKey, params);
       } else {
-        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn, seed: usedSeed };
+        const params = { model: modelId, prompt: finalPrompt, aspect_ratio: aspect, duration, __audio: audioOn, generate_audio: audioOn, seed: usedSeed, __studio: "cinema", __resolved: compiledNow.resolved };
         if (caps.qualityAxis) params[caps.qualityAxis.field] = resolution;
         if (caps.bitrate) params.high_bitrate = highBitrate;
         res = await generateVideo(apiKey, params);

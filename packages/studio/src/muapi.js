@@ -25,6 +25,11 @@ function logGeneration(result, params, type) {
             type,
             aspect_ratio: params.aspect_ratio || null,
             cost: typeof result.cost === 'number' ? result.cost : null,
+            // Cinema shows resolved gear chips and the seed on each card —
+            // without these the entry comes back from the server stripped.
+            resolved: params.__resolved || null,
+            seed: typeof params.seed === 'number' ? params.seed : null,
+            studio: params.__studio || null,
         });
     }
     return result;
