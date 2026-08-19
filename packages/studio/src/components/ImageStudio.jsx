@@ -43,6 +43,11 @@ import {
   promptMediaButtonClassName,
 } from "./prompt/PromptComposer.jsx";
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
+import { compileCinematography } from "../cinema/compiler.js";
+import { GENRES, ERAS } from "../cinema/filmSetup.js";
+import { CINEMA_CAMERAS, PHOTO_CAMERAS, CINE_LENSES, PHOTO_LENSES, FILM_STOCKS, APERTURES } from "../cinema/gear.js";
+import { PALETTES } from "../cinema/palettes.js";
+import { LIGHTING } from "../cinema/lighting.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 import Lightbox, { downloadMedia } from "./Lightbox.jsx";
 import { enhancePrompt } from "../providers.js";
@@ -1180,6 +1185,104 @@ export default function ImageStudio({
     localHistory,
   ]);
 
+  // ── Mood: a saved style (or a fresh moodboard read) becomes treatment
+  // text appended to the prompt. Image Studio has no gear controls of its
+  // own, so the style has to arrive already compiled into words.
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [savedStyles, setSavedStyles] = useState([]);
+  const [activeStyle, setActiveStyle] = useState(null); // { name, text }
+  const [moodImages, setMoodImages] = useState([]);
+  const [moodBusy, setMoodBusy] = useState(false);
+  const moodInputRef = useRef(null);
+
+  useEffect(() => {
+    fetch("/api/moodboard").then((r) => r.json())
+      .then((d) => setSavedStyles(d.styles || []))
+      .catch(() => {});
+  }, []);
+
+  // setup → the same treatment blocks Cinema compiles, minus any subject.
+  const styleToText = useCallback((setup, signature) => {
+    const compiled = compileCinematography({
+      ...setup, signature, prompt: "", seedText: "", mode: "image",
+    });
+    return compiled.prompt;
+  }, []);
+
+  const applySavedStyle = useCallback((style) => {
+    const text = styleToText(style.setup || {}, style.signature);
+    if (!text) { toast.error("Este estilo está vazio."); return; }
+    setActiveStyle({ name: style.name, text });
+    setMoodImages(style.refs || []);
+    setStyleOpen(false);
+    toast.success(`Estilo "${style.name}" ativo — entra em toda geração.`);
+  }, [styleToText]);
+
+  const uploadMoodImages = useCallback(async (files) => {
+    const usable = [...files].filter((f) => f.type.startsWith("image/")).slice(0, 12 - moodImages.length);
+    if (!usable.length) return;
+    setMoodBusy(true);
+    try {
+      const urls = await Promise.all(usable.map(async (f) => {
+        const form = new FormData();
+        form.append("file", f);
+        const r = await fetch("/api/upload-image", { method: "POST", body: form });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "upload falhou");
+        return d.url;
+      }));
+      setMoodImages((prev) => [...prev, ...urls].slice(0, 12));
+    } catch (e) {
+      toast.error(formatErrorMessage(e, "Não consegui subir as referências"));
+    } finally {
+      setMoodBusy(false);
+    }
+  }, [moodImages.length]);
+
+  const readMoodboard = useCallback(async () => {
+    if (!moodImages.length) { toast.error("Adicione ao menos uma referência."); return; }
+    setMoodBusy(true);
+    const toastId = toast.loading("Lendo o moodboard…");
+    try {
+      const slim = (items) => items.map((i) => ({ id: i.id, name: i.name }));
+      const r = await fetch("/api/moodboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "analyze",
+          images: moodImages,
+          catalogs: {
+            genre: slim(GENRES), era: slim(ERAS),
+            camera: slim([...CINEMA_CAMERAS, ...PHOTO_CAMERAS]),
+            lens: slim([...CINE_LENSES, ...PHOTO_LENSES]),
+            aperture: slim(APERTURES), medium: slim(FILM_STOCKS),
+            palette: slim(PALETTES), lighting: slim(LIGHTING),
+          },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "falha na leitura");
+      const st = d.style;
+      const setup = {
+        genre: st.genre, era: st.era, camera: st.camera, lens: st.lens,
+        aperture: st.aperture, medium: st.medium, palette: st.palette, lighting: st.lighting,
+      };
+      setActiveStyle({ name: st.name, text: styleToText(setup, st.signature) });
+      // Save it so the look is reusable here and in Cinema.
+      const saved = await fetch("/api/moodboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", name: st.name, setup, signature: st.signature, reading: st.reading, refs: moodImages }),
+      }).then((x) => x.json()).catch(() => null);
+      if (saved?.style) setSavedStyles((prev) => [saved.style, ...prev.filter((x) => x.id !== saved.style.id)]);
+      toast.success(`Estilo "${st.name}" lido e salvo.`, { id: toastId });
+    } catch (e) {
+      toast.error(formatErrorMessage(e, "Não consegui ler o moodboard"), { id: toastId });
+    } finally {
+      setMoodBusy(false);
+    }
+  }, [moodImages, styleToText]);
+
   // Fresh view of the attached list for merges that happen AFTER an await —
   // two quick pastes must not clobber each other's result.
   const uploadedImageUrlsRef = useRef(uploadedImageUrls);
@@ -1500,6 +1603,11 @@ export default function ImageStudio({
         // Inside the try: a rejection here used to strand the button in
         // "Generating…" forever — no finally had run yet.
         finalPrompt = await enhancePrompt(finalPrompt, "image", selectedModelId);
+      }
+      // Mood style: curated treatment appended AFTER enhance, so the LLM
+      // never paraphrases the phrases that carry the look.
+      if (activeStyle?.text) {
+        finalPrompt = `${finalPrompt}. ${activeStyle.text}`;
       }
       const results = await Promise.all(
         Array.from({ length: batchSize }).map(async () => {
@@ -1844,6 +1952,73 @@ export default function ImageStudio({
           <PromptFooter>
             {/* Left controls */}
             <PromptControls ref={dropdownRef}>
+              {/* Mood — moodboard/style, applied to every generation */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setStyleOpen((v) => !v); }}
+                  title={activeStyle ? `Estilo ativo: ${activeStyle.name}` : "Mood — deixe suas referências definirem o estilo"}
+                  className={promptControlClassName({ compact: true, active: !!activeStyle || styleOpen })}
+                >
+                  <span className="text-xs font-semibold">{activeStyle ? activeStyle.name : "Mood"}</span>
+                  {activeStyle && (
+                    <span
+                      role="button"
+                      title="Remover estilo"
+                      onClick={(e) => { e.stopPropagation(); setActiveStyle(null); setMoodImages([]); }}
+                      className="ml-0.5 text-white/50 hover:text-white text-[13px] leading-none"
+                    >×</span>
+                  )}
+                </button>
+                {styleOpen && (
+                  <div className="absolute bottom-[calc(100%+10px)] left-0 z-50 w-[320px] bg-[#1d1d1f]/[0.98] backdrop-blur-3xl rounded-2xl border border-white/[0.1] shadow-[0_16px_48px_rgba(0,0,0,0.65)] p-3.5 flex flex-col gap-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-white/85 text-[13px] font-semibold">Moodboard</span>
+                      <span className="text-white/35 text-[11px]">as referências viram o estilo</span>
+                    </div>
+                    <input ref={moodInputRef} type="file" accept="image/*" multiple className="hidden"
+                      onChange={(e) => { uploadMoodImages(e.target.files); e.target.value = ""; }} />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {moodImages.map((url) => (
+                        <div key={url} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/[0.1] group/ref">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button type="button"
+                            onClick={() => setMoodImages((prev) => prev.filter((u) => u !== url))}
+                            className="absolute top-0 right-0 w-4 h-4 rounded-bl-md bg-black/70 text-white/80 text-[10px] leading-4 opacity-0 group-hover/ref:opacity-100">×</button>
+                        </div>
+                      ))}
+                      {moodImages.length < 12 && (
+                        <button type="button" onClick={() => moodInputRef.current?.click()} disabled={moodBusy}
+                          className="w-12 h-12 rounded-lg border border-dashed border-white/[0.15] text-white/40 hover:text-white/70 hover:border-white/30 text-[10px] disabled:opacity-40">
+                          + ref
+                        </button>
+                      )}
+                    </div>
+                    <button type="button" onClick={readMoodboard} disabled={moodBusy || !moodImages.length}
+                      className="pressable h-8 rounded-full bg-[#EF0328] text-white text-[12px] font-semibold disabled:opacity-40">
+                      {moodBusy ? "Lendo…" : "✦ Ler moodboard"}
+                    </button>
+                    {savedStyles.length > 0 && (
+                      <div className="flex flex-col gap-1.5 pt-1 border-t border-white/[0.06]">
+                        <span className="text-white/40 text-[11px]">Estilos salvos</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {savedStyles.map((st) => (
+                            <button key={st.id} type="button" onClick={() => applySavedStyle(st)}
+                              className="h-7 px-2.5 rounded-full border border-white/[0.1] bg-white/[0.04] text-[11px] font-semibold text-white/70 hover:text-white">
+                              {st.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {activeStyle && (
+                      <p className="text-white/35 text-[10px] leading-relaxed border-t border-white/[0.06] pt-2">
+                        Ativo: <span className="text-white/60">{activeStyle.name}</span> — entra em toda geração até você remover.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
               {/* Enhance — discreet icon toggle (sticky) */}
               <button
                 type="button"
