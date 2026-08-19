@@ -55,10 +55,10 @@ const pickDeterministic = (list, seedString) => {
 //  • Image models want dense declarative attributes with the optical stack
 //    close to the subject, and carry no motion sections at all.
 const ASSEMBLY_PROFILES = {
-  seedance: ["subject", "genreTag", "framing", "motion", "vfx", "gear", "light", "pace", "grade"],
-  veo: ["subject", "genreTag", "framing", "light", "motion", "vfx", "gear", "pace", "grade"],
-  imageDense: ["subject", "genreTag", "framing", "gear", "light", "grade"],
-  default: ["subject", "genreTag", "framing", "light", "motion", "vfx", "pace", "gear", "grade"],
+  seedance: ["subject", "genreTag", "framing", "motion", "vfx", "gear", "light", "pace", "grade", "signature"],
+  veo: ["subject", "genreTag", "framing", "light", "motion", "vfx", "gear", "pace", "grade", "signature"],
+  imageDense: ["subject", "genreTag", "framing", "gear", "light", "grade", "signature"],
+  default: ["subject", "genreTag", "framing", "light", "motion", "vfx", "pace", "gear", "grade", "signature"],
 };
 
 export function assemblyProfile(modelId = "", mode = "image") {
@@ -169,6 +169,9 @@ export function compileCinematography(setup) {
     pace: mode === "video" && !multiShot ? (tempo ? tempo.prompt : genre ? genre.blocks.pace : null) : null,
     gear: [camera?.prompt, lens?.prompt, aperture?.prompt, medium?.prompt, era?.prompt].filter(Boolean).join(". ") || null,
     grade: palette ? palette.prompt : genre ? genre.blocks.palette : null,
+    // Moodboard signature: the recurring texture/surface/habit the catalogs
+    // could not name. Rides with the grade so it survives every profile.
+    signature: (setup.signature || "").trim() || null,
   };
 
   // IMAGE-TO-VIDEO: the frame already carries framing, optics, light and
@@ -176,7 +179,7 @@ export function compileCinematography(setup) {
   // instead of animating the still — the exact "it ignored my reference"
   // failure. Only motion sections ride along.
   const order = setup.hasStartFrame
-    ? ["subject", "motion", "vfx", "pace"]
+    ? ["subject", "motion", "vfx", "pace"]  // the frame already carries the look
     : assemblyProfile(setup.modelId, mode);
   const prompt = order.map((k) => section[k]).filter(Boolean).join(". ");
 

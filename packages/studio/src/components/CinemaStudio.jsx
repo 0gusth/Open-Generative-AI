@@ -430,6 +430,131 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
   const [decoupaging, setDecoupaging] = useState(false);
   const updateCut = (id, patch) => setCuts((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   const removeCut = (id) => setCuts((prev) => prev.filter((c) => c.id !== id));
+  // ── Moodboard → style ────────────────────────────────────────────────
+  // Reference images in, Cinema's own setup vocabulary out. The catalogs go
+  // to the reader so it can only answer with ids this app compiles; a look
+  // it invented would silently degrade to "auto" with no explanation.
+  const [moodImages, setMoodImages] = useState([]);   // hosted urls
+  const [moodNote, setMoodNote] = useState("");
+  const [moodReading, setMoodReading] = useState(null); // { name, signature, reading }
+  const [moodBusy, setMoodBusy] = useState(false);
+  const [savedStyles, setSavedStyles] = useState([]);
+  const moodInputRef = useRef(null);
+
+  useEffect(() => {
+    fetch("/api/moodboard").then((r) => r.json())
+      .then((d) => setSavedStyles(d.styles || []))
+      .catch(() => {});
+  }, []);
+
+  const uploadMoodImages = async (files) => {
+    const usable = [...files].filter((f) => f.type.startsWith("image/")).slice(0, 12 - moodImages.length);
+    if (!usable.length) return;
+    setMoodBusy(true);
+    try {
+      // Own upload route — the legacy Muapi key is not required (and is
+      // often expired), so the moodboard never dies on someone else's auth.
+      const urls = await Promise.all(usable.map(async (f) => {
+        const form = new FormData();
+        form.append("file", f);
+        const r = await fetch("/api/upload-image", { method: "POST", body: form });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "upload falhou");
+        return d.url;
+      }));
+      setMoodImages((prev) => [...prev, ...urls].slice(0, 12));
+    } catch (e) {
+      toast.error(formatErrorMessage(e, "Não consegui subir as referências"));
+    } finally {
+      setMoodBusy(false);
+    }
+  };
+
+  const readMoodboard = async () => {
+    if (moodImages.length === 0) { toast.error("Adicione ao menos uma imagem de referência."); return; }
+    setMoodBusy(true);
+    const toastId = toast.loading("Lendo o moodboard…");
+    try {
+      const slim = (items) => items.map((i) => ({ id: i.id, name: i.name }));
+      const r = await fetch("/api/moodboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "analyze",
+          images: moodImages,
+          note: moodNote.trim() || undefined,
+          catalogs: {
+            genre: slim(GENRES), era: slim(ERAS),
+            camera: slim(cameraItems), lens: slim(lensItems),
+            aperture: slim(APERTURES), medium: slim(mediumItems),
+            palette: slim(PALETTES), lighting: slim(LIGHTING),
+          },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "falha na leitura");
+      const st = d.style;
+      // Apply everything at once — the user sees the reading reflected in the
+      // same controls they already know, and can override any of them.
+      setSetup((prev) => ({
+        ...prev,
+        genre: st.genre, era: st.era, camera: st.camera, lens: st.lens,
+        aperture: st.aperture, medium: st.medium, palette: st.palette, lighting: st.lighting,
+        signature: st.signature || "",
+      }));
+      setMoodReading({ name: st.name, signature: st.signature, reading: st.reading });
+      toast.success(`Estilo lido: ${st.name}`, { id: toastId });
+    } catch (e) {
+      toast.error(formatErrorMessage(e, "Não consegui ler o moodboard"), { id: toastId });
+    } finally {
+      setMoodBusy(false);
+    }
+  };
+
+  const saveStyle = async () => {
+    if (!moodReading) return;
+    try {
+      const r = await fetch("/api/moodboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save",
+          name: moodReading.name,
+          setup: {
+            genre: setup.genre, era: setup.era, camera: setup.camera, lens: setup.lens,
+            aperture: setup.aperture, medium: setup.medium, palette: setup.palette, lighting: setup.lighting,
+          },
+          signature: moodReading.signature,
+          reading: moodReading.reading,
+          refs: moodImages,
+          setupSignature: setup.signature || "",
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "falha ao salvar");
+      setSavedStyles((prev) => [d.style, ...prev.filter((x) => x.id !== d.style.id)]);
+      toast.success("Estilo salvo — disponível em qualquer aparelho.");
+    } catch (e) {
+      toast.error(formatErrorMessage(e, "Não consegui salvar o estilo"));
+    }
+  };
+
+  const applyStyle = (style) => {
+    setSetup((prev) => ({ ...prev, ...style.setup, signature: style.signature || "" }));
+    setMoodReading({ name: style.name, signature: style.signature, reading: style.reading });
+    setMoodImages(style.refs || []);
+    toast.success(`Estilo "${style.name}" aplicado.`);
+  };
+
+  const deleteStyle = async (style) => {
+    if (!window.confirm(`Excluir o estilo "${style.name}"?`)) return;
+    await fetch("/api/moodboard", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", id: style.id }),
+    }).catch(() => {});
+    setSavedStyles((prev) => prev.filter((s) => s.id !== style.id));
+  };
+
   // Hand the assembled look to the Production tab: treatment blocks only
   // (no subject), compiled deterministically from the current setup.
   const saveStylePrefix = () => {
@@ -1149,6 +1274,74 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   <PickerSection label={mediumItems[0]?.kind === "digital" ? "Color Science" : "Film Stock"} category="stock" items={mediumItems} value={setup.medium} onSelect={set("medium")} />
                 </>
               )}
+              {openPanel === "mood" && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-white/85 text-[13px] font-semibold">Moodboard</span>
+                    <span className="text-white/35 text-[11px]">as referências definem câmera, luz, paleta e época</span>
+                  </div>
+                  <input ref={moodInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={(e) => { uploadMoodImages(e.target.files); e.target.value = ""; }} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {moodImages.map((url) => (
+                      <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/[0.1] group/ref">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <button type="button"
+                          onClick={() => setMoodImages((prev) => prev.filter((u) => u !== url))}
+                          className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-white/80 text-[10px] leading-none opacity-0 group-hover/ref:opacity-100">×</button>
+                      </div>
+                    ))}
+                    {moodImages.length < 12 && (
+                      <button type="button" onClick={() => moodInputRef.current?.click()} disabled={moodBusy}
+                        className="w-16 h-16 rounded-lg border border-dashed border-white/[0.15] text-white/40 hover:text-white/70 hover:border-white/30 text-[11px] disabled:opacity-40">
+                        + ref
+                      </button>
+                    )}
+                  </div>
+                  <input value={moodNote} onChange={(e) => setMoodNote(e.target.value)}
+                    placeholder="opcional: o que te interessa nessas referências (ex.: a luz, não o assunto)"
+                    className="w-full bg-[#212123] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[12px] text-white/85 placeholder-white/25 outline-none focus:border-[#EF0328]/50" />
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={readMoodboard} disabled={moodBusy || moodImages.length === 0}
+                      className="pressable h-8 px-3 rounded-full bg-[#EF0328] text-white text-[12px] font-semibold disabled:opacity-40">
+                      {moodBusy ? "Lendo…" : "✦ Ler moodboard"}
+                    </button>
+                    {moodReading && (
+                      <button type="button" onClick={saveStyle}
+                        className="pressable h-8 px-3 rounded-full border border-white/[0.1] bg-white/[0.05] text-white/75 text-[12px] font-semibold hover:text-white">
+                        Salvar estilo
+                      </button>
+                    )}
+                  </div>
+                  {moodReading && (
+                    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 flex flex-col gap-1">
+                      <span className="text-white/90 text-[13px] font-semibold">{moodReading.name}</span>
+                      {moodReading.reading && (
+                        <span className="text-white/45 text-[11px] leading-relaxed">O que eu vi: {moodReading.reading}</span>
+                      )}
+                      {moodReading.signature && (
+                        <span className="text-white/60 text-[11px] leading-relaxed">Assinatura: {moodReading.signature}</span>
+                      )}
+                      <span className="text-white/30 text-[10px]">Os painéis Film / Camera / Look já foram preenchidos — ajuste o que quiser.</span>
+                    </div>
+                  )}
+                  {savedStyles.length > 0 && (
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-white/[0.06]">
+                      <span className="text-white/40 text-[11px]">Estilos salvos</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {savedStyles.map((st) => (
+                          <span key={st.id} className="group/st inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border border-white/[0.1] bg-white/[0.04]">
+                            <button type="button" onClick={() => applyStyle(st)}
+                              className="text-[11px] font-semibold text-white/70 hover:text-white">{st.name}</button>
+                            <button type="button" onClick={() => deleteStyle(st)} title="Excluir estilo"
+                              className="w-4 h-4 rounded-full text-white/25 hover:text-red-400 text-[11px] leading-none">×</button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {openPanel === "look" && (
                 <>
                   <PickerSection label="Color Palette" category="palette" items={PALETTES} value={setup.palette} onSelect={set("palette")} />
@@ -1260,6 +1453,19 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
               ))}
             </div>
             <div className="w-px h-5 bg-white/[0.08]" />
+            <button
+              type="button"
+              onClick={() => setOpenPanel(openPanel === "mood" ? null : "mood")}
+              className={promptControlClassName({ compact: true, active: openPanel === "mood" })}
+              title="Moodboard — as referências definem o estilo"
+            >
+              <span className="text-xs font-semibold">Mood</span>
+              {moodImages.length > 0 && (
+                <span className="min-w-[16px] h-4 px-1 rounded-full bg-[#EF0328] text-white text-[9px] font-bold flex items-center justify-center">
+                  {moodImages.length}
+                </span>
+              )}
+            </button>
             {panelButton("film", "Film", ["genre", "era", "tempo"])}
             {panelButton("camera", "Camera", ["camera", "lens", "aperture", "medium", "shotSize", "angle"])}
             {panelButton("look", "Look", ["palette", "lighting"])}
