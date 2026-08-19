@@ -228,6 +228,14 @@ export default function StandaloneShell() {
     try { localStorage.setItem('gallery_scope', scope); } catch {}
     window.dispatchEvent(new CustomEvent('gallery-scope-changed', { detail: scope }));
   }, []);
+
+  // A studio can flip the scope too (the "Ver tudo" escape hatch on a gallery
+  // emptied by the project filter) — mirror it so the header stays honest.
+  useEffect(() => {
+    const onScope = (e) => setGalleryScopeState(e.detail || 'all');
+    window.addEventListener('gallery-scope-changed', onScope);
+    return () => window.removeEventListener('gallery-scope-changed', onScope);
+  }, []);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
@@ -860,7 +868,7 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
                         type="button"
                         title={folderStates[p.id] === 'granted' ? 'Pasta conectada — clique para sincronizar agora' : folderStates[p.id] === 'prompt' ? 'Reconectar pasta local' : 'Conectar uma pasta local — as gerações deste projeto baixam sozinhas nela'}
                         onClick={(e) => { e.stopPropagation(); folderStates[p.id] === 'none' || !folderStates[p.id] ? linkProjectFolder(p) : resyncProjectFolder(p); }}
-                        className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-md transition-colors duration-100 ${syncingProject === p.id ? 'text-white/80 animate-pulse' : folderStates[p.id] === 'granted' ? 'text-white/70 hover:text-white' : folderStates[p.id] === 'prompt' ? 'text-amber-400/80 hover:text-amber-300' : 'text-white/30 hover:text-white/70 opacity-0 group-hover:opacity-100'}`}
+                        className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-md transition-colors duration-100 ${syncingProject === p.id ? 'text-white/80 animate-pulse' : folderStates[p.id] === 'granted' ? 'text-white/70 hover:text-white' : folderStates[p.id] === 'prompt' ? 'text-amber-400/80 hover:text-amber-300' : 'text-white/45 hover:text-white/80'}`}
                       >
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>{folderStates[p.id] === 'granted' && <path d="M9 13l2 2 4-4"/>}</svg>
                       </button>

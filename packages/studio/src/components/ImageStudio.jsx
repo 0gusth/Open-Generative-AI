@@ -1713,6 +1713,27 @@ export default function ImageStudio({
               </div>
             ))}
           </div>
+        ) : historyUnfiltered.length > 0 ? (
+          /* Nothing to show ONLY because the project filter hides it — an
+             unexplained blank gallery reads as "my history was lost". */
+          <div className="flex flex-col items-center justify-center h-full animate-fade-in-up min-h-[50vh] gap-3 px-4">
+            <span className="text-white/85 font-semibold text-lg tracking-tight text-center">
+              Este projeto ainda não tem gerações
+            </span>
+            <p className="text-white/40 text-[13px] text-center max-w-md leading-relaxed">
+              Seu histórico está inteiro ({historyUnfiltered.length} {historyUnfiltered.length === 1 ? "item" : "itens"}) — só não aparece aqui porque a galeria está filtrada pelo projeto ativo.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                try { localStorage.setItem("gallery_scope", "all"); } catch {}
+                window.dispatchEvent(new CustomEvent("gallery-scope-changed", { detail: "all" }));
+              }}
+              className="pressable h-9 px-4 rounded-full bg-[#EF0328] text-white text-[13px] font-semibold"
+            >
+              Ver tudo
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full animate-fade-in-up transition-all duration-700 min-h-[50vh]">
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-center px-4 flex flex-col items-center">
