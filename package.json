@@ -115,6 +115,8 @@
     }
   },
   "dependencies": {
+    "@google/genai": "^2.17.1",
+    "@vercel/blob": "^2.8.0",
     "ai-agent": "file:./packages/Open-Poe-AI/packages/agents",
     "axios": "^1.7.0",
     "next": "^15.0.0",

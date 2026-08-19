@@ -1538,6 +1538,7 @@ export default function ImageStudio({
             url: res.url,
             prompt: sentPrompt || finalPrompt,
             model: selectedModelId,
+            cost: typeof res.cost === "number" ? res.cost : null,
             aspect_ratio: selectedAr,
             timestamp: new Date().toISOString(),
           };

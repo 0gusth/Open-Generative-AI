@@ -284,7 +284,7 @@ function JobClock({ startedAt, route }) {
   }, [startedAt]);
   if (secs < 2) return null;
   const label = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
-  const provider = route === "muapi" ? "Muapi" : route === "fal" ? "fal" : "Runware";
+  const provider = route === "muapi" ? "Muapi" : route === "fal" ? "fal" : route === "google" ? "Google" : "Runware";
   return (
     <>
       <span className="text-[11px] tabular-nums text-white/40">via {provider} · {label}</span>
@@ -1066,7 +1066,10 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   <p className="text-white/65 text-[12px] line-clamp-2 leading-relaxed" title={entry.prompt}>{entry.prompt}</p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {typeof entry.cost === "number" && (
-                      <span className="text-[10px] font-semibold text-white/40" title="Custo real cobrado pelo provedor">${entry.cost.toFixed(3)}</span>
+                      <span className={`text-[10px] font-semibold ${entry.cost === 0 ? "text-emerald-400/70" : "text-white/40"}`}
+                        title={entry.cost === 0 ? "Cota gratuita do Google — sem custo" : "Custo real cobrado pelo provedor"}>
+                        {entry.cost === 0 ? "grátis" : `$${entry.cost.toFixed(3)}`}
+                      </span>
                     )}
                     {[...new Set([entry.resolved?.camera, entry.resolved?.lens, entry.resolved?.palette].filter(Boolean))].slice(0, 3).map((chip, ci) => (
                       <span key={`${ci}-${chip}`} className="text-[9px] font-medium text-white/50 px-1.5 py-0.5 bg-white/[0.06] rounded-full border border-white/[0.07] truncate max-w-[140px]">

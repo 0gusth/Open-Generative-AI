@@ -37,3 +37,8 @@ out/
 .env.*
 !.env.example
 .data/
+.vercel
+.env*
+
+# Locally generated images (cloud uses Vercel Blob)
+public/generated/

@@ -321,11 +321,83 @@ const stillRenderingError = () => new Error(
     "It will appear in your Runware library — do not regenerate, you would be charged twice.",
 );
 
+// ── Google direct (Nano Banana family) ──────────────────────────────────────
+//
+// The Flash-class Nano Bananas are Google's own weights that Runware resells.
+// Going direct makes them free inside the daily quota. Pro is deliberately
+// absent: it has no free tier and costs more at Google than at Runware.
+const GOOGLE_TIERS = {
+    "nano-banana": "flash",
+    "nano-banana-edit": "flash",
+    "nano-banana-effects": "flash",
+    "google:4@1": "flash",
+    "nano-banana-2": "flash2",
+    "nano-banana-2-edit": "flash2",
+    "google:4@3": "flash2",
+    "nano-banana-2-lite": "lite",
+};
+
+// Cached per session: one probe tells us whether this deployment has keys.
+let googleReady = null;
+async function googleConfigured() {
+    if (googleReady !== null) return googleReady;
+    try {
+        const response = await fetch("/api/providers/google-image");
+        googleReady = response.ok ? !!(await response.json()).configured : false;
+    } catch {
+        googleReady = false;
+    }
+    return googleReady;
+}
+
+// Try Google first for mapped models. Returns a result or null — null means
+// "not handled here", and the caller continues down the Runware path exactly
+// as before, so this can never make generation worse.
+async function tryGoogleImage(modelId, params) {
+    const tier = GOOGLE_TIERS[modelId];
+    if (!tier || !(await googleConfigured())) return null;
+    const refs = params.images_list?.length
+        ? params.images_list
+        : params.image_url
+            ? [params.image_url]
+            : [];
+    announceRoute("google", modelId);
+    const response = await fetch("/api/providers/google-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            prompt: params.prompt || "",
+            tier,
+            count: Math.min(4, Math.max(1, parseInt(params.numberResults, 10) || 1)),
+            aspectRatio: params.aspect_ratio,
+            referenceImages: refs,
+        }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.images?.length) {
+        // Quota spent or Google refused: fall through to Runware rather than
+        // failing the user's click. The reason is logged, never swallowed.
+        console.warn(`[providers] Google image route unavailable (${response.status}):`, data.error);
+        return null;
+    }
+    const [first, ...rest] = data.images;
+    return {
+        url: first.url,
+        urls: data.images.map((i) => i.url),
+        id: makeUUID(),
+        provider: "google",
+        cost: data.images.reduce((sum, i) => sum + (i.cost || 0), 0),
+        free: data.images.every((i) => !i.paid),
+    };
+}
+
 // Route an image generation. displayName enables dynamic Runware lookup when
 // the model has no hand-mapped route. Returns {url, id, provider} or null.
 // AIR ids (creator:model@version — Runware's own catalog) route directly and
 // NEVER fall back: their errors surface with the provider's real cause.
 export async function tryProviderGenerate(modelId, mode, params, displayName) {
+    const viaGoogle = await tryGoogleImage(modelId, params);
+    if (viaGoogle) return viaGoogle;
     if (/:.+@/.test(modelId || "")) {
         if (!getProviderKey("runware")) {
             throw new Error("Runware API key required — add it in Settings to generate with this model.");
