@@ -1890,7 +1890,7 @@ export default function ImageStudio({
                     {typeof entry.cost === "number" && (
                       <span className={`text-[10px] font-semibold tabular-nums ${entry.cost === 0 ? "text-emerald-400/70" : "text-white/40"}`}
                         title={entry.cost === 0 ? "Sem custo" : "Custo real cobrado pelo provedor"}>
-                        {entry.cost === 0 ? "grátis" : `$${entry.cost.toFixed(3)}`}
+                        {entry.cost === 0 ? "grátis" : `${entry.costEstimated ? "~" : ""}$${entry.cost.toFixed(3)}`}
                       </span>
                     )}
                     {entry.provider && entry.provider !== "muapi" && (

@@ -25,6 +25,9 @@ function logGeneration(result, params, type) {
             type,
             aspect_ratio: params.aspect_ratio || null,
             cost: typeof result.cost === 'number' ? result.cost : null,
+            // Runware reports what it actually charged; the Vertex figure is
+            // our own table. The card must not present them as equal truth.
+            costEstimated: !!result.estimated,
             // Cinema shows resolved gear chips and the seed on each card —
             // without these the entry comes back from the server stripped.
             resolved: params.__resolved || null,

@@ -92,6 +92,7 @@ export async function POST(request) {
                 type: entry.type || 'image',
                 aspect_ratio: entry.aspect_ratio || null,
                 cost: typeof entry.cost === 'number' ? entry.cost : null,
+                costEstimated: !!entry.costEstimated,
                 resolved: entry.resolved || null,
                 seed: typeof entry.seed === 'number' ? entry.seed : null,
                 studio: entry.studio || null,

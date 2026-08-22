@@ -389,7 +389,7 @@ async function tryVertex(modelId, params, kind) {
         console.warn(`[providers] Vertex indisponível (${response.status}):`, data.error);
         return null; // fall through to the existing provider
     }
-    return { url: data.url, id: makeUUID(), provider: "vertex", cost: data.cost, estimated: data.estimated };
+    return { url: data.url, id: makeUUID(), provider: "vertex", cost: data.cost, estimated: !!data.estimated };
 }
 
 // Cached per session: one probe tells us whether this deployment has keys.

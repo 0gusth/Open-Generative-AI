@@ -1193,7 +1193,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                     {typeof entry.cost === "number" && (
                       <span className={`text-[10px] font-semibold ${entry.cost === 0 ? "text-emerald-400/70" : "text-white/40"}`}
                         title={entry.cost === 0 ? "Cota gratuita do Google — sem custo" : "Custo real cobrado pelo provedor"}>
-                        {entry.cost === 0 ? "grátis" : `$${entry.cost.toFixed(3)}`}
+                        {entry.cost === 0 ? "grátis" : `${entry.costEstimated ? "~" : ""}$${entry.cost.toFixed(3)}`}
                       </span>
                     )}
                     {[...new Set([entry.resolved?.camera, entry.resolved?.lens, entry.resolved?.palette].filter(Boolean))].slice(0, 3).map((chip, ci) => (
