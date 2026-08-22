@@ -995,7 +995,12 @@ export default function ImageStudio({
 
   // ── UI state ────────────────────────────────────────────────────────────
   const [dropdownOpen, setDropdownOpen] = useState(null); // 'model' | 'ar' | 'quality' | null
-  const [generating, setGenerating] = useState(false);
+  // Count of in-flight generations, not a boolean: with two running, the
+  // first to finish would clear the flag and hide the other's placeholder.
+  const [inFlight, setInFlight] = useState(0);
+  const generating = inFlight > 0;
+  const startJob = () => setInFlight((n) => n + 1);
+  const endJob = () => setInFlight((n) => Math.max(0, n - 1));
   const [generateError, setGenerateError] = useState(null);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
@@ -1362,7 +1367,7 @@ export default function ImageStudio({
     if (files.length > room) {
       toast(`Só ${room} espaço(s) livre(s) — anexando as ${room} primeiras.`, { icon: "⚠️" });
     }
-    setGenerating(true); // Show as generating/busy
+    startJob(); // placeholder appears immediately
     const toUpload = files.slice(0, room);
     // Instant local previews while the real upload happens in the background
     const localPreviews = toUpload.map((f) => URL.createObjectURL(f));
@@ -1395,7 +1400,7 @@ export default function ImageStudio({
     } finally {
       localPreviews.forEach((u) => URL.revokeObjectURL(u));
       setUploadingPreviews([]);
-      setGenerating(false);
+      endJob();
     }
   };
 
@@ -1627,7 +1632,9 @@ export default function ImageStudio({
   };
 
   const handleGenerate = async () => {
-    if (generating) return;
+    // Concurrent by design: a render takes tens of seconds and must never
+    // hold the studio hostage. Each click opens its own job with its own
+    // placeholder; results land as they finish.
 
     if (imageMode) {
       if (uploadedImageUrls.length === 0) {
@@ -1657,7 +1664,7 @@ export default function ImageStudio({
     // Always send a seed we know, like Cinema does: without it a result can
     // never be reproduced from its history entry.
     const usedSeed = lockedSeed ?? Math.floor(Math.random() * 2147483647);
-    setGenerating(true);
+    startJob();
     setGenerateError(null);
 
     try {
@@ -1732,7 +1739,7 @@ export default function ImageStudio({
       if (onGenerationError) onGenerationError(errMsg);
       else toast.error(errMsg);
     } finally {
-      setGenerating(false);
+      endJob();
       onGenerationEnd?.();
     }
   };
@@ -1776,7 +1783,7 @@ export default function ImageStudio({
         )}
         {history.length > 0 || generating ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full pt-4 animate-fade-in-up">
-            {generating && Array.from({ length: batchSize || 1 }).map((_, i) => (
+            {Array.from({ length: inFlight * (batchSize || 1) }).map((_, i) => (
               <div
                 key={`placeholder-${i}`}
                 className="relative rounded-2xl overflow-hidden border border-white/[0.07] bg-[#171719] animate-fade-in-up"

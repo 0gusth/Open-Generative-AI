@@ -33,7 +33,9 @@ import ModelPicker from "./ModelPicker.jsx";
 
 // Ratios the provider router maps to real dimensions. Single source: a studio
 // never invents its own list, so a ratio that works in one works in all.
-export const ASPECT_OPTIONS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "4:5"];
+// "auto" first: it lets the subject decide the framing, and the router has
+// always accepted it. Dropping it from this list was a regression.
+export const ASPECT_OPTIONS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "4:5"];
 export const TIER_OPTIONS = ["1k", "2k", "4k"];
 export const VIDEO_QUALITY_OPTIONS = ["480p", "720p", "1080p"];
 
