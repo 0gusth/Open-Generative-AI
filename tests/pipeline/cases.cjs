@@ -25,6 +25,10 @@ global.fetch = async (url, opts) => {
   if (url === "/api/providers/google-image" && !opts) {
     return { ok: true, json: async () => ({ configured: googleConfigured }) };
   }
+  // Vertex probe: off in these cases, so the classic route is exercised.
+  if (url === "/api/providers/vertex" && !opts) {
+    return { ok: true, json: async () => ({ configured: false }) };
+  }
   const body = opts?.body ? JSON.parse(opts.body) : null;
   const task = Array.isArray(body) ? body[0] : body;
   sent.push(task);
@@ -94,6 +98,39 @@ const dimError = () => ({ ok: false, res: { errors: [{ code: "unsupportedDimensi
   });
   assert.strictEqual(rerouted.reroutedTo, "klingai:kling-video@3-standard");
   console.log("PASS  vídeo: veto de moderação da ByteDance re-roteia para o Kling");
+
+  // 6. With Google Cloud configured, Google models bill to the user's own
+  //    project and the reseller is not touched; a credential failure must
+  //    fall back instead of costing the user the generation.
+  {
+    const realFetch = global.fetch;
+    let vertexOn = true, hit = [];
+    global.fetch = async (url, opts) => {
+      if (url === "/api/providers/vertex" && !opts) return { ok: true, json: async () => ({ configured: vertexOn }) };
+      if (url === "/api/providers/vertex") {
+        hit.push("vertex");
+        return vertexOn
+          ? { ok: true, status: 200, json: async () => ({ ok: true, url: "https://blob/v.png", cost: 0.134, estimated: true }) }
+          : { ok: false, status: 403, json: async () => ({ error: "permission denied" }) };
+      }
+      if (url === "/api/providers/runware") hit.push("runware");
+      return realFetch(url, opts);
+    };
+    delete require.cache[require.resolve("./lib/providers.js")];
+    const mod = require("./lib/providers.js");
+
+    reset(); hit = []; script = [okImage()];
+    let out = await mod.tryProviderGenerate("google:4@3", "t2i", { prompt: "x", aspect_ratio: "1:1", quality_tier: "2k" });
+    assert.strictEqual(out.provider, "vertex", "Google model must bill to the user's Cloud project");
+    assert.ok(!hit.includes("runware"), "reseller must not be called");
+    console.log("PASS  Google Cloud: modelo Google vai para a conta do usuário");
+
+    vertexOn = false; hit = []; script = [okImage()];
+    out = await mod.tryProviderGenerate("google:4@3", "t2i", { prompt: "x", aspect_ratio: "1:1" });
+    assert.strictEqual(out.provider, "runware", "credential failure must fall back, not fail");
+    console.log("PASS  Google Cloud: falha de credencial cai na Runware sem quebrar");
+    global.fetch = realFetch;
+  }
 
   console.log("\nTODOS OS CASOS PASSARAM");
 })().catch((e) => { console.error("FALHOU:", e.message); process.exit(1); });
