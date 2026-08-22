@@ -9,9 +9,10 @@ import DrawModal from "./DrawModal.jsx";
 import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
+import { fetchRunwareImageCatalog, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
 import {
-  t2iModels,
-  i2iModels,
+  t2iModels as wrapperT2iModels,
+  i2iModels as wrapperI2iModels,
   getAspectRatiosForModel,
   getResolutionsForModel,
   getQualityFieldForModel,
@@ -616,7 +617,7 @@ const PROVIDER_LOGOS = {
 
 const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
-function ModelDropdown({ selectedModel, onSelect, onClose }) {
+function ModelDropdown({ selectedModel, onSelect, onClose, t2iModels, i2iModels }) {
   const [search, setSearch] = useState("");
   const modelCategories = [
     {
@@ -950,13 +951,13 @@ export default function ImageStudio({
 
   // ── Model / mode state ──────────────────────────────────────────────────
   const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
-  const [selectedModelId, setSelectedModelId] = useState(t2iModels[0].id);
-  const [selectedModelName, setSelectedModelName] = useState(t2iModels[0].name);
+  const [selectedModelId, setSelectedModelId] = useState(wrapperT2iModels[0].id);
+  const [selectedModelName, setSelectedModelName] = useState(wrapperT2iModels[0].name);
   const [selectedAr, setSelectedAr] = useState(
-    t2iModels[0].inputs?.aspect_ratio?.default || "1:1",
+    wrapperT2iModels[0].inputs?.aspect_ratio?.default || "1:1",
   );
   const [selectedQuality, setSelectedQuality] = useState(() => {
-    const resolutions = getResolutionsForModel(t2iModels[0].id);
+    const resolutions = getResolutionsForModel(wrapperT2iModels[0].id);
     return resolutions[0] || null;
   });
   const [selectedEffect, setSelectedEffect] = useState("");
@@ -1184,6 +1185,32 @@ export default function ImageStudio({
     batchSize,
     localHistory,
   ]);
+
+  // Model catalog — the SAME source Cinema and Video already use. The legacy
+  // wrapper list carries 430 models that no longer exist on the provider, so
+  // picking one failed with "not available on Runware or fal". The native
+  // Runware catalog only lists models that actually run; the wrapper list
+  // stays as the offline/no-key fallback.
+  // Quality tier that does not depend on the legacy catalog: native Runware
+  // models carry no `inputs.resolution`, so the old per-model selector simply
+  // vanished for them. This one is the same 1K/2K/4K Cinema uses and always
+  // reaches the router as quality_tier.
+  const [imageTier, setImageTier] = useState(() => {
+    if (typeof window === "undefined") return "2k";
+    return window.localStorage.getItem("image_studio_tier") || "2k";
+  });
+  const setTier = (t) => {
+    setImageTier(t);
+    try { window.localStorage.setItem("image_studio_tier", t); } catch {}
+  };
+
+  const [rwImages, setRwImages] = useState([]);
+  useEffect(() => { fetchRunwareImageCatalog().then(setRwImages).catch(() => {}); }, []);
+  const t2iModels = useMemo(() => mergeImageCatalogs(rwImages, wrapperT2iModels), [rwImages]);
+  const i2iModels = useMemo(
+    () => mergeImageCatalogs(rwImages.filter((m) => m.rwImage?.i2i), wrapperI2iModels),
+    [rwImages],
+  );
 
   // ── Mood: a saved style (or a fresh moodboard read) becomes treatment
   // text appended to the prompt. Image Studio has no gear controls of its
@@ -1595,6 +1622,9 @@ export default function ImageStudio({
     onGenerationStart?.();
     let finalPrompt = prompt.trim();
     let sentPrompt = finalPrompt;
+    // Always send a seed we know, like Cinema does: without it a result can
+    // never be reproduced from its history entry.
+    const usedSeed = Math.floor(Math.random() * 2147483647);
     setGenerating(true);
     setGenerateError(null);
 
@@ -1617,6 +1647,8 @@ export default function ImageStudio({
               images_list: uploadedImageUrls,
               image_url: uploadedImageUrls[0],
               aspect_ratio: selectedAr,
+              quality_tier: imageTier,
+              seed: usedSeed,
             };
             if (swapImageUrl) genParams.swap_url = swapImageUrl;
             if (prompt.trim()) genParams.prompt = resolveImageRefs(finalPrompt, uploadedImageUrls.length).resolved;
@@ -1630,6 +1662,8 @@ export default function ImageStudio({
               model: selectedModelId,
               prompt: finalPrompt,
               aspect_ratio: selectedAr,
+              quality_tier: imageTier,
+              seed: usedSeed,
             };
             if (currentQualityField && selectedQuality) {
               genParams[currentQualityField] = selectedQuality;
@@ -1647,6 +1681,7 @@ export default function ImageStudio({
             prompt: sentPrompt || finalPrompt,
             model: selectedModelId,
             cost: typeof res.cost === "number" ? res.cost : null,
+            seed: usedSeed,
             aspect_ratio: selectedAr,
             timestamp: new Date().toISOString(),
           };
@@ -2076,6 +2111,8 @@ export default function ImageStudio({
                       selectedModel={selectedModelId}
                       onSelect={handleModelSelect}
                       onClose={() => setDropdownOpen(null)}
+                      t2iModels={t2iModels}
+                      i2iModels={i2iModels}
                     />
                   </PromptPopover>
                 )}
@@ -2115,39 +2152,33 @@ export default function ImageStudio({
               </div>
 
               {/* Quality/resolution button (represented as Diamond icon) */}
-              {showQualityBtn && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDropdownOpen((o) => (o === "quality" ? null : "quality"));
-                    }}
-                    className={promptControlClassName({
-                      active: dropdownOpen === "quality",
-                    })}
-                  >
-                    <PromptQualityIcon />
-                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                      {selectedQuality || currentResolutions[0]}
-                    </span>
-                  </button>
-
-                  {dropdownOpen === "quality" && (
-                    <PromptPopover
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <SimpleDropdown
-                        title="Resolution"
-                        options={currentResolutions}
-                        selected={selectedQuality}
-                        onSelect={(val) => setSelectedQuality(val)}
-                        onClose={() => setDropdownOpen(null)}
-                      />
-                    </PromptPopover>
-                  )}
-                </div>
-              )}
+              {/* Quality tier — works for every model (native or wrapper),
+                  and actually reaches the router. The old per-model selector
+                  vanished on native models and its value was ignored. */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen((o) => (o === "quality" ? null : "quality"));
+                  }}
+                  className={promptControlClassName({ active: dropdownOpen === "quality" })}
+                >
+                  <PromptQualityIcon />
+                  <span className={PROMPT_CONTROL_LABEL_CLASS}>{imageTier.toUpperCase()}</span>
+                </button>
+                {dropdownOpen === "quality" && (
+                  <PromptPopover onClick={(e) => e.stopPropagation()}>
+                    <SimpleDropdown
+                      title="Resolution"
+                      options={["1k", "2k", "4k"]}
+                      selected={imageTier}
+                      onSelect={(val) => setTier(val)}
+                      onClose={() => setDropdownOpen(null)}
+                    />
+                  </PromptPopover>
+                )}
+              </div>
 
               {/* Effect type button */}
               {showEffectBtn && (

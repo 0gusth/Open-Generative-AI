@@ -243,7 +243,12 @@ const roundTo64 = (n) => Math.max(256, Math.round(n / 64) * 64);
 async function generateImageRunware(air, params) {
     announceRoute("runware", air);
     let [width, height] = AR_DIMENSIONS[params.aspect_ratio] || AR_DIMENSIONS["1:1"];
-    const scale = IMAGE_TIER_SCALE[String(params.quality_tier || "1k").toLowerCase()];
+    // Studios name this differently — Cinema sends quality_tier, Image Studio
+    // sends the model's own field (resolution/quality). Reading only one of
+    // them silently rendered every Image Studio job at 1K no matter what the
+    // user picked; accept all three spellings.
+    const tier = String(params.quality_tier || params.resolution || params.quality || "1k").toLowerCase();
+    const scale = IMAGE_TIER_SCALE[tier];
     if (scale && scale !== 1) {
         width = roundTo64(width * scale);
         height = roundTo64(height * scale);
