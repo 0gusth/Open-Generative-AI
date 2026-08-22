@@ -24,6 +24,7 @@ import { MOVEMENTS } from "../cinema/movement.js";
 import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import { EFFECTS } from "../cinema/effects.js";
 import { truthFor } from "../modelTruth.js";
+import GenerationControls from "./prompt/GenerationControls.jsx";
 import { fetchRunwareVideoCatalog, fetchRunwareImageCatalog, mergeVideoCatalogs, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
 // Curated shortlist lives in one shared module — Image Studio reads the
 // exact same list, so a model promoted here is promoted there too.
@@ -1590,200 +1591,47 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
 
           {/* Footer */}
           <PromptFooter>
-            <PromptControls>
-              {/* Model — list */}
-              <div className="relative">
-                <button type="button"
-                  onClick={() => setOpenList(openList === "model" ? null : "model")}
-                  className={promptControlClassName({ compact: true, active: openList === "model" })}
-                  title="Generation model">
-                  <span className="text-xs font-semibold">{models[mode].find((m) => m.id === modelId)?.name}</span>
-                  <PromptChevronIcon />
-                </button>
-                {openList === "model" && (
-                  <PromptPopover className="min-w-[300px] max-h-[52vh]">
-                    <input
-                      type="text"
-                      value={modelSearch}
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder="Search models…"
-                      autoFocus
-                      className="w-full mb-2 bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-[#EF0328]/40"
-                    />
-                    {!modelSearch && (
-                      <div className="flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5 mb-2">
-                        {[["fav", "Favoritos"], ["all", "Todos"]].map(([value, label]) => (
-                          <button key={value} type="button" onClick={() => setModelTab(value)}
-                            className={`flex-1 px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 ${
-                              modelTab === value ? "bg-[#636366]/90 text-white shadow-sm" : "text-white/50 hover:text-white/80"
-                            }`}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {!modelSearch && modelTab === "fav" && (
-                      <PromptMenuList>
-                        {CINEMA_FAVORITES[mode]
-                          .map((id) => models[mode].find((m) => m.id === id))
-                          .filter(Boolean)
-                          .map((m) => (
-                            <PromptMenuItem key={m.id} selected={modelId === m.id}
-                              onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
-                              <span className="flex items-center gap-2">
-                                {(m.logoUrl || PROVIDER_LOGOS[m.provider]) && (
-                                  <img src={m.logoUrl || PROVIDER_LOGOS[m.provider]} alt="" className={`w-3.5 h-3.5 object-contain ${!m.logoUrl && INVERT_LOGOS.includes(m.provider) ? "invert" : ""}`} />
-                                )}
-                                {m.name}
-                              </span>
-                            </PromptMenuItem>
-                          ))}
-                      </PromptMenuList>
-                    )}
-                    {(modelSearch || modelTab === "all") && groupByProvider(
-                      models[mode].filter((m) => !modelSearch ||
-                        m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
-                        (m.provider_name || "").toLowerCase().includes(modelSearch.toLowerCase())),
-                    ).map((group) => (
-                      <div key={group.name} className="mb-2 last:mb-0">
-                        <div className="flex items-center gap-2 px-1 pb-1.5 pt-1 border-b border-white/[0.05] mb-1">
-                          {group.logo && (
-                            <img src={group.logo} alt="" className={`w-4 h-4 object-contain ${group.invert ? "invert" : ""}`} />
-                          )}
-                          <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">{group.name}</span>
-                        </div>
-                        <PromptMenuList>
-                          {group.items.map((m) => (
-                            <PromptMenuItem key={m.id} selected={modelId === m.id}
-                              onClick={() => { setModelId(m.id); setOpenList(null); setModelSearch(""); }}>
-                              {m.name}
-                            </PromptMenuItem>
-                          ))}
-                        </PromptMenuList>
-                      </div>
-                    ))}
-                  </PromptPopover>
-                )}
-              </div>
-              {/* Aspect — list */}
-              <div className="relative">
-                <button type="button"
-                  onClick={() => setOpenList(openList === "aspect" ? null : "aspect")}
-                  className={promptControlClassName({ compact: true, active: openList === "aspect" })}
-                  title="Aspect ratio">
-                  <span className="text-xs font-semibold tabular-nums">{aspect}</span>
-                  <PromptChevronIcon />
-                </button>
-                {openList === "aspect" && (
-                  <PromptPopover>
-                    <PromptMenuList>
-                      {caps.aspects.map((a) => (
-                        <PromptMenuItem key={a} selected={aspect === a}
-                          onClick={() => { setAspect(a); setOpenList(null); }}>
-                          {a}
-                        </PromptMenuItem>
-                      ))}
-                    </PromptMenuList>
-                  </PromptPopover>
-                )}
-              </div>
-              {/* Image mode: quality tier + variations per Direct */}
-              {mode === "image" && (
-                <>
-                  <div className="relative">
-                    <button type="button"
-                      onClick={() => setOpenList(openList === "imgQuality" ? null : "imgQuality")}
-                      className={promptControlClassName({ compact: true, active: openList === "imgQuality" })}
-                      title="Resolução da imagem">
-                      <span className="text-xs font-semibold uppercase tabular-nums">{imageTier}</span>
-                      <PromptChevronIcon />
-                    </button>
-                    {openList === "imgQuality" && (
-                      <PromptPopover>
-                        <PromptMenuList>
-                          {["1k", "2k", "4k"].map((t) => (
-                            <PromptMenuItem key={t} selected={imageTier === t}
-                              onClick={() => { setImageTier(t); setOpenList(null); }}>
-                              {t.toUpperCase()}
-                            </PromptMenuItem>
-                          ))}
-                        </PromptMenuList>
-                      </PromptPopover>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button type="button"
-                      onClick={() => setOpenList(openList === "variations" ? null : "variations")}
-                      className={promptControlClassName({ compact: true, active: openList === "variations" })}
-                      title="Quantas variações por geração">
-                      <span className="text-xs font-semibold tabular-nums">{variations}×</span>
-                      <PromptChevronIcon />
-                    </button>
-                    {openList === "variations" && (
-                      <PromptPopover>
-                        <PromptMenuList>
-                          {[1, 2, 3, 4].map((n) => (
-                            <PromptMenuItem key={n} selected={variations === n}
-                              onClick={() => { setVariations(n); setOpenList(null); }}>
-                              {n} {n === 1 ? "imagem" : "variações"}
-                            </PromptMenuItem>
-                          ))}
-                        </PromptMenuList>
-                      </PromptPopover>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Seed — random by default; lock one to iterate variations of
-                  the same frame instead of restarting each click */}
-              <div className="relative">
-                <button type="button"
-                  onClick={() => setOpenList(openList === "seed" ? null : "seed")}
-                  className={promptControlClassName({ compact: true, active: openList === "seed" || seed !== null })}
-                  title={seed !== null ? `Seed fixa: ${seed}` : "Seed aleatória a cada geração"}>
-                  <span className="text-xs font-semibold tabular-nums">{seed !== null ? String(seed).slice(0, 7) : "Seed"}</span>
-                  <PromptChevronIcon />
-                </button>
-                {openList === "seed" && (
-                  <PromptPopover className="min-w-[210px]">
-                    <PromptMenuList>
-                      <PromptMenuItem selected={seed === null}
-                        onClick={() => { setSeed(null); setOpenList(null); }}>
-                        Aleatória a cada geração
-                      </PromptMenuItem>
-                      {lastSeed !== null && (
-                        <PromptMenuItem selected={seed === lastSeed}
-                          onClick={() => { setSeed(lastSeed); setOpenList(null); }}>
-                          Fixar a última ({lastSeed})
-                        </PromptMenuItem>
-                      )}
-                    </PromptMenuList>
-                    <input
-                      type="number"
-                      value={seed ?? ""}
-                      onChange={(e) => setSeed(e.target.value === "" ? null : Math.abs(parseInt(e.target.value, 10) || 0))}
-                      placeholder="Seed manual…"
-                      className="w-full mt-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[12px] tabular-nums text-white placeholder:text-white/25 outline-none focus:border-[#EF0328]/60"
-                    />
-                  </PromptPopover>
-                )}
-              </div>
-
-              {/* Audio — discreet switch (only when the model generates sound) */}
-              {caps.audio && (
-                <button type="button" onClick={toggleAudio}
-                  title={audioOn ? "Som ativado" : "Sem som"} aria-pressed={audioOn}
-                  className="pressable h-[38px] px-2.5 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.04] hover:bg-white/[0.07]">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={audioOn ? "text-white/80" : "text-white/35"}>
-                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                    {audioOn ? <path d="M15.5 8.5a5 5 0 010 7" /> : <path d="M22 9l-6 6M16 9l6 6" />}
-                  </svg>
-                  <span className={`relative w-7 h-[16px] rounded-full transition-colors duration-150 ${audioOn ? "bg-[#30D158]" : "bg-white/15"}`}>
-                    <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${audioOn ? "left-[14px]" : "left-[2px]"}`} />
-                  </span>
-                </button>
-              )}
+            <GenerationControls
+              features={{
+                enhance: true,
+                mood: true,
+                model: true,
+                aspect: true,
+                quality: true,
+                qualityOptions: mode === "image" ? ["1k", "2k", "4k"] : (caps.qualities?.length ? caps.qualities : ["480p", "720p", "1080p"]),
+                variations: mode === "image",
+                maxVariations: 4,
+                seed: true,
+                duration: mode === "video" && caps.durations?.length > 0,
+                durationOptions: caps.durations,
+                audio: mode === "video" && caps.audio,
+              }}
+              modelKind={mode === "image" ? "image" : "video"}
+              models={models[mode]}
+              value={{
+                enhance: enhanceOn,
+                styleName: moodReading?.name || null,
+                modelId,
+                aspect,
+                quality: mode === "image" ? imageTier : resolution,
+                variations,
+                seed,
+                duration,
+                audio: audioOn,
+              }}
+              onChange={(patch) => {
+                if ("enhance" in patch) toggleEnhance();
+                if (patch.openMood) setOpenPanel("mood");
+                if (patch.clearStyle) { setMoodReading(null); setMoodImages([]); }
+                if (patch.modelId) setModelId(patch.modelId);
+                if (patch.aspect) setAspect(patch.aspect);
+                if (patch.quality) { mode === "image" ? setImageTier(patch.quality) : setResolution(patch.quality); }
+                if (patch.variations) setVariations(patch.variations);
+                if ("seed" in patch) setSeed(patch.seed);
+                if (patch.duration) setDuration(patch.duration);
+                if ("audio" in patch) toggleAudio();
+              }}
+            >
               {/* Bitrate — discreet switch (models with high/standard bitrate) */}
               {caps.bitrate && (
                 <button type="button" onClick={() => setHighBitrate((v) => !v)}
@@ -1795,55 +1643,7 @@ export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onG
                   </span>
                 </button>
               )}
-              {/* Quality — list (video); catalog field may be resolution or quality */}
-              {caps.qualityAxis && (
-                <div className="relative">
-                  <button type="button"
-                    onClick={() => setOpenList(openList === "quality" ? null : "quality")}
-                    className={promptControlClassName({ compact: true, active: openList === "quality" })}
-                    title="Video quality">
-                    <span className="text-xs font-semibold tabular-nums">{resolution}</span>
-                    <PromptChevronIcon />
-                  </button>
-                  {openList === "quality" && (
-                    <PromptPopover>
-                      <PromptMenuList>
-                        {caps.qualityAxis.options.map((r) => (
-                          <PromptMenuItem key={r} selected={resolution === r}
-                            onClick={() => { setResolution(r); setOpenList(null); }}>
-                            {r}
-                          </PromptMenuItem>
-                        ))}
-                      </PromptMenuList>
-                    </PromptPopover>
-                  )}
-                </div>
-              )}
-              {/* Duration — list (video) */}
-              {mode === "video" && (
-                <div className="relative">
-                  <button type="button"
-                    onClick={() => setOpenList(openList === "duration" ? null : "duration")}
-                    className={promptControlClassName({ compact: true, active: openList === "duration" })}
-                    title="Duration">
-                    <span className="text-xs font-semibold tabular-nums">{duration}s</span>
-                    <PromptChevronIcon />
-                  </button>
-                  {openList === "duration" && (
-                    <PromptPopover>
-                      <PromptMenuList>
-                        {caps.durations.map((d) => (
-                          <PromptMenuItem key={d} selected={duration === d}
-                            onClick={() => { setDuration(d); setOpenList(null); }}>
-                            {d}s
-                          </PromptMenuItem>
-                        ))}
-                      </PromptMenuList>
-                    </PromptPopover>
-                  )}
-                </div>
-              )}
-            </PromptControls>
+            </GenerationControls>
             {/* Never disabled while rendering — jobs run in parallel. The
                 badge shows how many are in flight. */}
             <PromptAction onClick={handleGenerate}>

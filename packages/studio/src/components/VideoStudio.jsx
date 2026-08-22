@@ -49,6 +49,7 @@ import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 import Lightbox from "./Lightbox.jsx";
 import { scrubForByteDance, enhancePrompt } from "../providers.js";
+import GenerationControls from "./prompt/GenerationControls.jsx";
 import { fetchRunwareVideoCatalog, mergeVideoCatalogs, i2vVideoCatalog, isAirId } from "../runwareCatalog.js";
 import { truthFor } from "../modelTruth.js";
 import MODEL_CONSTRAINTS from "../modelConstraints.json";
@@ -2332,130 +2333,40 @@ export default function VideoStudio({
 
           {/* Bottom row: controls + generate */}
           <PromptFooter>
-            <PromptControls ref={dropdownRef}>
-              {/* Audio — only when this model exposes a real sound control */}
-              {audioControl && (
-              <button
-                type="button"
-                onClick={toggleAudio}
-                title={audioOn ? "Som ativado" : "Sem som"}
-                aria-pressed={audioOn}
-                className="pressable h-[38px] px-2.5 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.04] hover:bg-white/[0.07]"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={audioOn ? "text-white/80" : "text-white/35"}>
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  {audioOn ? <path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13" /> : <path d="M22 9l-6 6M16 9l6 6" />}
-                </svg>
-                <span className={`relative w-7 h-[16px] rounded-full transition-colors duration-150 ${audioOn ? "bg-[#30D158]" : "bg-white/15"}`}>
-                  <span className={`absolute top-[2px] w-3 h-3 rounded-full bg-white shadow transition-[left] duration-150 ease-apple ${audioOn ? "left-[14px]" : "left-[2px]"}`} />
-                </span>
-              </button>
-              )}
-
-              {/* Enhance — discreet icon toggle (sticky) */}
-              <button
-                type="button"
-                onClick={toggleEnhance}
-                title={enhanceOn ? "Enhance ativado" : "Enhance de prompt"}
-                aria-pressed={enhanceOn}
-                className={`pressable h-[38px] w-[38px] flex items-center justify-center rounded-lg border text-[15px] ${
-                  enhanceOn
-                    ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
-                    : "text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
-                }`}
-              >
-                ✦
-              </button>
-              {/* Model btn */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={toggleDropdown("model")}
-                  className={promptControlClassName({
-                    active: openDropdown === "model",
-                  })}
-                >
-                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white/5">
-                    {(() => {
-                      const allCurrentModels = [...t2vModels, ...i2vModels, ...v2vModels];
-                      const selectedModelObj = allCurrentModels.find(m => m.id === selectedModel);
-                      const selectedModelProvider = selectedModelObj?.provider || 'muapi';
-                      return PROVIDER_LOGOS[selectedModelProvider] ? (
-                        <img 
-                          src={PROVIDER_LOGOS[selectedModelProvider]} 
-                          alt="" 
-                          className={`w-full h-full object-contain ${invertLogos.includes(selectedModelProvider) ? "invert" : ""}`} 
-                        />
-                      ) : (
-                        <span className="text-[9px] font-bold text-black uppercase">V</span>
-                      );
-                    })()}
-                  </div>
-                <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                    {selectedModelName}
-                  </span>
-                  <PromptChevronIcon />
-                </button>
-                {openDropdown === "model" && (
-                  <PromptPopover
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-[calc(100vw-2rem)] md:w-[480px] max-w-md md:max-w-none max-h-[70vh]"
-                  >
-                    <PromptPopoverHeader>Model</PromptPopoverHeader>
-                    <ModelDropdown
-                      selectedModel={selectedModel}
-                      onSelect={handleModelSelect}
-                      onClose={() => setOpenDropdown(null)}
-                      t2v={catalogT2v}
-                      i2v={catalogI2v}
-                      v2v={v2vModels}
-                    />
-                  </PromptPopover>
-                )}
-              </div>
-
-              {/* Aspect ratio btn */}
-              {showAr && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={toggleDropdown("ar")}
-                    className={promptControlClassName({
-                      active: openDropdown === "ar",
-                    })}
-                  >
-                    <PromptAspectRatioIcon />
-                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                      {selectedAr}
-                    </span>
-                  </button>
-                  {openDropdown === "ar" && (
-                    <PromptPopover
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <PromptPopoverHeader>
-                        Aspect Ratio
-                      </PromptPopoverHeader>
-                      <PromptMenuList>
-                        {getCurrentAspectRatios(selectedModel).map((r) => (
-                          <PromptMenuItem
-                            key={r}
-                            selected={selectedAr === r}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAr(r);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            {r}
-                          </PromptMenuItem>
-                        ))}
-                      </PromptMenuList>
-                    </PromptPopover>
-                  )}
-                </div>
-              )}
-
+            <GenerationControls
+              features={{
+                enhance: true,
+                model: true,
+                aspect: true,
+                quality: getCurrentResolutions(selectedModel).length > 0,
+                qualityOptions: getCurrentResolutions(selectedModel),
+                duration: getCurrentDurations(selectedModel).length > 0,
+                durationOptions: getCurrentDurations(selectedModel),
+                audio: !!audioControl,
+              }}
+              modelKind="video"
+              models={imageMode ? catalogI2v : catalogT2v}
+              value={{
+                enhance: enhanceOn,
+                modelId: selectedModel,
+                aspect: selectedAr,
+                quality: selectedResolution,
+                duration: selectedDuration,
+                audio: audioOn,
+              }}
+              onChange={(patch) => {
+                if ("enhance" in patch) toggleEnhance();
+                if (patch.modelId) {
+                  const list = imageMode ? catalogI2v : catalogT2v;
+                  const m = list.find((x) => x.id === patch.modelId);
+                  if (m) handleModelSelect(m);
+                }
+                if (patch.aspect) setSelectedAr(patch.aspect);
+                if (patch.quality) setSelectedResolution(patch.quality);
+                if (patch.duration) setSelectedDuration(patch.duration);
+                if ("audio" in patch) toggleAudio();
+              }}
+            >
               {/* Effect btn */}
               {showEffect && (
                 <div className="relative">
@@ -2509,112 +2420,7 @@ export default function VideoStudio({
                 </div>
               )}
 
-              {/* Duration btn */}
-              {showDuration && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={toggleDropdown("duration")}
-                    className={promptControlClassName({
-                      active: openDropdown === "duration",
-                    })}
-                  >
-                    <PromptDurationIcon />
-                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                      {selectedDuration}s
-                    </span>
-                  </button>
-                  {openDropdown === "duration" && (
-                    <PromptPopover
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <PromptPopoverHeader>
-                        Duration
-                      </PromptPopoverHeader>
-                      <PromptMenuList>
-                        {getCurrentDurations(selectedModel).map((d) => (
-                          <PromptMenuItem
-                            key={d}
-                            selected={selectedDuration === d}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDuration(d);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            {d}s
-                          </PromptMenuItem>
-                        ))}
-                      </PromptMenuList>
-                    </PromptPopover>
-                  )}
-                </div>
-              )}
-
-              {/* Resolution btn */}
-              {showResolution && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={toggleDropdown("resolution")}
-                    className={promptControlClassName({
-                      active: openDropdown === "resolution",
-                    })}
-                  >
-                    <PromptQualityIcon />
-                    <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                      {selectedResolution || "720p"}
-                    </span>
-                  </button>
-                  {openDropdown === "resolution" && (
-                    <PromptPopover
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <PromptPopoverHeader>
-                        Resolution
-                      </PromptPopoverHeader>
-                      <PromptMenuList>
-                        {getCurrentResolutions(selectedModel).map((r) => (
-                          <PromptMenuItem
-                            key={r}
-                            selected={selectedResolution === r}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedResolution(r);
-                              setOpenDropdown(null);
-                            }}
-                          >
-                            {r}
-                          </PromptMenuItem>
-                        ))}
-                      </PromptMenuList>
-                    </PromptPopover>
-                  )}
-                </div>
-              )}
-
-              {canUploadImageReference && (
-                <button
-                  type="button"
-                  className={promptControlClassName()}
-                  onClick={() => setIsDrawModalOpen(true)}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    className="opacity-40 text-white group-hover:text-white/80 transition-colors"
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                  <span className={PROMPT_CONTROL_LABEL_CLASS}>Draw</span>
-                </button>
-              )}
-            </PromptControls>
+            </GenerationControls>
 
             {/* Generate button */}
             <PromptAction
