@@ -2122,14 +2122,16 @@ export default function ImageStudio({
             </GenerationControls>
 
             {/* Generate button */}
+            {/* Stays clickable while rendering: queueing a second idea must
+                not wait for the first to land. The count shows what is in
+                flight so the button still reads as busy. */}
             <PromptAction
               onClick={handleGenerate}
-              disabled={generating}
             >
               {generating ? (
                 <>
                   <span className="animate-spin inline-block text-black">◌</span>
-                  Generating...
+                  {`Generate ✦  (${inFlight})`}
                 </>
               ) : (
                 <>
