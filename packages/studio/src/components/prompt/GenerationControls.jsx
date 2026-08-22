@@ -29,7 +29,7 @@ import {
   promptControlClassName,
   PROMPT_CONTROL_LABEL_CLASS,
 } from "./PromptComposer.jsx";
-import { curatedFirst } from "../../curatedModels.js";
+import ModelPicker from "./ModelPicker.jsx";
 
 // Ratios the provider router maps to real dimensions. Single source: a studio
 // never invents its own list, so a ratio that works in one works in all.
@@ -69,7 +69,6 @@ export default function GenerationControls({
 
   const toggle = (id) => setOpen((cur) => (cur === id ? null : id));
   const selectedModel = models.find((m) => m.id === value.modelId);
-  const { curated, rest } = curatedFirst(models, modelKind);
 
   return (
     <PromptControls ref={rowRef}>
@@ -118,24 +117,16 @@ export default function GenerationControls({
             </span>
             <PromptChevronIcon />
           </button>
-          <Dropdown open={open === "model"} width="w-72">
-            {curated.length > 0 && (
-              <div className="px-2 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-white/30">Favoritos</div>
-            )}
-            {curated.map((m) => (
-              <PromptMenuItem key={m.id} selected={m.id === value.modelId} onClick={() => set({ modelId: m.id })}>
-                {m.name}
-              </PromptMenuItem>
-            ))}
-            {rest.length > 0 && (
-              <div className="px-2 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-white/30">Todos</div>
-            )}
-            {rest.map((m) => (
-              <PromptMenuItem key={m.id} selected={m.id === value.modelId} onClick={() => set({ modelId: m.id })}>
-                {m.name}
-              </PromptMenuItem>
-            ))}
-          </Dropdown>
+          {open === "model" && (
+            <PromptPopover className="w-auto p-2" onClick={(e) => e.stopPropagation()}>
+              <ModelPicker
+                models={models}
+                value={value.modelId}
+                kind={modelKind}
+                onSelect={(m) => set({ modelId: m.id })}
+              />
+            </PromptPopover>
+          )}
         </div>
       )}
 
