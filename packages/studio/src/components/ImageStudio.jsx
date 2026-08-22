@@ -617,6 +617,13 @@ const PROVIDER_LOGOS = {
 
 const invertLogos = ['openai', 'blackforest', 'runway', 'ideogram', 'lightricks', 'grok'];
 
+// Ratios the provider router maps to real width/height. Used whenever a
+// model's catalog entry lists none — true for every native Runware model.
+const ROUTER_ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "4:5"];
+// Reference ceiling for models the legacy catalog knows nothing about —
+// the same 9 Cinema allows. Without it a native model collapsed to 1 ref.
+const NATIVE_MAX_REFS = 9;
+
 function ModelDropdown({ selectedModel, onSelect, onClose, t2iModels, i2iModels }) {
   const [search, setSearch] = useState("");
   const modelCategories = [
@@ -1387,9 +1394,14 @@ export default function ImageStudio({
 
   // ── Derived: current model lists & helpers ───────────────────────────────
   const currentModels = imageMode ? i2iModels : t2iModels;
-  const currentAspectRatios = imageMode
+  // Native Runware models carry no inputs.aspect_ratio, so the catalog lookup
+  // comes back empty for them and the picker froze on 1:1. Fall back to the
+  // ratios the router actually maps to dimensions — the same set Cinema
+  // offers — so every model gets the full list.
+  const catalogAspects = imageMode
     ? getAspectRatiosForI2IModel(selectedModelId)
     : getAspectRatiosForModel(selectedModelId);
+  const currentAspectRatios = catalogAspects?.length ? catalogAspects : ROUTER_ASPECTS;
   const currentResolutions = imageMode
     ? getResolutionsForI2IModel(selectedModelId)
     : getResolutionsForModel(selectedModelId);
@@ -1454,7 +1466,7 @@ export default function ImageStudio({
         setSelectedAr(ars[0] || "1:1");
         setSelectedQuality(resolutions[0] || null);
         setSelectedEffect(effects.length > 0 ? (getDefaultEffectForI2IModel(target.id) || effects[0]) : "");
-        setMaxImages(getMaxImagesForI2IModel(target.id));
+        setMaxImages(getMaxImagesForI2IModel(target.id) || NATIVE_MAX_REFS);
       }
     },
     [imageMode, selectedModelId],
@@ -1547,7 +1559,7 @@ export default function ImageStudio({
     setSelectedQuality(resolutions[0] || null);
     setSwapImageUrl(null);
     if (nextImageMode) {
-      setMaxImages(getMaxImagesForI2IModel(m.id));
+      setMaxImages(getMaxImagesForI2IModel(m.id) || NATIVE_MAX_REFS);
       const effects = getEffectsForI2IModel(m.id);
       setSelectedEffect(effects.length > 0 ? (getDefaultEffectForI2IModel(m.id) || effects[0]) : "");
     } else {
