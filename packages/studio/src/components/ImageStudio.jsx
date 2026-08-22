@@ -10,6 +10,7 @@ import MobileGenerationActions, {
   GenerationCopyButtons,
 } from "./MobileGenerationActions.jsx";
 import { fetchRunwareImageCatalog, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
+import { curatedFirst } from "../curatedModels.js";
 import {
   t2iModels as wrapperT2iModels,
   i2iModels as wrapperI2iModels,
@@ -626,7 +627,20 @@ const NATIVE_MAX_REFS = 9;
 
 function ModelDropdown({ selectedModel, onSelect, onClose, t2iModels, i2iModels }) {
   const [search, setSearch] = useState("");
+  // Same curated shortlist Cinema opens on: the raw catalog is 400+ entries
+  // ordered by the provider's internals, which is where "the picker is a
+  // mess" comes from. Curated leads; everything else stays one tab away.
+  const { curated: favT2i } = curatedFirst(t2iModels, "image");
+  const { curated: favI2i } = curatedFirst(i2iModels, "image");
   const modelCategories = [
+    {
+      id: "fav",
+      label: "Favoritos",
+      entries: [
+        ...favT2i.map((model) => ({ model, category: "t2i" })),
+        ...favI2i.map((model) => ({ model, category: "i2i" })),
+      ],
+    },
     {
       id: "all",
       label: "All",
@@ -646,7 +660,9 @@ function ModelDropdown({ selectedModel, onSelect, onClose, t2iModels, i2iModels 
       entries: i2iModels.map((model) => ({ model, category: "i2i" })),
     },
   ];
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState(
+    () => (modelCategories[0].entries.length ? "fav" : "all"),
+  );
   const [selectedProvider, setSelectedProvider] = useState("all");
   const activeCategory = modelCategories.find((category) => category.id === selectedCategory) || modelCategories[0];
   const modelEntries = activeCategory.entries;

@@ -25,6 +25,9 @@ import { SHOT_SIZES, ANGLES } from "../cinema/shots.js";
 import { EFFECTS } from "../cinema/effects.js";
 import { truthFor } from "../modelTruth.js";
 import { fetchRunwareVideoCatalog, fetchRunwareImageCatalog, mergeVideoCatalogs, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
+// Curated shortlist lives in one shared module — Image Studio reads the
+// exact same list, so a model promoted here is promoted there too.
+import { CURATED_MODELS as CINEMA_FAVORITES } from "../curatedModels.js";
 import MODEL_CONSTRAINTS from "../modelConstraints.json";
 import { hasAudioControl } from "../providerSettings.js";
 
@@ -134,38 +137,6 @@ function modelSupportsAudio(m) {
 
 // Curated favorites for Cinema Studio — the models that respond best to this
 // studio's dense cinematographic prompts (dialects, refs, performance craft).
-const CINEMA_FAVORITES = {
-  // Runware-native AIRs (fall back to wrapper ids when the native catalog
-  // hasn't loaded — the picker skips whatever isn't present).
-  image: [
-    "bytedance:seedream@5.0-pro",   // dense prompts + reference consistency
-    "google:4@3",                   // Nano Banana 2 — fast pro quality
-    "google:nano-banana@2-lite",    // rascunho barato
-    "ideogram:4@0",                 // tipografia e texto na imagem
-    "xai:grok-imagine@image-2.0",   // composição multi-imagem
-    "alibaba:qwen-image@3.0-pro",   // prompts longos e estruturados
-    "reve:2@1",                     // fotografia estilizada
-    "seedream-5.0",                 // fallbacks do catálogo antigo
-    "nano-banana-2",
-    "flux-2-pro",
-    "gpt-image-2",
-  ],
-  // Runware-native AIRs first (fast primary route); wrapper ids only where
-  // Runware lacks the model.
-  video: [
-    "bytedance:seedance@2.5",              // deep dialect, 12-asset multiref, audio
-    "bytedance:seedance@2.0",              // Seedance 2.0
-    "klingai:kling-video@3-pro",           // character/performance king — no wrapper slowness
-    "klingai:kling-video@o3-standard",     // Kling 3.0 Omni — reference-driven
-    "google:3@3",                          // Veo 3.1 Fast — environment hero
-    "minimax:h3@0",                        // MiniMax H3 flagship
-    "minimax-hailuo-2.3-pro-t2v",          // physical motion/VFX (wrapper)
-    "alibaba:wan@2.7",                     // 60fps artistic
-    "openai:3@2",                          // Sora 2 Pro — scale and physics
-    "xai:grok-imagine@video-1.5",          // Grok Imagine 1.5
-    "google:gemini@omni-flash",            // reference-driven with native audio
-  ],
-};
 
 // Group a model list by provider for the picker.
 function groupByProvider(models) {
