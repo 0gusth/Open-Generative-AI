@@ -523,14 +523,30 @@ function videoDimensions(params) {
 function closestAllowedSize(allowed, width, height) {
     const targetRatio = width / height;
     const targetArea = width * height;
-    let best = null;
+    const sizes = [];
     for (const s of allowed) {
         const [w, h] = String(s).split("x").map(Number);
-        if (!w || !h) continue;
-        const score = Math.abs(w / h - targetRatio) * 1e6 + Math.abs(w * h - targetArea) / 1e3;
-        if (!best || score < best.score) best = { w, h, score };
+        if (w && h) sizes.push({ w, h, ratioOff: Math.abs(w / h - targetRatio), area: w * h });
     }
-    return best ? [best.w, best.h] : [width, height];
+    if (!sizes.length) return [width, height];
+
+    // Aspect ratio first — a squashed frame is worse than a smaller one.
+    const bestRatio = Math.min(...sizes.map((s) => s.ratioOff));
+    const sameShape = sizes.filter((s) => s.ratioOff <= bestRatio + 0.01);
+
+    // Then pick by PROPORTIONAL distance, not absolute pixels. These tables
+    // jump in powers (1.1 → 4.2 → 16.9 MP), and absolute distance always
+    // favours the smaller rung — which silently turned a 2K request into a
+    // 1K render. A small bias upward breaks ties toward the tier the user
+    // actually asked for rather than below it.
+    const UPWARD_BIAS = 0.15;
+    const chosen = sameShape
+        .map((s) => {
+            const ratio = Math.log(s.area / targetArea);
+            return { ...s, distance: ratio >= 0 ? ratio - UPWARD_BIAS : -ratio };
+        })
+        .sort((a, b) => a.distance - b.distance)[0];
+    return [chosen.w, chosen.h];
 }
 
 // Same-ratio fallback ladder for architectures that reject our dimensions
@@ -548,6 +564,16 @@ const DIMENSION_LADDER = {
 const isDimensionError = (error) =>
     (error.runwareErrors || []).some((e) => e.code === "unsupportedModelResolution")
     || /width\/height|width.*height.*combination|unsupported.*resolution/i.test(error.message || "");
+
+// allowedValues arrives EITHER as an array OR as a label→value object
+// ({"1:1 1K": "1024x1024", …}). The healer only understood arrays, so for
+// every model that answers with the object shape it never saw the sizes the
+// provider was literally handing it — and the render just failed.
+function allowedList(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object") return Object.values(value);
+    return [];
+}
 
 // Parameter name(s) an error is complaining about — Runware ships them as a
 // string, an array, or only inside the message text. Never trust one shape.
@@ -578,11 +604,14 @@ async function submitRunwareTask(task, restoreDims = null) {
             let healed = false;
 
             // 1. Exact sizes offered (allowedValues shaped like WxH, any code)
-            const dimError = errs.find(
-                (e) => Array.isArray(e.allowedValues) && e.allowedValues.length && e.allowedValues.every((v) => /^\d+\s*[x*:]\s*\d+/.test(String(v))),
-            );
+            const dimError = errs.find((e) => {
+                const list = allowedList(e.allowedValues);
+                return list.length && list.every((v) => /^\d+\s*[x*:]\s*\d+/.test(String(v)));
+            });
             if (!healed && dimError && current.width && current.height) {
-                const [w, h] = closestAllowedSize(dimError.allowedValues.map((v) => String(v).replace(/\s*\(.*\)$/, "").replace(/[*:]/, "x")), current.width, current.height);
+                const sizes = allowedList(dimError.allowedValues)
+                    .map((v) => String(v).replace(/\s*\(.*\)$/, "").replace(/[*:]/, "x"));
+                const [w, h] = closestAllowedSize(sizes, current.width, current.height);
                 if (w !== current.width || h !== current.height) {
                     current = { ...current, taskUUID: makeUUID(), width: w, height: h };
                     healed = true;
@@ -591,10 +620,10 @@ async function submitRunwareTask(task, restoreDims = null) {
 
             // 2. Duration enum offered (numeric allowedValues on a duration error)
             const durError = errs.find(
-                (e) => /duration/i.test(String(e.parameter || "") + e.code) && Array.isArray(e.allowedValues) && e.allowedValues.some((v) => typeof v === "number"),
+                (e) => /duration/i.test(String(e.parameter || "") + e.code) && allowedList(e.allowedValues).some((v) => typeof v === "number"),
             );
             if (!healed && durError && current.duration) {
-                const opts = durError.allowedValues.filter((v) => typeof v === "number");
+                const opts = allowedList(durError.allowedValues).filter((v) => typeof v === "number");
                 const snapped = opts.reduce((a, b) => (Math.abs(b - current.duration) < Math.abs(a - current.duration) ? b : a));
                 if (snapped !== current.duration) {
                     current = { ...current, taskUUID: makeUUID(), duration: snapped };
@@ -611,9 +640,8 @@ async function submitRunwareTask(task, restoreDims = null) {
                 for (const e of errs) {
                     if (!/invalid/i.test(String(e.code || "")) && !/invalid value/i.test(e.message || "")) continue;
                     const [param] = offendingParams(e, current);
-                    const allowed = Array.isArray(e.allowedValues)
-                        ? e.allowedValues.filter((v) => typeof v === "string" || typeof v === "number")
-                        : [];
+                    const allowed = allowedList(e.allowedValues)
+                        .filter((v) => typeof v === "string" || typeof v === "number");
                     if (!param || !allowed.length || CORE_TASK_FIELDS.has(param)) continue;
                     if (allowed.some((v) => /^\d+\s*[x*:]\s*\d+/.test(String(v)))) continue; // WxH — step 1's job
                     if (allowed.includes(current[param])) continue; // complaint is not about this value
