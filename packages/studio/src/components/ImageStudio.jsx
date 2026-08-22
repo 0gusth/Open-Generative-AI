@@ -11,6 +11,7 @@ import MobileGenerationActions, {
 } from "./MobileGenerationActions.jsx";
 import { fetchRunwareImageCatalog, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
 import { curatedFirst } from "../curatedModels.js";
+import GenerationControls from "./prompt/GenerationControls.jsx";
 import {
   t2iModels as wrapperT2iModels,
   i2iModels as wrapperI2iModels,
@@ -1218,6 +1219,9 @@ export default function ImageStudio({
   // models carry no `inputs.resolution`, so the old per-model selector simply
   // vanished for them. This one is the same 1K/2K/4K Cinema uses and always
   // reaches the router as quality_tier.
+  // Locked seed: null = fresh randomness each run. The shared control exposes
+  // it in every studio, so a result can be reproduced from its history entry.
+  const [lockedSeed, setLockedSeed] = useState(null);
   const [imageTier, setImageTier] = useState(() => {
     if (typeof window === "undefined") return "2k";
     return window.localStorage.getItem("image_studio_tier") || "2k";
@@ -1652,7 +1656,7 @@ export default function ImageStudio({
     let sentPrompt = finalPrompt;
     // Always send a seed we know, like Cinema does: without it a result can
     // never be reproduced from its history entry.
-    const usedSeed = Math.floor(Math.random() * 2147483647);
+    const usedSeed = lockedSeed ?? Math.floor(Math.random() * 2147483647);
     setGenerating(true);
     setGenerateError(null);
 
@@ -2020,200 +2024,42 @@ export default function ImageStudio({
           {/* Bottom row: controls + generate */}
           <PromptFooter>
             {/* Left controls */}
-            <PromptControls ref={dropdownRef}>
-              {/* Mood — moodboard/style, applied to every generation */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setStyleOpen((v) => !v); }}
-                  title={activeStyle ? `Estilo ativo: ${activeStyle.name}` : "Mood — deixe suas referências definirem o estilo"}
-                  className={promptControlClassName({ compact: true, active: !!activeStyle || styleOpen })}
-                >
-                  <span className="text-xs font-semibold">{activeStyle ? activeStyle.name : "Mood"}</span>
-                  {activeStyle && (
-                    <span
-                      role="button"
-                      title="Remover estilo"
-                      onClick={(e) => { e.stopPropagation(); setActiveStyle(null); setMoodImages([]); }}
-                      className="ml-0.5 text-white/50 hover:text-white text-[13px] leading-none"
-                    >×</span>
-                  )}
-                </button>
-                {styleOpen && (
-                  <div className="absolute bottom-[calc(100%+10px)] left-0 z-50 w-[320px] bg-[#1d1d1f]/[0.98] backdrop-blur-3xl rounded-2xl border border-white/[0.1] shadow-[0_16px_48px_rgba(0,0,0,0.65)] p-3.5 flex flex-col gap-3">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-white/85 text-[13px] font-semibold">Moodboard</span>
-                      <span className="text-white/35 text-[11px]">as referências viram o estilo</span>
-                    </div>
-                    <input ref={moodInputRef} type="file" accept="image/*" multiple className="hidden"
-                      onChange={(e) => { uploadMoodImages(e.target.files); e.target.value = ""; }} />
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {moodImages.map((url) => (
-                        <div key={url} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/[0.1] group/ref">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                          <button type="button"
-                            onClick={() => setMoodImages((prev) => prev.filter((u) => u !== url))}
-                            className="absolute top-0 right-0 w-4 h-4 rounded-bl-md bg-black/70 text-white/80 text-[10px] leading-4 opacity-0 group-hover/ref:opacity-100">×</button>
-                        </div>
-                      ))}
-                      {moodImages.length < 12 && (
-                        <button type="button" onClick={() => moodInputRef.current?.click()} disabled={moodBusy}
-                          className="w-12 h-12 rounded-lg border border-dashed border-white/[0.15] text-white/40 hover:text-white/70 hover:border-white/30 text-[10px] disabled:opacity-40">
-                          + ref
-                        </button>
-                      )}
-                    </div>
-                    <button type="button" onClick={readMoodboard} disabled={moodBusy || !moodImages.length}
-                      className="pressable h-8 rounded-full bg-[#EF0328] text-white text-[12px] font-semibold disabled:opacity-40">
-                      {moodBusy ? "Lendo…" : "✦ Ler moodboard"}
-                    </button>
-                    {savedStyles.length > 0 && (
-                      <div className="flex flex-col gap-1.5 pt-1 border-t border-white/[0.06]">
-                        <span className="text-white/40 text-[11px]">Estilos salvos</span>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {savedStyles.map((st) => (
-                            <button key={st.id} type="button" onClick={() => applySavedStyle(st)}
-                              className="h-7 px-2.5 rounded-full border border-white/[0.1] bg-white/[0.04] text-[11px] font-semibold text-white/70 hover:text-white">
-                              {st.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {activeStyle && (
-                      <p className="text-white/35 text-[10px] leading-relaxed border-t border-white/[0.06] pt-2">
-                        Ativo: <span className="text-white/60">{activeStyle.name}</span> — entra em toda geração até você remover.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-              {/* Enhance — discreet icon toggle (sticky) */}
-              <button
-                type="button"
-                onClick={toggleEnhance}
-                title={enhanceOn ? "Enhance ativado" : "Enhance de prompt"}
-                aria-pressed={enhanceOn}
-                className={`pressable h-[38px] w-[38px] flex items-center justify-center rounded-lg border text-[15px] ${
-                  enhanceOn
-                    ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
-                    : "text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
-                }`}
-              >
-                ✦
-              </button>
-              {/* Model button */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen((o) => (o === "model" ? null : "model"));
-                  }}
-                  className={promptControlClassName({
-                    active: dropdownOpen === "model",
-                  })}
-                >
-                  <div className="w-4 h-4 rounded overflow-hidden shrink-0 flex items-center justify-center bg-white/5">
-                    {(() => {
-                      const selectedModelObj = currentModels.find(m => m.id === selectedModelId);
-                      const selectedModelProvider = selectedModelObj?.provider || 'muapi';
-                      return PROVIDER_LOGOS[selectedModelProvider] ? (
-                        <img 
-                          src={PROVIDER_LOGOS[selectedModelProvider]} 
-                          alt="" 
-                          className={`w-full h-full object-contain ${invertLogos.includes(selectedModelProvider) ? "invert" : ""}`} 
-                        />
-                      ) : (
-                        <span className="text-[9px] font-bold text-black uppercase">G</span>
-                      );
-                    })()}
-                  </div>
-                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                    {selectedModelName}
-                  </span>
-                  <PromptChevronIcon />
-                </button>
-
-                {dropdownOpen === "model" && (
-                  <PromptPopover
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-[calc(100vw-2rem)] md:w-[480px] max-w-md md:max-w-none max-h-[70vh]"
-                  >
-                    <PromptPopoverHeader>Model</PromptPopoverHeader>
-                    <ModelDropdown
-                      selectedModel={selectedModelId}
-                      onSelect={handleModelSelect}
-                      onClose={() => setDropdownOpen(null)}
-                      t2iModels={t2iModels}
-                      i2iModels={i2iModels}
-                    />
-                  </PromptPopover>
-                )}
-              </div>
-
-              {/* Aspect ratio button */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen((o) => (o === "ar" ? null : "ar"));
-                  }}
-                  className={promptControlClassName({
-                    active: dropdownOpen === "ar",
-                  })}
-                >
-                  <PromptAspectRatioIcon />
-                  <span className={PROMPT_CONTROL_LABEL_CLASS}>
-                    {selectedAr}
-                  </span>
-                </button>
-
-                {dropdownOpen === "ar" && (
-                  <PromptPopover
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <SimpleDropdown
-                      title="Aspect Ratio"
-                      options={currentAspectRatios}
-                      selected={selectedAr}
-                      onSelect={(val) => setSelectedAr(val)}
-                      onClose={() => setDropdownOpen(null)}
-                    />
-                  </PromptPopover>
-                )}
-              </div>
-
-              {/* Quality/resolution button (represented as Diamond icon) */}
-              {/* Quality tier — works for every model (native or wrapper),
-                  and actually reaches the router. The old per-model selector
-                  vanished on native models and its value was ignored. */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDropdownOpen((o) => (o === "quality" ? null : "quality"));
-                  }}
-                  className={promptControlClassName({ active: dropdownOpen === "quality" })}
-                >
-                  <PromptQualityIcon />
-                  <span className={PROMPT_CONTROL_LABEL_CLASS}>{imageTier.toUpperCase()}</span>
-                </button>
-                {dropdownOpen === "quality" && (
-                  <PromptPopover onClick={(e) => e.stopPropagation()}>
-                    <SimpleDropdown
-                      title="Resolution"
-                      options={["1k", "2k", "4k"]}
-                      selected={imageTier}
-                      onSelect={(val) => setTier(val)}
-                      onClose={() => setDropdownOpen(null)}
-                    />
-                  </PromptPopover>
-                )}
-              </div>
-
+            <GenerationControls
+              features={{
+                enhance: true,
+                mood: true,
+                model: true,
+                aspect: true,
+                quality: true,
+                variations: true,
+                seed: true,
+                maxVariations: 4,
+              }}
+              modelKind="image"
+              models={currentModels}
+              value={{
+                enhance: enhanceOn,
+                styleName: activeStyle?.name || null,
+                modelId: selectedModelId,
+                aspect: selectedAr,
+                quality: imageTier,
+                variations: batchSize,
+                seed: lockedSeed,
+              }}
+              onChange={(patch) => {
+                if ("enhance" in patch) toggleEnhance();
+                if (patch.openMood) setStyleOpen(true);
+                if (patch.clearStyle) { setActiveStyle(null); setMoodImages([]); }
+                if (patch.modelId) {
+                  const m = currentModels.find((x) => x.id === patch.modelId);
+                  if (m) handleModelSelect(m);
+                }
+                if (patch.aspect) setSelectedAr(patch.aspect);
+                if (patch.quality) setTier(patch.quality);
+                if (patch.variations) setBatchSize(patch.variations);
+                if ("seed" in patch) setLockedSeed(patch.seed);
+              }}
+            >
               {/* Effect type button */}
               {showEffectBtn && (
                 <div className="relative">
@@ -2252,27 +2098,6 @@ export default function ImageStudio({
                 </div>
               )}
 
-              {/* Batch size stepper */}
-              <div className={promptControlClassName({ compact: true, className: "select-none" })}>
-                <button
-                  type="button"
-                  onClick={() => setBatchSize(prev => Math.max(1, prev - 1))}
-                  className="text-white/40 hover:text-white/80 font-extrabold text-xs transition-colors px-1"
-                >
-                  -
-                </button>
-                <span className="text-xs font-semibold text-white/70 min-w-[24px] text-center">
-                  {batchSize}/4
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setBatchSize(prev => Math.min(4, prev + 1))}
-                  className="text-white/40 hover:text-white/80 font-extrabold text-xs transition-colors px-1"
-                >
-                  +
-                </button>
-              </div>
-
               {/* Draw button */}
               <button
                 type="button"
@@ -2287,7 +2112,7 @@ export default function ImageStudio({
                   Draw
                 </span>
               </button>
-            </PromptControls>
+            </GenerationControls>
 
             {/* Generate button */}
             <PromptAction
