@@ -1848,6 +1848,12 @@ export default function ImageStudio({
                       {entry.model?.replace(/-/g, " ") || "Image Studio"}
                     </span>
                     {entry.aspect_ratio && <span className="text-[10px] text-white/30 tabular-nums">{entry.aspect_ratio}</span>}
+                    {typeof entry.cost === "number" && (
+                      <span className={`text-[10px] font-semibold tabular-nums ${entry.cost === 0 ? "text-emerald-400/70" : "text-white/40"}`}
+                        title={entry.cost === 0 ? "Sem custo" : "Custo real cobrado pelo provedor"}>
+                        {entry.cost === 0 ? "grátis" : `$${entry.cost.toFixed(3)}`}
+                      </span>
+                    )}
                     {entry.provider && entry.provider !== "muapi" && (
                       <span className="text-[9px] text-white/25 capitalize ml-auto">{entry.provider}</span>
                     )}

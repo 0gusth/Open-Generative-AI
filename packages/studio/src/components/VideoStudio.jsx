@@ -48,7 +48,7 @@ import {
 import { modelSpeedTier, SPEED_BADGES } from "../utils/modelSpeed.js";
 import { fetchLedger, fetchPending, reconcilePending } from "../ledger.js";
 import Lightbox from "./Lightbox.jsx";
-import { enhancePrompt } from "../providers.js";
+import { scrubForByteDance, enhancePrompt } from "../providers.js";
 import { fetchRunwareVideoCatalog, mergeVideoCatalogs, i2vVideoCatalog, isAirId } from "../runwareCatalog.js";
 import { truthFor } from "../modelTruth.js";
 import MODEL_CONSTRAINTS from "../modelConstraints.json";
@@ -1468,8 +1468,8 @@ export default function VideoStudio({
       const names = detectProperNames(trimmedPrompt);
       if (names.length) {
         toast(
-          `⚠ Nomes próprios no prompt (${names.slice(0, 4).join(", ")}) — a moderação da ByteDance costuma bloquear por copyright. Ative o Enhance ✦ para convertê-los em descrições visuais.`,
-          { duration: 9000, id: "preflight-names" },
+          `Nomes próprios (${names.slice(0, 4).join(", ")}) viram descrições visuais — a moderação da ByteDance bloqueia nomes por copyright.`,
+          { duration: 7000, id: "preflight-names" },
         );
       }
     }
@@ -1481,6 +1481,13 @@ export default function VideoStudio({
     if (enhanceOn && trimmedPrompt) {
       // placeholder is already visible while the prompt is enriched
       trimmedPrompt = await enhancePrompt(trimmedPrompt, "video", currentModel?.id);
+    }
+    // Name scrub runs ALWAYS on ByteDance video, exactly as Cinema does.
+    // It used to ride inside enhancePrompt only, so turning Enhance off sent
+    // proper names straight into a moderation block — warning the user was
+    // never a fix. No-ops for every other family.
+    if (trimmedPrompt) {
+      trimmedPrompt = await scrubForByteDance(trimmedPrompt, currentModel?.id, "video");
     }
 
     let hadError = false;
@@ -1937,6 +1944,12 @@ export default function VideoStudio({
                           )}
                           {entry.duration && (
                             <span className="text-[10px] text-white/40">{entry.duration}s</span>
+                          )}
+                          {typeof entry.cost === "number" && (
+                            <span className={`text-[10px] font-semibold tabular-nums ${entry.cost === 0 ? "text-emerald-400/70" : "text-white/40"}`}
+                              title={entry.cost === 0 ? "Sem custo" : "Custo real cobrado pelo provedor"}>
+                              {entry.cost === 0 ? "grátis" : `$${entry.cost.toFixed(3)}`}
+                            </span>
                           )}
                         </div>
                       </div>

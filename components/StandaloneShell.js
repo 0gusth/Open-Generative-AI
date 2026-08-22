@@ -573,12 +573,17 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
   }, [activeTab]);
 
   const fetchBalance = useCallback(async (key) => {
+    // Two INDEPENDENT sources. The legacy Muapi balance used to run first
+    // inside the same try, so once that key expired it threw and the real
+    // Runware/fal balances never loaded — the header just showed "$---"
+    // while the providers that actually bill were perfectly reachable.
+    getProviderBalances().then(setProviderBalances).catch(() => {});
+    if (!key) return;
     try {
       const data = await getUserBalance(key);
       setBalance(data.balance);
-      getProviderBalances().then(setProviderBalances).catch(() => {});
-    } catch (err) {
-      console.error('Balance fetch failed:', err);
+    } catch {
+      setBalance(null); // legacy key dead: providers above still show
     }
   }, []);
 
