@@ -129,10 +129,41 @@ export async function fetchRunwareImageCatalog() {
   return usable;
 }
 
+// Models that do not come from the reseller at all — they generate on the
+// user's own provider account, so their presence in the picker cannot depend
+// on whether Runware's catalog loaded or still lists them.
+export const DIRECT_IMAGE_MODELS = [
+  {
+    id: "bytedance:seedream@5.0-pro",
+    name: "Seedream 5.0 Pro",
+    provider: "bytedance",
+    provider_name: "ByteDance",
+    logoUrl: null,
+    comment: "Direto na sua conta ByteDance (BytePlus)",
+    rwImage: { t2i: true, i2i: true },
+  },
+  {
+    id: "seedream-5.0",
+    name: "Seedream 5.0 Lite",
+    provider: "bytedance",
+    provider_name: "ByteDance",
+    logoUrl: null,
+    comment: "Direto na sua conta ByteDance (BytePlus)",
+    rwImage: { t2i: true, i2i: true },
+  },
+];
+
 // Same contract as the video merge: the native list wins; the wrapper list
 // survives only as a browse fallback when no Runware catalog is available.
+// The direct-account models are folded in either way, replacing any reseller
+// entry that carries the same id.
 export function mergeImageCatalogs(runwareModels, wrapperModels) {
-  return runwareModels.length ? runwareModels : wrapperModels;
+  const base = runwareModels.length ? runwareModels : wrapperModels;
+  const direct = new Map(DIRECT_IMAGE_MODELS.map((m) => [m.id, m]));
+  const merged = base.map((m) => direct.get(m.id) || m);
+  const seen = new Set(merged.map((m) => m.id));
+  // A direct model the catalog never had still belongs in the list.
+  return [...DIRECT_IMAGE_MODELS.filter((m) => !seen.has(m.id)), ...merged];
 }
 
 export function mergeVideoCatalogs(runwareModels, wrapperModels) {

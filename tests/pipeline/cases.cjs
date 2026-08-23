@@ -31,6 +31,7 @@ const NANO2_SIZES = {
 };
 
 let script, sent, googleConfigured;
+let byteplusOn = false;
 global.fetch = async (url, opts) => {
   if (url === "/api/history") return { ok: true, json: async () => ({}) };
   if (url === "/api/providers/google-image" && !opts) {
@@ -39,6 +40,9 @@ global.fetch = async (url, opts) => {
   // Vertex probe: off in these cases, so the classic route is exercised.
   if (url === "/api/providers/vertex" && !opts) {
     return { ok: true, json: async () => ({ configured: false }) };
+  }
+  if (url === "/api/providers/byteplus" && !opts) {
+    return { ok: true, json: async () => ({ configured: byteplusOn }) };
   }
   const body = opts?.body ? JSON.parse(opts.body) : null;
   const task = Array.isArray(body) ? body[0] : body;
@@ -161,6 +165,54 @@ const dimError = () => ({ ok: false, res: { errors: [{ code: "unsupportedDimensi
     assert.strictEqual(out.provider, "runware", "it must still render");
     console.log("PASS  Google Cloud: modelo Google fora do Vertex avisa que foi cobrado no revendedor");
     global.window.removeEventListener("vertex-miss", onMiss);
+    global.fetch = realFetch;
+  }
+
+  // ── Seedream 5.0 direto na ByteDance ─────────────────────────────────────
+  {
+    const realFetch = global.fetch;
+    let arkOk = true, hit = [];
+    byteplusOn = true;
+    global.fetch = async (url, opts) => {
+      if (url === "/api/providers/byteplus" && !opts) return { ok: true, json: async () => ({ configured: true }) };
+      if (url === "/api/providers/byteplus") {
+        hit.push("byteplus");
+        return arkOk
+          ? { ok: true, status: 200, json: async () => ({ ok: true, url: "https://blob/s.jpg", cost: 0.035, estimated: true }) }
+          : { ok: false, status: 502, json: async () => ({ error: "ark caiu" }) };
+      }
+      if (url === "/api/providers/vertex" && !opts) return { ok: true, json: async () => ({ configured: false }) };
+      if (url === "/api/providers/runware") hit.push("runware");
+      return realFetch(url, opts);
+    };
+    delete require.cache[require.resolve("./lib/providers.js")];
+    const ark = require("./lib/providers.js");
+
+    for (const [id, name] of [["bytedance:seedream@5.0-pro", "Seedream 5.0 Pro"], ["seedream-5.0", "Seedream 5.0 Lite"]]) {
+      reset(); hit = []; script = [okImage()];
+      const out = await ark.tryProviderGenerate(id, "t2i", { prompt: "x", aspect_ratio: "16:9", quality_tier: "2k" }, name);
+      assert.strictEqual(out.provider, "byteplus", `${name} must bill to the user's ByteDance account`);
+      assert.ok(!hit.includes("runware"), `${name} must not touch the reseller`);
+    }
+    console.log("PASS  Seedream 5.0 Pro e Lite geram pela conta ByteDance");
+
+    // The reseller route for these two was deleted on purpose. A fallback
+    // would move the charge back to Runware — the exact thing this prevents.
+    arkOk = false; hit = []; script = [okImage()];
+    let threw = null;
+    try {
+      await ark.tryProviderGenerate("bytedance:seedream@5.0-pro", "t2i", { prompt: "x" }, "Seedream 5.0 Pro");
+    } catch (e) { threw = e; }
+    assert.ok(threw, "a BytePlus failure must surface, not silently reroute");
+    assert.ok(!hit.includes("runware"), "a BytePlus failure must NOT fall back to the reseller");
+    console.log("PASS  falha na BytePlus nao volta a cobrar no Runware");
+
+    // Models outside the 5.0 family keep their existing route untouched.
+    reset(); hit = []; script = [okImage()];
+    const four = await ark.tryProviderGenerate("bytedance:seedream@4.0", "t2i", { prompt: "x" }, "Seedream 4.0");
+    assert.strictEqual(four.provider, "runware", "Seedream 4 must keep its reseller route");
+    console.log("PASS  Seedream 4 segue pelo caminho antigo");
+    byteplusOn = false;
     global.fetch = realFetch;
   }
 

@@ -68,6 +68,7 @@ export const PROVIDER_ROUTES = {
 // Table lives in providerKeys.js so ledger.js can share it without a cycle;
 // re-exported here to keep the public surface unchanged.
 import { vertexModelFor, looksGoogle } from "./googleModels.js";
+import { byteplusModelFor } from "./byteplusModels.js";
 import { PROVIDER_KEY_STORAGE } from "./providerKeys.js";
 export { PROVIDER_KEY_STORAGE };
 
@@ -370,6 +371,70 @@ async function vertexConfigured() {
     return vertexReady;
 }
 
+// ── BytePlus (ByteDance ModelArk) — the user's own Seedream account ────────
+//
+// Seedream 5.0 Pro and Lite are billed straight to their ByteDance account.
+// The reseller route for these two was DELETED on purpose: a fallback would
+// quietly move the charge back to Runware, which is the exact thing this
+// change exists to stop. If BytePlus fails, the real reason surfaces.
+let arkReady = null;
+let arkCheckedAt = 0;
+async function byteplusConfigured() {
+    if (arkReady === true) return true;
+    if (arkReady === false && Date.now() - arkCheckedAt < 60_000) return false;
+    try {
+        const r = await fetch("/api/providers/byteplus");
+        arkReady = r.ok ? !!(await r.json()).configured : false;
+    } catch {
+        arkReady = false;
+    }
+    arkCheckedAt = Date.now();
+    return arkReady;
+}
+
+async function tryByteplus(modelId, params, displayName) {
+    const arkModel = byteplusModelFor(modelId, displayName);
+    if (!arkModel) return null;
+    if (!(await byteplusConfigured())) {
+        const err = new Error(
+            "Seedream 5.0 agora gera pela sua conta ByteDance, e ela não está configurada no servidor. " +
+            "Adicione BYTEPLUS_API_KEY.",
+        );
+        err.definitive = true;
+        throw err;
+    }
+    announceRoute("byteplus", modelId);
+    const refs = params.images_list?.length ? params.images_list : params.image_url ? [params.image_url] : [];
+    const response = await fetch("/api/providers/byteplus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            modelId,
+            arkModel,
+            displayName,
+            prompt: params.prompt || "",
+            aspectRatio: params.aspect_ratio,
+            tier: params.quality_tier || params.resolution || params.quality,
+            referenceImages: refs,
+            seed: typeof params.seed === "number" ? params.seed : undefined,
+        }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.url) {
+        // No silent reroute: surfacing the cause is the whole point.
+        const err = new Error(data.error || `BytePlus respondeu ${response.status}`);
+        err.definitive = !!data.definitive;
+        throw err;
+    }
+    return {
+        url: data.url,
+        id: makeUUID(),
+        provider: "byteplus",
+        cost: data.cost,
+        estimated: !!data.estimated,
+    };
+}
+
 async function tryVertex(modelId, params, kind, displayName) {
     const vertexModel = vertexModelFor(modelId, displayName);
     if (!vertexModel) {
@@ -472,6 +537,8 @@ async function tryGoogleImage(modelId, params) {
 export async function tryProviderGenerate(modelId, mode, params, displayName) {
     const viaVertex = await tryVertex(modelId, params, "image", displayName);
     if (viaVertex) return viaVertex;
+    const viaArk = await tryByteplus(modelId, params, displayName);
+    if (viaArk) return viaArk;
     const viaGoogle = await tryGoogleImage(modelId, params);
     if (viaGoogle) return viaGoogle;
     if (/:.+@/.test(modelId || "")) {

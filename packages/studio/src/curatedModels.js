@@ -12,14 +12,14 @@
 export const CURATED_MODELS = {
   image: [
     "bytedance:seedream@5.0-pro",   // dense prompts + reference consistency
+    "seedream-5.0",                 // Seedream 5.0 Lite — both bill direct
     "google:4@3",                   // Nano Banana 2 — fast pro quality
     "google:nano-banana@2-lite",    // cheap drafting
     "ideogram:4@0",                 // typography and text inside the image
     "xai:grok-imagine@image-2.0",   // multi-image composition
     "alibaba:qwen-image@3.0-pro",   // long, structured prompts
     "reve:2@1",                     // stylised photography
-    "seedream-5.0",                 // legacy-catalog fallbacks below
-    "nano-banana-2",
+    "nano-banana-2",                // legacy-catalog fallbacks below
     "flux-2-pro",
     "gpt-image-2",
   ],
