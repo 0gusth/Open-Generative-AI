@@ -788,11 +788,18 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
       {/* Sandbox marker. The whole point of a test environment is that you
           always know you are in it — this user has already confused two URLs
           once. Deliberately loud, deliberately impossible to miss. */}
-      {process.env.NEXT_PUBLIC_SANDBOX === '1' && (
-        <div className="flex-shrink-0 h-7 flex items-center justify-center gap-2 bg-[#B45309] text-white text-[12px] font-semibold tracking-wide z-[60]">
-          <span aria-hidden="true">🧪</span>
-          <span>Ambiente de teste — as gerações são simuladas e não custam nada</span>
-        </div>
+      {process.env.NEXT_PUBLIC_LOCAL === '1' && (
+        process.env.NEXT_PUBLIC_SANDBOX === '1' ? (
+          <div className="flex-shrink-0 h-7 flex items-center justify-center gap-2 bg-[#B45309] text-white text-[12px] font-semibold tracking-wide z-[60]">
+            <span aria-hidden="true">🧪</span>
+            <span>Modo simulado — as gerações são falsas e não custam nada</span>
+          </div>
+        ) : (
+          <div className="flex-shrink-0 h-7 flex items-center justify-center gap-2 bg-[#1D4ED8] text-white text-[12px] font-semibold tracking-wide z-[60]">
+            <span aria-hidden="true">🔧</span>
+            <span>Cópia de trabalho — tudo funciona de verdade. Não é o gusaistudio.</span>
+          </div>
+        )
       )}
 
       {/* Header */}

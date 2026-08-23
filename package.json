@@ -12,7 +12,7 @@
     "packages/Open-AI-Design-Agent/packages/design-agent"
   ],
   "scripts": {
-    "dev": "NEXT_PUBLIC_SANDBOX=1 BLOB_READ_WRITE_TOKEN= next dev",
+    "dev": "NEXT_PUBLIC_LOCAL=1 BLOB_READ_WRITE_TOKEN= next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -37,9 +37,10 @@
     "electron:build:all": "vite build && electron-builder --mac --win --linux",
     "test:ui": "bash tests/ui/overlays.sh",
     "test:pipeline": "bash tests/pipeline/run.sh",
-    "dev:real": "next dev",
     "check": "npm run test:ui && npm run test:pipeline && NEXT_DIST_DIR=.next-check next build && rm -rf .next-check",
-    "publicar": "bash scripts/publicar.sh"
+    "publicar": "bash scripts/publicar.sh",
+    "dev:simulado": "NEXT_PUBLIC_LOCAL=1 NEXT_PUBLIC_SANDBOX=1 BLOB_READ_WRITE_TOKEN= next dev",
+    "espelhar": "node scripts/espelhar.js"
   },
   "build": {
     "appId": "ai.generative.open",

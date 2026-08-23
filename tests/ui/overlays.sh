@@ -46,13 +46,23 @@ fi
 # 4. The sandbox returns placeholders. If it were ever enabled in the cloud,
 #    a real request would come back fake — worse than any error. It must be
 #    switched on by the dev script alone, never committed anywhere.
-hits=$(grep -rn 'NEXT_PUBLIC_SANDBOX' --include="*.json" --include="*.mjs" --include="*.env*"         package.json next.config.mjs vercel.json 2>/dev/null | grep -v '"dev"' || true)
+hits=$(grep -rn 'NEXT_PUBLIC_SANDBOX' --include="*.json" --include="*.mjs" --include="*.env*"         package.json next.config.mjs vercel.json 2>/dev/null | grep -v '"dev:simulado"' || true)
 if [ -n "$hits" ]; then
   echo "FALHOU  sandbox ligado fora do script de dev:"
   echo "$hits" | sed 's/^/          /'
   fail=1
 else
   echo "PASS  sandbox so existe no comando de desenvolvimento"
+fi
+
+# 4b. `npm run dev` is the working copy — real providers, real output. If it
+#     ever turned the sandbox on, we would be evaluating features against
+#     fake images without noticing.
+if grep -E '"dev":' package.json | grep -q 'NEXT_PUBLIC_SANDBOX'; then
+  echo "FALHOU  npm run dev esta simulando — a copia de trabalho tem de ser real"
+  fail=1
+else
+  echo "PASS  npm run dev roda com as IAs de verdade"
 fi
 
 # 5. The sandbox must sit above every paid provider in the router, or a test
