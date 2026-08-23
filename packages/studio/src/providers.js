@@ -67,6 +67,7 @@ export const PROVIDER_ROUTES = {
 
 // Table lives in providerKeys.js so ledger.js can share it without a cycle;
 // re-exported here to keep the public surface unchanged.
+import { vertexModelFor, looksGoogle } from "./googleModels.js";
 import { PROVIDER_KEY_STORAGE } from "./providerKeys.js";
 export { PROVIDER_KEY_STORAGE };
 
@@ -347,12 +348,7 @@ const GOOGLE_TIERS = {
 // When configured, every Google model bills to their Cloud account instead of
 // the reseller. Failure falls back to the existing route: a credential
 // problem must never cost the user a generation.
-const VERTEX_MODELS = new Set([
-    "nano-banana", "nano-banana-edit", "google:4@1",
-    "nano-banana-2", "nano-banana-2-edit", "google:4@3",
-    "nano-banana-2-lite", "nano-banana-pro", "nano-banana-pro-edit",
-    "google:3@3", "google:3@2",
-]);
+
 
 let vertexReady = null;
 async function vertexConfigured() {
@@ -366,8 +362,18 @@ async function vertexConfigured() {
     return vertexReady;
 }
 
-async function tryVertex(modelId, params, kind) {
-    if (!VERTEX_MODELS.has(modelId) || !(await vertexConfigured())) return null;
+async function tryVertex(modelId, params, kind, displayName) {
+    const vertexModel = vertexModelFor(modelId, displayName);
+    if (!vertexModel) {
+        // A Google model we cannot place bills to the reseller. Say it out
+        // loud — a silent reroute is how the user ends up paying twice for
+        // the account they thought they had switched away from.
+        if (looksGoogle(modelId, displayName) && (await vertexConfigured())) {
+            announceVertexMiss(modelId, displayName, "modelo Google sem equivalente mapeado no Vertex");
+        }
+        return null;
+    }
+    if (!(await vertexConfigured())) return null;
     announceRoute("vertex", modelId);
     const refs = params.images_list?.length ? params.images_list : params.image_url ? [params.image_url] : [];
     const response = await fetch("/api/providers/vertex", {
@@ -376,6 +382,8 @@ async function tryVertex(modelId, params, kind) {
         body: JSON.stringify({
             kind,
             modelId,
+            vertexModel,
+            displayName,
             prompt: params.prompt || "",
             aspectRatio: params.aspect_ratio,
             tier: params.quality_tier || params.resolution || params.quality,
@@ -387,7 +395,10 @@ async function tryVertex(modelId, params, kind) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.url) {
         console.warn(`[providers] Vertex indisponível (${response.status}):`, data.error);
-        return null; // fall through to the existing provider
+        // Falling through keeps the generation alive, but it moves the charge
+        // to the reseller. That is a billing change and must be visible.
+        announceVertexMiss(modelId, displayName, data.error || `Vertex respondeu ${response.status}`);
+        return null;
     }
     return { url: data.url, id: makeUUID(), provider: "vertex", cost: data.cost, estimated: !!data.estimated };
 }
@@ -451,7 +462,7 @@ async function tryGoogleImage(modelId, params) {
 // AIR ids (creator:model@version — Runware's own catalog) route directly and
 // NEVER fall back: their errors surface with the provider's real cause.
 export async function tryProviderGenerate(modelId, mode, params, displayName) {
-    const viaVertex = await tryVertex(modelId, params, "image");
+    const viaVertex = await tryVertex(modelId, params, "image", displayName);
     if (viaVertex) return viaVertex;
     const viaGoogle = await tryGoogleImage(modelId, params);
     if (viaGoogle) return viaGoogle;
@@ -498,6 +509,15 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
 export function announceRoute(provider, modelId) {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent("generation-route", { detail: { provider, modelId } }));
+}
+
+// A Google model that did NOT reach the user's own Cloud project. The studios
+// surface this as a warning: the render still happens, on the reseller's bill.
+export function announceVertexMiss(modelId, displayName, reason) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("vertex-miss", {
+        detail: { modelId, displayName: displayName || modelId, reason },
+    }));
 }
 
 async function pollRunwareTask(taskUUID, kind) {
@@ -877,7 +897,7 @@ async function generateVideoRunware(air, params) {
 // AIR ids (creator:model@version, straight from Runware's own catalog) route
 // directly and NEVER fall back — their errors surface with the real cause.
 export async function tryProviderVideo(modelId, params, displayName) {
-    const viaVertex = await tryVertex(modelId, params, "video");
+    const viaVertex = await tryVertex(modelId, params, "video", displayName);
     if (viaVertex) return viaVertex;
     if (!getProviderKey("runware")) return null;
     const direct = /:.+@/.test(modelId || "");

@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
+import useVertexMiss from "../useVertexMiss.js";
 import { generateImage, generateI2I, generateVideo, generateI2V, uploadFile } from "../muapi.js";
 import { enhanceScene, scrubForByteDance, decoupageScene } from "../providers.js";
 import { fetchLedger, reconcilePending } from "../ledger.js";
@@ -375,6 +376,7 @@ function CastPanel({ cast, apiKey, onChanged }) {
 // ── Main component ──────────────────────────────────────────────────────────
 
 export default function CinemaStudio({ apiKey, droppedFiles, onFilesHandled, onGenerationStart, onGenerationEnd, onGenerationComplete, onGenerationError }) {
+  useVertexMiss();
   const [setup, setSetup] = useState(() => {
     if (typeof window === "undefined") return DEFAULT_SETUP;
     try { return { ...DEFAULT_SETUP, ...JSON.parse(localStorage.getItem(SETUP_KEY) || "{}") }; }

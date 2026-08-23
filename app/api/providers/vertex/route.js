@@ -25,7 +25,7 @@ export async function POST(request) {
     }
     const body = await request.json().catch(() => null);
     if (!body?.modelId) return NextResponse.json({ error: 'modelId é obrigatório' }, { status: 400 });
-    if (!isGoogleModel(body.modelId)) {
+    if (!isGoogleModel(body.modelId, body.displayName) && !body.vertexModel) {
         return NextResponse.json({ error: `${body.modelId} não é um modelo Google.` }, { status: 400 });
     }
     const origin = new URL(request.url).origin;
@@ -34,6 +34,8 @@ export async function POST(request) {
         const result = body.kind === 'video'
             ? await vertexGenerateVideo({
                 modelId: body.modelId,
+                displayName: body.displayName,
+                vertexModel: body.vertexModel,
                 prompt: body.prompt,
                 aspectRatio: body.aspectRatio,
                 duration: body.duration,
@@ -42,6 +44,8 @@ export async function POST(request) {
             })
             : await vertexGenerateImage({
                 modelId: body.modelId,
+                displayName: body.displayName,
+                vertexModel: body.vertexModel,
                 prompt: body.prompt,
                 aspectRatio: body.aspectRatio,
                 tier: body.tier,
