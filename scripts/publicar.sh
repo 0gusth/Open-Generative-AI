@@ -36,6 +36,7 @@ step "4/5  Build de verificação"
 echo "     ${DIM}compilando em .next-check (não mexe no servidor local)…${OFF}"
 NEXT_DIST_DIR=.next-check npx next build > /tmp/publicar-build.log 2>&1 \
   || { tail -n 25 /tmp/publicar-build.log | sed 's/^/     /'; die "O build falhou."; }
+rm -rf .next-check
 echo "     ${GREEN}compilou${OFF}"
 
 step "5/5  Publicando"

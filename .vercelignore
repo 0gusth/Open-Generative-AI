@@ -1,0 +1,12 @@
+# What never belongs in a deploy upload.
+#
+# Vercel builds from source in the cloud; shipping local build output is both
+# pointless and fatal — .next-check alone is 800MB and blew the 100MB file
+# limit, which is what stopped the first run of `npm run publicar`.
+.next
+.next-check
+.data
+public/generated
+node_modules
+tests
+*.log

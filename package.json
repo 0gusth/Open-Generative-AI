@@ -38,7 +38,7 @@
     "test:ui": "bash tests/ui/overlays.sh",
     "test:pipeline": "bash tests/pipeline/run.sh",
     "dev:real": "next dev",
-    "check": "npm run test:ui && npm run test:pipeline && NEXT_DIST_DIR=.next-check next build",
+    "check": "npm run test:ui && npm run test:pipeline && NEXT_DIST_DIR=.next-check next build && rm -rf .next-check",
     "publicar": "bash scripts/publicar.sh"
   },
   "build": {
