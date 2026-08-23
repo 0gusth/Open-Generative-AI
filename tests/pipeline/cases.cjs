@@ -5,10 +5,21 @@ const assert = require("assert");
 
 global.CustomEvent = class { constructor(n, o) { this.name = n; this.detail = o?.detail; } };
 const routes = [];
+// A real (tiny) event target: cases assert on what the app ANNOUNCES, not
+// only on what it returns. A no-op addEventListener silently passed every
+// such assertion.
+const listeners = new Map();
 global.window = {
   localStorage: { getItem: () => "TEST-KEY", setItem() {}, removeItem() {} },
-  dispatchEvent(e) { if (e.name === "generation-route") routes.push(e.detail.provider); },
-  addEventListener() {},
+  dispatchEvent(e) {
+    if (e.name === "generation-route") routes.push(e.detail.provider);
+    for (const fn of listeners.get(e.name) || []) fn(e);
+  },
+  addEventListener(name, fn) {
+    if (!listeners.has(name)) listeners.set(name, new Set());
+    listeners.get(name).add(fn);
+  },
+  removeEventListener(name, fn) { listeners.get(name)?.delete(fn); },
 };
 
 // Size table exactly as google:4@3 returns it — a label→value OBJECT, which
@@ -129,6 +140,27 @@ const dimError = () => ({ ok: false, res: { errors: [{ code: "unsupportedDimensi
     out = await mod.tryProviderGenerate("google:4@3", "t2i", { prompt: "x", aspect_ratio: "1:1" });
     assert.strictEqual(out.provider, "runware", "credential failure must fall back, not fail");
     console.log("PASS  Google Cloud: falha de credencial cai na Runware sem quebrar");
+
+    // The regression that started this: the curated shortlist ships an id the
+    // hardcoded gate never knew, so Lite renders billed to the reseller.
+    vertexOn = true; hit = []; script = [okImage()];
+    out = await mod.tryProviderGenerate("google:nano-banana@2-lite", "t2i", { prompt: "x" }, "Nano Banana 2 Lite");
+    assert.strictEqual(out.provider, "vertex", "Nano Banana Lite must bill to the user's Cloud project");
+    assert.ok(!hit.includes("runware"), "reseller must not be called for Lite");
+    console.log("PASS  Google Cloud: Nano Banana Lite nao escapa para a Runware");
+
+    // An unmapped Google model still renders — but it must announce that the
+    // charge moved, instead of switching accounts behind the user's back.
+    vertexOn = true;
+    let missed = null;
+    const onMiss = (e) => { missed = e.detail; };
+    global.window.addEventListener("vertex-miss", onMiss);
+    hit = []; script = [okImage()];
+    out = await mod.tryProviderGenerate("google:1@1", "t2i", { prompt: "x" }, "Imagen 4");
+    assert.ok(missed, "an unmapped Google model must warn that it billed elsewhere");
+    assert.strictEqual(out.provider, "runware", "it must still render");
+    console.log("PASS  Google Cloud: modelo Google fora do Vertex avisa que foi cobrado no revendedor");
+    global.window.removeEventListener("vertex-miss", onMiss);
     global.fetch = realFetch;
   }
 

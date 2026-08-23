@@ -350,15 +350,23 @@ const GOOGLE_TIERS = {
 // problem must never cost the user a generation.
 
 
+// Only a POSITIVE answer is cached for good. A "no" was being cached forever
+// too, so one hiccup on the config check at page load meant every Google
+// render for the rest of the session quietly billed to the reseller. A no is
+// re-checked after a short cool-off instead.
 let vertexReady = null;
+let vertexCheckedAt = 0;
+const VERTEX_RECHECK_MS = 60_000;
 async function vertexConfigured() {
-    if (vertexReady !== null) return vertexReady;
+    if (vertexReady === true) return true;
+    if (vertexReady === false && Date.now() - vertexCheckedAt < VERTEX_RECHECK_MS) return false;
     try {
         const r = await fetch("/api/providers/vertex");
         vertexReady = r.ok ? !!(await r.json()).configured : false;
     } catch {
         vertexReady = false;
     }
+    vertexCheckedAt = Date.now();
     return vertexReady;
 }
 
