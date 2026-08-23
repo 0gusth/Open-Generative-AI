@@ -35,6 +35,7 @@
     "package:linux:deb:arm64": "node scripts/package-linux-deb.js --arch arm64",
     "package:linux:deb:x64": "node scripts/package-linux-deb.js --arch x64",
     "electron:build:all": "vite build && electron-builder --mac --win --linux",
+    "test:ui": "bash tests/ui/overlays.sh",
     "test:pipeline": "bash tests/pipeline/run.sh"
   },
   "build": {

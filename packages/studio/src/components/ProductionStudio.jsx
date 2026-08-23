@@ -270,7 +270,7 @@ export default function ProductionStudio({ apiKey, onGenerationStart, onGenerati
 
   return (
     <div className="h-full w-full overflow-y-auto bg-[#0f0f10]">
-      <Toaster position="bottom-center" toastOptions={{ style: { background: "#212123", color: "#fff", border: "1px solid rgba(255,255,255,0.08)" } }} />
+      <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} toastOptions={{ style: { background: "#212123", color: "#fff", border: "1px solid rgba(255,255,255,0.08)" } }} />
       <input ref={glossaryFileRef} type="file" accept="image/*" className="hidden" onChange={onGlossaryFile} />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
 

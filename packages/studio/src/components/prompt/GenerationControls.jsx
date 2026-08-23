@@ -81,10 +81,10 @@ export default function GenerationControls({
           onClick={() => onChange?.({ enhance: !value.enhance })}
           title={value.enhance ? "Enhance ativado" : "Enhance de prompt"}
           aria-pressed={!!value.enhance}
-          className={`pressable h-[34px] w-[34px] flex items-center justify-center rounded-lg border text-[14px] ${
+          className={`pressable h-[38px] w-[38px] flex items-center justify-center rounded-lg border text-[14px] ${
             value.enhance
-              ? "text-[#FF2447] bg-[#EF0328]/15 border-[#EF0328]/30"
-              : "text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70"
+              ? "text-[#FF2447] bg-[#EF0328]/20 border-[#EF0328]/60"
+              : "text-white/75 bg-white/[0.09] border-white/[0.34] hover:bg-white/[0.16] hover:text-white"
           }`}
         >✦</button>
       )}
@@ -195,17 +195,27 @@ export default function GenerationControls({
       )}
 
       {/* Variations */}
-      {features.variations && (
-        <div className="flex items-center gap-0.5 h-[34px] px-1.5 rounded-lg border border-white/[0.06] bg-white/[0.04]">
-          <button type="button" onClick={() => onChange?.({ variations: Math.max(1, (value.variations || 1) - 1) })}
-            className="pressable w-5 h-5 text-white/50 hover:text-white text-[13px] leading-none">−</button>
-          <span className="text-[11px] font-semibold text-white/70 tabular-nums w-6 text-center">
-            {value.variations || 1}/{features.maxVariations || 4}
-          </span>
-          <button type="button" onClick={() => onChange?.({ variations: Math.min(features.maxVariations || 4, (value.variations || 1) + 1) })}
-            className="pressable w-5 h-5 text-white/50 hover:text-white text-[13px] leading-none">+</button>
-        </div>
-      )}
+      {features.variations && (() => {
+        // The steppers were 20x20 glyphs with no fill and no border at all —
+        // a "−" floating on the panel reads as punctuation, not a control.
+        // They now match every other control's box and hit area, and they go
+        // dim at the limits instead of silently swallowing the press.
+        const n = value.variations || 1;
+        const max = features.maxVariations || 4;
+        const step = (to) => onChange?.({ variations: to });
+        const btn = "pressable w-7 h-7 flex items-center justify-center rounded-md text-[15px] leading-none " +
+          "text-white/80 hover:text-white hover:bg-white/[0.14] disabled:opacity-30 disabled:hover:bg-transparent " +
+          "focus:outline-none focus-visible:ring-1 focus-visible:ring-[#EF0328]/40";
+        return (
+          <div className="flex items-center gap-0.5 h-[38px] px-1 rounded-lg border border-white/[0.34] bg-white/[0.09]">
+            <button type="button" aria-label="Menos uma variação" disabled={n <= 1}
+              onClick={() => step(Math.max(1, n - 1))} className={btn}>−</button>
+            <span className="text-[11px] font-semibold text-white/90 tabular-nums w-7 text-center">{n}/{max}</span>
+            <button type="button" aria-label="Mais uma variação" disabled={n >= max}
+              onClick={() => step(Math.min(max, n + 1))} className={btn}>+</button>
+          </div>
+        );
+      })()}
 
       {/* Seed */}
       {features.seed && (

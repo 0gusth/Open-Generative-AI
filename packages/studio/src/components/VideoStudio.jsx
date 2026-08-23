@@ -576,7 +576,15 @@ export default function VideoStudio({
   const [uploadedVideoName, setUploadedVideoName] = useState(null);
 
   // ── generation / canvas ──
-  const [generating, setGenerating] = useState(false);
+  // A counter, not a flag. With a boolean, the second video you asked for
+  // cleared the first one's spinner on the way out and the button sat
+  // disabled meanwhile — one render at a time, with no reason given. Image
+  // Studio was fixed this way; Video was left behind.
+  const [inFlight, setInFlight] = useState(0);
+  const generating = inFlight > 0;
+  const setGenerating = useCallback((on) => {
+    setInFlight((n) => (on ? n + 1 : Math.max(0, n - 1)));
+  }, []);
   const [generateError, setGenerateError] = useState(null);
   const [fullscreenUrl, setFullscreenUrl] = useState(null);
   const [lightboxIdx, setLightboxIdx] = useState(null);
@@ -2424,22 +2432,17 @@ export default function VideoStudio({
 
             </GenerationControls>
 
-            {/* Generate button */}
-            <PromptAction
-              onClick={handleGenerate}
-              disabled={generating}
-            >
+            {/* Generate stays live while renders are in flight — asking for a
+                second video must not wait on the first. The count keeps the
+                button honest: busy, but still open for another. */}
+            <PromptAction onClick={handleGenerate}>
               {generating ? (
                 <>
-                  <span className="animate-spin inline-block text-black">
-                    ◌
-                  </span>{" "}
-                  Generating...
+                  <span className="animate-spin inline-block text-black">◌</span>
+                  {`Generate  (${inFlight})`}
                 </>
               ) : (
-                <>
-                  <span>Generate</span>
-                </>
+                <span>Generate</span>
               )}
             </PromptAction>
           </PromptFooter>

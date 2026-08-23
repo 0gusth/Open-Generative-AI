@@ -765,8 +765,14 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
         </div>
       )}
 
+      {/* NOT bottom-center. The composer lives there, and a toast keeps
+          pointer-events:auto so it can be dismissed — so every notification
+          landed on the generate controls and swallowed clicks for its whole
+          duration. The buttons looked fine and simply did nothing. Top-right
+          is where the ten other Toasters in this app already are. */}
       <Toaster
-        position="bottom-center"
+        position="top-right"
+        containerStyle={{ zIndex: 99999 }}
         toastOptions={{
           style: {
             background: 'rgba(29,29,31,0.96)',
@@ -823,7 +829,7 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
           <div className="relative">
             <button
               onClick={() => { setShowProjectMenu((v) => !v); if (!showProjectMenu) refreshFolderStates(projects); }}
-              className="pressable flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs text-white/60 hover:bg-white/[0.08] hover:text-white"
+              className="pressable flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.09] border border-white/[0.34] text-xs text-white/80 hover:bg-white/[0.16] hover:border-white/[0.48] hover:text-white"
             >
               <span className={`w-1.5 h-1.5 rounded-full ${activeProjectId ? 'bg-[#EF0328]' : 'bg-white/40'}`} />
               <span className="font-medium text-white/80 max-w-[160px] truncate">
@@ -903,13 +909,13 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
 
           {/* Projeto/Geral — app-wide gallery scope */}
           {projects.length > 0 && (
-            <div className="hidden sm:flex items-center bg-white/[0.05] border border-white/[0.07] rounded-lg p-0.5 gap-0.5">
+            <div className="hidden sm:flex items-center bg-black/40 border border-white/[0.34] rounded-lg p-0.5 gap-0.5">
               {[['project', 'Projeto'], ['all', 'Geral']].map(([value, label]) => (
                 <button
                   key={value}
                   onClick={() => setGalleryScope(value)}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 ${
-                    galleryScope === value ? 'bg-[#636366]/90 text-white shadow-sm' : 'text-white/50 hover:text-white/80'
+                    galleryScope === value ? 'bg-[#636366] text-white shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/[0.08]'
                   }`}
                 >
                   {label}
@@ -951,7 +957,7 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
 
             <button
               onClick={() => setShowSettings(true)}
-              className="pressable flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.06] text-[13px] font-medium text-white/80 hover:text-white hover:bg-white/10"
+              className="pressable flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/[0.34] bg-white/[0.09] text-[13px] font-medium text-white/85 hover:text-white hover:bg-white/[0.16] hover:border-white/[0.48]"
               aria-label="Settings"
             >
               <SettingsIcon size={15} strokeWidth={1.75} />

@@ -25,11 +25,16 @@ const DEFAULT_ACTION_CLASS =
 const CONTROL_LAYOUT_CLASS =
   "h-[38px] flex items-center gap-2 rounded-lg transition-[transform,background-color,border-color,color] duration-150 border group whitespace-nowrap focus:outline-none focus-visible:border-white/15 focus-visible:ring-1 focus-visible:ring-[#EF0328]/30 active:scale-[0.97]";
 
+// Measured, not eyeballed. The border used to sit at white/[0.06], which is
+// 1.17:1 against the #171719 composer — the LABEL was legible but the button
+// SHAPE was not there at all, so nothing said "this is pressable". WCAG asks
+// 3:1 for the boundary of a control; white/[0.34] is 3.12:1. Hover and the
+// selected state step up from there so each is a visible change, not a guess.
 const CONTROL_IDLE_CLASS =
-  "text-white/85 bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.06]";
+  "text-white/85 bg-white/[0.09] hover:bg-white/[0.16] border-white/[0.34] hover:border-white/[0.48]";
 
 const CONTROL_ACTIVE_CLASS =
-  "text-white/80 bg-white/10 hover:bg-white/20 border-white/15";
+  "text-white bg-white/[0.18] hover:bg-white/[0.24] border-white/[0.5]";
 
 const MEDIA_CONTROL_LAYOUT_CLASS =
   "w-10 h-10 shrink-0 rounded-full border transition-all flex items-center justify-center relative overflow-hidden group focus:outline-none focus-visible:border-white/15 focus-visible:ring-1 focus-visible:ring-[#EF0328]/30";
@@ -68,9 +73,11 @@ export function promptMediaButtonClassName({
 } = {}) {
   return joinClasses(
     MEDIA_CONTROL_LAYOUT_CLASS,
+    // Same measurement as the control row: a white/[0.03] rim is 1.08:1 on the
+    // composer — the "add reference" button had no visible edge at all.
     active
-      ? "border-white/15 bg-white/10 hover:border-white/15"
-      : "border-white/[0.03] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/15",
+      ? "border-white/[0.5] bg-white/[0.18] hover:bg-white/[0.24]"
+      : "border-white/[0.34] bg-white/[0.09] hover:bg-white/[0.16] hover:border-white/[0.48]",
     className,
   );
 }
@@ -79,7 +86,7 @@ export const PROMPT_MEDIA_PREVIEW_CLASS =
   "relative w-10 h-10 shrink-0 rounded-full border border-white/10 overflow-hidden shadow-md group";
 
 export const PROMPT_CONTROL_LABEL_CLASS =
-  "text-xs font-semibold text-current opacity-70 group-hover:text-white/80 group-hover:opacity-100 transition-all";
+  "text-xs font-semibold text-current opacity-90 group-hover:opacity-100 transition-opacity duration-150";
 
 export function PromptChevronIcon({ className = "" }) {
   return (
@@ -93,7 +100,7 @@ export function PromptChevronIcon({ className = "" }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       className={joinClasses(
-        "text-current opacity-[0.45] group-hover:opacity-100 flex-shrink-0 transition-opacity",
+        "text-current opacity-70 group-hover:opacity-100 flex-shrink-0 transition-opacity",
         className,
       )}
       aria-hidden="true"
@@ -112,7 +119,7 @@ export function PromptAspectRatioIcon({ className = "" }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      className={joinClasses("text-current opacity-[0.45] flex-shrink-0", className)}
+      className={joinClasses("text-current opacity-70 flex-shrink-0", className)}
       aria-hidden="true"
     >
       <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -131,7 +138,7 @@ export function PromptDurationIcon({ className = "" }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={joinClasses("text-current opacity-[0.45] flex-shrink-0", className)}
+      className={joinClasses("text-current opacity-70 flex-shrink-0", className)}
       aria-hidden="true"
     >
       <circle cx="12" cy="12" r="9" />
