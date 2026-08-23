@@ -21,7 +21,18 @@ export default function useVertexMiss() {
                 { icon: "⚠️", duration: 8000 },
             );
         };
+        const onCapped = (e) => {
+            const { modelName, askedTier, gotSize } = e.detail || {};
+            toast(
+                `${modelName} não chega a ${String(askedTier).toUpperCase()} — gerei no máximo dele, ${gotSize}.`,
+                { icon: "📐", duration: 7000 },
+            );
+        };
         window.addEventListener("vertex-miss", onMiss);
-        return () => window.removeEventListener("vertex-miss", onMiss);
+        window.addEventListener("resolution-capped", onCapped);
+        return () => {
+            window.removeEventListener("vertex-miss", onMiss);
+            window.removeEventListener("resolution-capped", onCapped);
+        };
     }, []);
 }

@@ -12,7 +12,8 @@ import MobileGenerationActions, {
 } from "./MobileGenerationActions.jsx";
 import { fetchRunwareImageCatalog, mergeImageCatalogs, isAirId } from "../runwareCatalog.js";
 import { curatedFirst } from "../curatedModels.js";
-import GenerationControls from "./prompt/GenerationControls.jsx";
+import { byteplusTiers, snapTier } from "../byteplusModels.js";
+import GenerationControls, { TIER_OPTIONS } from "./prompt/GenerationControls.jsx";
 import {
   t2iModels as wrapperT2iModels,
   i2iModels as wrapperI2iModels,
@@ -1429,6 +1430,17 @@ export default function ImageStudio({
     ? getAspectRatiosForI2IModel(selectedModelId)
     : getAspectRatiosForModel(selectedModelId);
   const currentAspectRatios = catalogAspects?.length ? catalogAspects : ROUTER_ASPECTS;
+  // Seedream 5.0 Pro tops out around 2.1K and Lite has no 1K at all. Offering
+  // a tier the model cannot produce turns a paid click into an error, so the
+  // picker only shows what the selected model can actually deliver.
+  const currentTiers = byteplusTiers(
+    selectedModelId,
+    currentModels.find((m) => m.id === selectedModelId)?.name || selectedModelName,
+  ) || TIER_OPTIONS;
+  useEffect(() => {
+    const next = snapTier(imageTier, currentTiers);
+    if (next !== imageTier) setImageTier(next);
+  }, [currentTiers, imageTier]);
   const currentResolutions = imageMode
     ? getResolutionsForI2IModel(selectedModelId)
     : getResolutionsForModel(selectedModelId);
@@ -2040,6 +2052,7 @@ export default function ImageStudio({
                 model: true,
                 aspect: true,
                 quality: true,
+                qualityOptions: currentTiers,
                 variations: true,
                 seed: true,
                 maxVariations: 4,

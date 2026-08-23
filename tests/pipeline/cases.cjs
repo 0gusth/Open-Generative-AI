@@ -212,6 +212,29 @@ const dimError = () => ({ ok: false, res: { errors: [{ code: "unsupportedDimensi
     const four = await ark.tryProviderGenerate("bytedance:seedream@4.0", "t2i", { prompt: "x" }, "Seedream 4.0");
     assert.strictEqual(four.provider, "runware", "Seedream 4 must keep its reseller route");
     console.log("PASS  Seedream 4 segue pelo caminho antigo");
+
+    // Pro tops out around 2.1K. The first version of this measured the ceiling
+    // on Lite and applied it to both, so a 4K request on Pro was sent at
+    // 4096x4096 and rejected outright.
+    const bp = require("./lib/byteplusModels.js");
+    for (const [model, tier, ceiling] of [
+      [bp.BYTEPLUS_PRO, "4k", 4624220],
+      [bp.BYTEPLUS_PRO, "1k", 4624220],
+      [bp.BYTEPLUS_LITE, "1k", 16777216],
+      [bp.BYTEPLUS_LITE, "4k", 16777216],
+    ]) {
+      for (const aspect of ["1:1", "16:9", "21:9", "9:16"]) {
+        const r = bp.byteplusSize(model, aspect, tier);
+        const lim = bp.PIXEL_LIMITS[model];
+        assert.ok(r.pixels <= ceiling, `${model} ${aspect} ${tier}: ${r.pixels} acima do teto`);
+        assert.ok(r.pixels >= lim.min, `${model} ${aspect} ${tier}: ${r.pixels} abaixo do piso`);
+      }
+    }
+    assert.strictEqual(bp.byteplusSize(bp.BYTEPLUS_PRO, "16:9", "4k").cappedFrom, "4k",
+      "a resolucao cortada tem de ser declarada, nunca silenciosa");
+    assert.ok(!bp.TIERS_FOR[bp.BYTEPLUS_PRO].includes("4k"), "o Pro nao pode oferecer 4K");
+    assert.strictEqual(bp.snapTier("4k", bp.TIERS_FOR[bp.BYTEPLUS_PRO]), "2k");
+    console.log("PASS  cada Seedream 5.0 respeita o proprio teto, e o corte e declarado");
     byteplusOn = false;
     global.fetch = realFetch;
   }

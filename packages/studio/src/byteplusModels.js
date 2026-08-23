@@ -45,12 +45,30 @@ export function byteplusCost(model, pixels) {
     return 0.035;
 }
 
-// Pixel envelopes, measured against the live API rather than assumed: Lite
-// refuses anything under 2K, Pro goes down to 1K, both cap at 4096x4096.
+// Pixel envelopes, each measured against the live API for THAT model. The
+// first version of this file measured the ceiling on Lite and applied it to
+// both, so a 4K request on Pro was sent at 4096x4096 and rejected outright.
+// The two models are not alike in either direction:
+//   Lite  2K floor, 4K ceiling, presets 2k/3k/4k
+//   Pro   1K floor, ~2.1K ceiling, presets 1k/2k  — it does NOT do 4K
 export const PIXEL_LIMITS = {
     [BYTEPLUS_LITE]: { min: 3686400, max: 16777216 },
-    [BYTEPLUS_PRO]: { min: 921600, max: 16777216 },
+    [BYTEPLUS_PRO]: { min: 921600, max: 4624220 },
 };
+
+// What the quality picker is allowed to offer for each model. Offering a tier
+// the model cannot produce is how a paid click turns into an error.
+export const TIERS_FOR = {
+    [BYTEPLUS_LITE]: ['2k', '4k'],
+    [BYTEPLUS_PRO]: ['1k', '2k'],
+};
+
+// The tiers a given catalog entry supports, or null when it is not a Seedream
+// 5.0 at all and the caller should keep its own list.
+export function byteplusTiers(modelId, displayName) {
+    const model = byteplusModelFor(modelId, displayName);
+    return model ? TIERS_FOR[model] : null;
+}
 
 const TIER_PIXELS = { '1k': 1048576, '2k': 4194304, '3k': 9437184, '4k': 16777216 };
 
@@ -59,8 +77,11 @@ const TIER_PIXELS = { '1k': 1048576, '2k': 4194304, '3k': 9437184, '4k': 1677721
 // the bug that made a paid 2K request come back at 1K.
 export function byteplusSize(model, aspect = '1:1', tier = '2k') {
     const limits = PIXEL_LIMITS[model] || PIXEL_LIMITS[BYTEPLUS_LITE];
-    let target = TIER_PIXELS[String(tier || '2k').toLowerCase()] || TIER_PIXELS['2k'];
-    target = Math.min(Math.max(target, limits.min), limits.max);
+    const asked = TIER_PIXELS[String(tier || '2k').toLowerCase()] || TIER_PIXELS['2k'];
+    let target = Math.min(Math.max(asked, limits.min), limits.max);
+    // Coming back smaller than the user paid for must never be silent — this
+    // is reported all the way to the card.
+    const cappedFrom = asked > limits.max ? String(tier).toLowerCase() : null;
 
     let [aw, ah] = String(aspect || '1:1').split(':').map(Number);
     if (!aw || !ah || aspect === 'auto') { aw = 1; ah = 1; }
@@ -73,5 +94,24 @@ export function byteplusSize(model, aspect = '1:1', tier = '2k') {
     // Rounding can push the area back under the floor or over the ceiling.
     for (let i = 0; i < 6 && w * h < limits.min; i++) { w = round8(w * 1.04); h = round8(w / ratio); }
     for (let i = 0; i < 6 && w * h > limits.max; i++) { w = round8(w * 0.97); h = round8(w / ratio); }
-    return { size: `${w}x${h}`, pixels: w * h };
+    return { size: `${w}x${h}`, pixels: w * h, cappedFrom };
+}
+
+// When the selected model cannot produce the tier that is currently chosen,
+// move to the closest one it CAN — preferring the larger of two equally close
+// options, because dropping the user to the floor is its own quiet downgrade.
+const TIER_ORDER = ['1k', '2k', '3k', '4k'];
+export function snapTier(current, allowed) {
+    if (!allowed?.length) return current;
+    const cur = String(current || '').toLowerCase();
+    if (allowed.includes(cur)) return cur;
+    const want = TIER_ORDER.indexOf(cur);
+    if (want < 0) return allowed[allowed.length - 1];
+    return allowed
+        .slice()
+        .sort((a, b) => {
+            const da = Math.abs(TIER_ORDER.indexOf(a) - want);
+            const db = Math.abs(TIER_ORDER.indexOf(b) - want);
+            return da - db || TIER_ORDER.indexOf(b) - TIER_ORDER.indexOf(a);
+        })[0];
 }

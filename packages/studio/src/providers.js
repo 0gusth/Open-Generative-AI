@@ -426,6 +426,9 @@ async function tryByteplus(modelId, params, displayName) {
         err.definitive = !!data.definitive;
         throw err;
     }
+    if (data.cappedFrom) {
+        announceCapped(displayName || modelId, data.cappedFrom, data.resolvedSize);
+    }
     return {
         url: data.url,
         id: makeUUID(),
@@ -584,6 +587,15 @@ export async function tryProviderGenerate(modelId, mode, params, displayName) {
 export function announceRoute(provider, modelId) {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent("generation-route", { detail: { provider, modelId } }));
+}
+
+// The model could not reach the resolution that was asked for. Rendering
+// smaller than the user paid for is allowed; doing it quietly is not.
+export function announceCapped(modelName, askedTier, gotSize) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("resolution-capped", {
+        detail: { modelName, askedTier, gotSize },
+    }));
 }
 
 // A Google model that did NOT reach the user's own Cloud project. The studios
