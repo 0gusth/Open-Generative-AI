@@ -43,5 +43,26 @@ else
   echo "PASS  contorno dos controles acima do limite visivel"
 fi
 
+# 4. The sandbox returns placeholders. If it were ever enabled in the cloud,
+#    a real request would come back fake — worse than any error. It must be
+#    switched on by the dev script alone, never committed anywhere.
+hits=$(grep -rn 'NEXT_PUBLIC_SANDBOX' --include="*.json" --include="*.mjs" --include="*.env*"         package.json next.config.mjs vercel.json 2>/dev/null | grep -v '"dev"' || true)
+if [ -n "$hits" ]; then
+  echo "FALHOU  sandbox ligado fora do script de dev:"
+  echo "$hits" | sed 's/^/          /'
+  fail=1
+else
+  echo "PASS  sandbox so existe no comando de desenvolvimento"
+fi
+
+# 5. The sandbox must sit above every paid provider in the router, or a test
+#    generation would reach a real API and be charged.
+if grep -A6 'export async function tryProviderGenerate' packages/studio/src/providers.js | grep -q 'trySandbox'    && grep -A6 'export async function tryProviderVideo' packages/studio/src/providers.js | grep -q 'trySandbox'; then
+  echo "PASS  sandbox intercepta antes de qualquer provedor pago"
+else
+  echo "FALHOU  sandbox nao esta no topo do roteador — um teste chegaria a uma API paga"
+  fail=1
+fi
+
 if [ $fail -eq 0 ]; then echo ""; echo "TODOS OS GUARDAS PASSARAM"; fi
 exit $fail

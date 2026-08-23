@@ -42,3 +42,6 @@ out/
 
 # Locally generated images (cloud uses Vercel Blob)
 public/generated/
+
+# Build de verificação local (npm run check)
+.next-check/

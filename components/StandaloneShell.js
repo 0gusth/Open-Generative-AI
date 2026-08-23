@@ -785,6 +785,16 @@ As gerações continuam no histórico (em Geral)${project.path ? ' e a pasta no 
         }}
       />
 
+      {/* Sandbox marker. The whole point of a test environment is that you
+          always know you are in it — this user has already confused two URLs
+          once. Deliberately loud, deliberately impossible to miss. */}
+      {process.env.NEXT_PUBLIC_SANDBOX === '1' && (
+        <div className="flex-shrink-0 h-7 flex items-center justify-center gap-2 bg-[#B45309] text-white text-[12px] font-semibold tracking-wide z-[60]">
+          <span aria-hidden="true">🧪</span>
+          <span>Ambiente de teste — as gerações são simuladas e não custam nada</span>
+        </div>
+      )}
+
       {/* Header */}
       {isHeaderVisible && (
         <header className="flex-shrink-0 h-[52px] border-b border-white/[0.08] flex items-center justify-between px-4 bg-[#171719]/75 backdrop-blur-2xl z-50 gap-4">

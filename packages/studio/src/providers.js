@@ -371,6 +371,36 @@ async function vertexConfigured() {
     return vertexReady;
 }
 
+// ── Sandbox ────────────────────────────────────────────────────────────────
+//
+// The local test environment. Every generation returns a placeholder instead
+// of calling a paid API, so a whole afternoon of testing costs nothing.
+//
+// It sits at the TOP of the router on purpose: nothing below it can be
+// reached, so no key, no quota and no invoice is ever touched by accident
+// while a feature is being built.
+export const SANDBOX = process.env.NEXT_PUBLIC_SANDBOX === "1";
+
+async function trySandbox(modelId, params, kind, displayName) {
+    if (!SANDBOX) return null;
+    announceRoute("sandbox", modelId);
+    const response = await fetch("/api/providers/mock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            kind,
+            model: displayName || modelId,
+            prompt: params.prompt || "",
+            aspectRatio: params.aspect_ratio,
+        }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.url) {
+        throw new Error(data.error || "Sandbox não conseguiu gerar o placeholder.");
+    }
+    return { url: data.url, id: makeUUID(), provider: "sandbox", cost: 0, estimated: false };
+}
+
 // ── BytePlus (ByteDance ModelArk) — the user's own Seedream account ────────
 //
 // Seedream 5.0 Pro and Lite are billed straight to their ByteDance account.
@@ -538,6 +568,8 @@ async function tryGoogleImage(modelId, params) {
 // AIR ids (creator:model@version — Runware's own catalog) route directly and
 // NEVER fall back: their errors surface with the provider's real cause.
 export async function tryProviderGenerate(modelId, mode, params, displayName) {
+    const viaSandbox = await trySandbox(modelId, params, "image", displayName);
+    if (viaSandbox) return viaSandbox;
     const viaVertex = await tryVertex(modelId, params, "image", displayName);
     if (viaVertex) return viaVertex;
     const viaArk = await tryByteplus(modelId, params, displayName);
@@ -984,6 +1016,8 @@ async function generateVideoRunware(air, params) {
 // AIR ids (creator:model@version, straight from Runware's own catalog) route
 // directly and NEVER fall back — their errors surface with the real cause.
 export async function tryProviderVideo(modelId, params, displayName) {
+    const viaSandbox = await trySandbox(modelId, params, "video", displayName);
+    if (viaSandbox) return viaSandbox;
     const viaVertex = await tryVertex(modelId, params, "video", displayName);
     if (viaVertex) return viaVertex;
     if (!getProviderKey("runware")) return null;
